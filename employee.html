@@ -125,7 +125,29 @@
         <div class="attendance-stats" id="empAttStats" style="margin-bottom:12px;"></div>
         <div class="table-wrap" style="box-shadow:none;">
           <table class="att-mini-table">
-            <thead><tr><th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th><th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា(ម៉ោង)</th><th>ថែម(ម៉ោង)</th><th>សរុប($)</th></tr></thead>
+            <thead>
+              <tr>
+                <th rowspan="2">ថ្ងៃទី</th>
+                <th rowspan="2">ថ្ងៃ</th>
+                <th colspan="4">ម៉ោងធ្វើការ</th>
+                <th rowspan="2">យឺត</th>
+                <th rowspan="2">ស្ថានភាព</th>
+                <th rowspan="2">ធម្មតា (ម៉ោង)</th>
+                <th rowspan="2">ប្រាក់ខែ</th>
+                <th rowspan="2">ថែមម៉ោង (ម៉ោង)</th>
+                <th rowspan="2">ប្រាក់ថែមម៉ោង</th>
+                <th rowspan="2">បាយថ្ងៃត្រង់</th>
+                <th rowspan="2">បាយថែមម៉ោង</th>
+                <th rowspan="2">សរុប ($)</th>
+                <th rowspan="2">សរុប (៛)</th>
+              </tr>
+              <tr>
+                <th>ចូល</th>
+                <th>ចេញ</th>
+                <th>ចូល</th>
+                <th>ចេញ</th>
+              </tr>
+            </thead>
             <tbody id="empAttBody"></tbody>
           </table>
         </div>
@@ -646,15 +668,16 @@ async function loadMonthAttendance(month) {
 async function renderAttendanceTabEmp() {
   const month = document.getElementById('attMonthInput').value || todayStr().slice(0, 7);
   const tbody = document.getElementById('empAttBody');
-  tbody.innerHTML = '<tr><td colspan="11">កំពុងផ្ទុក...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="16">កំពុងផ្ទុក...</td></tr>';
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
-  let totals = { total: 0, workDays: 0, lateDays: 0, leaveDays: 0 };
+  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, leaveDays: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const r = computeRow(salary, dayMap[date]);
     totals.total += r.total;
+    totals.riel += r.riel;
     if (r.status === 'present') totals.workDays++;
     if (r.status === 'leave') totals.leaveDays++;
     if (r.late) totals.lateDays++;
@@ -668,8 +691,13 @@ async function renderAttendanceTabEmp() {
       <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
       <td>${STATUS_LABELS[r.status] || '-'}</td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
+      <td>$${fmtUSD(r.normalPay)}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>$${fmtUSD(r.total)}</td>
+      <td>$${fmtUSD(r.otPay)}</td>
+      <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
+      <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
+      <td><strong>$${fmtUSD(r.total)}</strong></td>
+      <td>${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
 
@@ -678,6 +706,7 @@ async function renderAttendanceTabEmp() {
     <div class="stat-card"><div class="num">${totals.leaveDays}</div><div class="label">ថ្ងៃច្បាប់</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>
+    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន (៛)</div></div>
   `;
 }
 

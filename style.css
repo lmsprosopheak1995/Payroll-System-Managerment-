@@ -142,7 +142,7 @@ th {
   text-align: center;
 }
 
-#attendanceTab thead th {
+#attendanceTab thead th, #attendanceTabContent thead th {
   vertical-align: middle;
   font-size: 0.64rem;
   border: 1px solid var(--border);
