@@ -10,11 +10,43 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
-<div class="container">
+
+<div class="portal" id="adminGate" style="max-width:420px; margin:60px auto; padding:0 14px;">
+  <div id="adminGateLoading" style="text-align:center; color:var(--text-muted); font-size:0.8rem; padding:30px 0;">កំពុងផ្ទុក...</div>
+
+  <div class="portal-card" id="adminSetupCard" style="display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:22px;">
+    <h1 style="font-size:1.05rem; text-align:center; margin:0 0 4px;">🔐 កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រង</h1>
+    <p style="text-align:center; color:var(--text-muted); font-size:0.75rem; margin:0 0 18px;">នេះជាការចូលប្រើលើកដំបូង សូមកំណត់ពាក្យសម្ងាត់ការគ្រប់គ្រង</p>
+    <p id="adminSetupError" style="color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none;"></p>
+    <div class="form-group">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់ថ្មី</label>
+      <input type="password" id="adminSetupPassword" style="width:100%;padding:10px 12px;font-size:0.9rem;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">បញ្ជាក់ពាក្យសម្ងាត់</label>
+      <input type="password" id="adminSetupPassword2" style="width:100%;padding:10px 12px;font-size:0.9rem;">
+    </div>
+    <button id="adminSetupBtn" style="width:100%;padding:11px;font-size:0.9rem;">កំណត់ពាក្យសម្ងាត់</button>
+  </div>
+
+  <div class="portal-card" id="adminLoginCard" style="display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:22px;">
+    <h1 style="font-size:1.05rem; text-align:center; margin:0 0 4px;">🔐 ចូលគណនីអ្នកគ្រប់គ្រង</h1>
+    <p id="adminLoginError" style="color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none;"></p>
+    <div class="form-group">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់</label>
+      <input type="password" id="adminLoginPassword" style="width:100%;padding:10px 12px;font-size:0.9rem;">
+    </div>
+    <button id="adminLoginBtn" style="width:100%;padding:11px;font-size:0.9rem;">ចូលគណនី</button>
+  </div>
+</div>
+
+<div class="container" id="mainContainer" style="display:none;">
   <header>
     <h1>🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</h1>
-    <div style="display:flex; gap:8px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <a href="employee.html" target="_blank" class="secondary" style="text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; border-radius:6px; border:1px solid var(--border); color:var(--text); font-size:0.8rem; font-weight:600;">👤 ទំព័រចូលបុគ្គលិក</a>
+      <button class="secondary" id="changeAdminPwBtn">🔑 ប្តូរពាក្យសម្ងាត់</button>
+      <button class="secondary" id="logoutBtn">ចាកចេញ</button>
       <button id="addBtn">➕ បន្ថែមបុគ្គលិកថ្មី</button>
     </div>
   </header>

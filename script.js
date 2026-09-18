@@ -9,6 +9,88 @@ let editingId = null;
 let attendance = {};
 let settings = {};
 
+// ==== Admin authentication gate ====
+// ការចូលប្រើទំព័រនេះទាមទារពាក្យសម្ងាត់អ្នកគ្រប់គ្រង។ session ស្ថិតនៅក្នុង sessionStorage
+// ប៉ុណ្ណោះ (ដូចទំព័របុគ្គលិក) ដូច្នេះនឹងត្រូវចូលគណនីម្ដងទៀតរាល់ពេលបើក tab/browser ថ្មី។
+const ADMIN_SESSION_KEY = 'admin_portal_session';
+
+function getAdminSession() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === '1'; }
+function setAdminSession() { sessionStorage.setItem(ADMIN_SESSION_KEY, '1'); }
+function clearAdminSession() { sessionStorage.removeItem(ADMIN_SESSION_KEY); }
+
+function showAdminGate(view, errorMsg) {
+  document.getElementById('mainContainer').style.display = 'none';
+  document.getElementById('adminGateLoading').style.display = 'none';
+  document.getElementById('adminSetupCard').style.display = view === 'setup' ? '' : 'none';
+  document.getElementById('adminLoginCard').style.display = view === 'login' ? '' : 'none';
+  const setupErr = document.getElementById('adminSetupError');
+  const loginErr = document.getElementById('adminLoginError');
+  setupErr.style.display = 'none';
+  loginErr.style.display = 'none';
+  if (view === 'setup' && errorMsg) { setupErr.textContent = errorMsg; setupErr.style.display = 'block'; }
+  if (view === 'login' && errorMsg) { loginErr.textContent = errorMsg; loginErr.style.display = 'block'; }
+}
+
+async function checkAdminAuthAndInit() {
+  if (getAdminSession()) {
+    document.getElementById('adminGateLoading').style.display = 'none';
+    document.getElementById('adminSetupCard').style.display = 'none';
+    document.getElementById('adminLoginCard').style.display = 'none';
+    document.getElementById('mainContainer').style.display = '';
+    await Promise.all([loadData(), loadAttendance(), loadSettings()]);
+    renderAll();
+    return;
+  }
+  document.getElementById('adminGateLoading').style.display = '';
+  const { data: isSet, error } = await supabaseClient.rpc('admin_password_is_set');
+  if (error) {
+    console.error('admin_password_is_set failed', error);
+    showAdminGate('login', 'មិនអាចភ្ជាប់ទៅ Supabase បានទេ៖ ' + error.message);
+    return;
+  }
+  showAdminGate(isSet ? 'login' : 'setup');
+}
+
+async function doAdminSetup() {
+  const p1 = document.getElementById('adminSetupPassword').value;
+  const p2 = document.getElementById('adminSetupPassword2').value;
+  if (!p1 || p1.length < 6) { showAdminGate('setup', 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
+  if (p1 !== p2) { showAdminGate('setup', 'ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ'); return; }
+  const { data, error } = await supabaseClient.rpc('set_admin_password', { p_old_password: null, p_new_password: p1 });
+  if (error || !data) { showAdminGate('setup', 'កំណត់ពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + (error ? error.message : '')); return; }
+  setAdminSession();
+  await checkAdminAuthAndInit();
+}
+
+async function doAdminLogin() {
+  const pw = document.getElementById('adminLoginPassword').value;
+  if (!pw) { showAdminGate('login', 'សូមបំពេញពាក្យសម្ងាត់'); return; }
+  const { data, error } = await supabaseClient.rpc('login_admin', { p_password: pw });
+  if (error) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
+  if (!data) { showAdminGate('login', 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+  document.getElementById('adminLoginPassword').value = '';
+  setAdminSession();
+  await checkAdminAuthAndInit();
+}
+
+function doAdminLogout() {
+  clearAdminSession();
+  location.reload();
+}
+
+async function changeAdminPassword() {
+  const oldPw = prompt('បញ្ចូលពាក្យសម្ងាត់បច្ចុប្បន្ន៖');
+  if (oldPw === null) return;
+  const newPw = prompt('បញ្ចូលពាក្យសម្ងាត់ថ្មី (យ៉ាងតិច ៦ តួអក្សរ)៖');
+  if (newPw === null) return;
+  if (newPw.length < 6) { alert('ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
+  const confirmPw = prompt('បញ្ជាក់ពាក្យសម្ងាត់ថ្មីម្ដងទៀត៖');
+  if (newPw !== confirmPw) { alert('ពាក្យសម្ងាត់ថ្មីមិនដូចគ្នាទេ'); return; }
+  const { data, error } = await supabaseClient.rpc('set_admin_password', { p_old_password: oldPw, p_new_password: newPw });
+  if (error || !data) { alert('ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ពាក្យសម្ងាត់បច្ចុប្បន្នប្រហែលមិនត្រឹមត្រូវ'); return; }
+  alert('ប្តូរពាក្យសម្ងាត់ជោគជ័យ');
+}
+
 const DEFAULT_SETTINGS = {
   standardStart: '08:00',
   standardHours: 8,
@@ -18,13 +100,6 @@ const DEFAULT_SETTINGS = {
   workDaysPerMonth: 26,
   exchangeRate: 4100,
 };
-
-// ---- password hashing (SHA-256, requires https:// or localhost) ----
-async function sha256Hex(text) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 // ---- row <-> object mapping ----
 function rowToEmployee(r) {
@@ -55,7 +130,6 @@ function employeeToRow(e) {
     status: e.status,
     username: e.username || null,
   };
-  if (e.newPasswordHash) row.password_hash = e.newPasswordHash;
   return row;
 }
 
@@ -571,8 +645,12 @@ async function saveEmployee() {
 
   const username = document.getElementById('empUsername').value.trim();
   const passwordInput = document.getElementById('empPassword').value;
-  if (username && passwordInput === '' && !editingId) {
-    alert('សូមកំណត់ពាក្យសម្ងាត់សម្រាប់គណនីថ្មីនេះ');
+  const existingEmp = editingId ? employees.find(x => x.id === editingId) : null;
+  // ត្រូវការពាក្យសម្ងាត់ទាំងពេលបង្កើតគណនីថ្មី ទាំងពេលបន្ថែម username ដំបូងគេទៅឲ្យបុគ្គលិកចាស់
+  // (មុននេះការត្រួតពិនិត្យអនុវត្តតែពេលបង្កើតថ្មី ធ្វើឲ្យអាចរក្សាទុក username ដោយគ្មានពាក្យសម្ងាត់ពេលកែប្រែ)
+  const isFirstTimeUsername = username && (!existingEmp || !existingEmp.username);
+  if (isFirstTimeUsername && passwordInput === '') {
+    alert('សូមកំណត់ពាក្យសម្ងាត់សម្រាប់គណនីនេះ (គណនីនេះមិនទាន់មានពាក្យសម្ងាត់ទេ)');
     return;
   }
 
@@ -598,14 +676,16 @@ async function saveEmployee() {
     employees.push(savedEmp);
   }
 
-  if (passwordInput) {
-    savedEmp.newPasswordHash = await sha256Hex(passwordInput);
-  }
-
   closeModal();
   renderAll();
-  upsertEmployee(savedEmp);
-  delete savedEmp.newPasswordHash;
+  await upsertEmployee(savedEmp);
+  if (passwordInput) {
+    const { error } = await supabaseClient.rpc('set_employee_password', {
+      p_employee_id: savedEmp.id,
+      p_password: passwordInput,
+    });
+    if (error) alert('រក្សាទុកព័ត៌មានបុគ្គលិកបានជោគជ័យ ប៉ុន្តែកំណត់ពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + error.message);
+  }
 }
 
 function deleteEmployee(id) {
@@ -824,7 +904,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 document.getElementById('attendanceMonth').value = todayStr().slice(0, 7);
-(async function init() {
-  await Promise.all([loadData(), loadAttendance(), loadSettings()]);
-  renderAll();
-})();
+document.getElementById('adminSetupBtn').addEventListener('click', doAdminSetup);
+document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
+document.getElementById('adminLoginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doAdminLogin(); });
+document.getElementById('logoutBtn').addEventListener('click', doAdminLogout);
+document.getElementById('changeAdminPwBtn').addEventListener('click', changeAdminPassword);
+
+checkAdminAuthAndInit();

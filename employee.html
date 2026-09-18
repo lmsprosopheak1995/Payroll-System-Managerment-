@@ -94,12 +94,12 @@ function nowTimeStr() {
 function weekdayLabel(dateStr) {
   return KHMER_WEEKDAYS[new Date(dateStr + 'T00:00:00').getDay()];
 }
-async function sha256Hex(text) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+// គណនាថ្ងៃចុងក្រោយពិតប្រាកដនៃខែ ('2026-02-31' មិនមែនជាកាលបរិច្ឆេទត្រឹមត្រូវទេ ធ្វើឲ្យ query បរាជ័យ)
+function monthEndStr(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${monthStr}-${String(lastDay).padStart(2, '0')}`;
 }
-
 function getSession() {
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; }
 }
@@ -118,8 +118,7 @@ async function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
   if (!username || !password) { showLogin('សូមបំពេញឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់'); return; }
-  const hash = await sha256Hex(password);
-  const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password_hash: hash });
+  const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password: password });
   if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
   if (!data || data.length === 0) { showLogin('ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
   setSession({ id: data[0].id, name: data[0].name });
@@ -207,7 +206,7 @@ async function renderHistory() {
   list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
   const month = todayStr().slice(0, 7);
   const { data, error } = await supabaseClient.from('attendance').select('*')
-    .eq('employee_id', session.id).gte('date', month + '-01').lte('date', month + '-31')
+    .eq('employee_id', session.id).gte('date', month + '-01').lte('date', monthEndStr(month))
     .order('date', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានកំណត់ត្រាខែនេះទេ</div>'; return; }
