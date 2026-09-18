@@ -574,6 +574,7 @@ function renderRequestsTab() {
         <td>${r.start_date}</td>
         <td>${r.end_date}</td>
         <td style="max-width:220px;white-space:normal;">${escapeHtml(r.reason || '-')}</td>
+        <td>${r.attachment_url ? `<a href="${r.attachment_url}" target="_blank" rel="noopener">🖼 មើល</a>` : '-'}</td>
         <td><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
         <td>
           ${r.status === 'pending' ? `

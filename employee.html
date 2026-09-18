@@ -61,6 +61,7 @@
   #payslipTemplate .ps-total-row td { font-weight:700; background:#f3f4f6; }
   #empQrReader { width:100%; border-radius:10px; overflow:hidden; background:var(--bg); min-height:180px; }
   .scan-hint { font-size:0.68rem; color:var(--text-muted); margin:8px 0 0; text-align:center; }
+  #leaveAttachmentPreview img { max-width:140px; max-height:140px; border-radius:8px; border:1px solid var(--border); display:block; }
 </style>
 </head>
 <body>
@@ -157,6 +158,11 @@
         <div class="form-group">
           <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ</label>
           <textarea id="leaveReason" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">រូបភាពបញ្ជាក់ (ជាជម្រើស — ឧ. សំបុត្រពេទ្យ)</label>
+          <input type="file" id="leaveAttachment" accept="image/*" capture="environment">
+          <div id="leaveAttachmentPreview" style="margin-top:8px;"></div>
         </div>
         <button class="primary-btn" id="leaveSubmitBtn">ដាក់ស្នើសុំ</button>
       </div>
@@ -646,23 +652,67 @@ async function summarizeMonth(month) {
 }
 
 // ==== ស្នើសុំច្បាប់ ====
+function previewLeaveAttachment() {
+  const fileInput = document.getElementById('leaveAttachment');
+  const preview = document.getElementById('leaveAttachmentPreview');
+  preview.innerHTML = '';
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { preview.innerHTML = `<img src="${e.target.result}" alt="preview">`; };
+  reader.readAsDataURL(file);
+}
+
+async function uploadLeaveAttachment(file, employeeId) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${employeeId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabaseClient.storage.from('leave-attachments').upload(path, file, { upsert: false });
+  if (error) throw error;
+  const { data } = supabaseClient.storage.from('leave-attachments').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 async function submitLeaveRequest() {
   const session = getSession();
   const leaveType = document.getElementById('leaveType').value;
   const start = document.getElementById('leaveStart').value;
   const end = document.getElementById('leaveEnd').value;
   const reason = document.getElementById('leaveReason').value.trim();
+  const fileInput = document.getElementById('leaveAttachment');
   const err = document.getElementById('leaveError');
+  const submitBtn = document.getElementById('leaveSubmitBtn');
   err.style.display = 'none';
   if (!start || !end) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
   if (end < start) { err.textContent = 'ថ្ងៃបញ្ចប់ត្រូវនៅក្រោយថ្ងៃចាប់ផ្តើម'; err.style.display = 'block'; return; }
+
+  let attachmentUrl = null;
+  submitBtn.disabled = true;
+  const file = fileInput.files && fileInput.files[0];
+  if (file) {
+    submitBtn.textContent = 'កំពុងផ្ទុករូបភាព...';
+    try {
+      attachmentUrl = await uploadLeaveAttachment(file, session.id);
+    } catch (e) {
+      err.textContent = 'ផ្ទុករូបភាពមិនជោគជ័យ៖ ' + e.message;
+      err.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'ដាក់ស្នើសុំ';
+      return;
+    }
+  }
+  submitBtn.textContent = 'កំពុងដាក់ស្នើសុំ...';
+
   const { error } = await supabaseClient.from('leave_requests').insert({
-    employee_id: session.id, leave_type: leaveType, start_date: start, end_date: end, reason, status: 'pending',
+    employee_id: session.id, leave_type: leaveType, start_date: start, end_date: end, reason, status: 'pending', attachment_url: attachmentUrl,
   });
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'ដាក់ស្នើសុំ';
   if (error) { err.textContent = 'ដាក់ស្នើសុំមិនជោគជ័យ៖ ' + error.message; err.style.display = 'block'; return; }
   document.getElementById('leaveStart').value = '';
   document.getElementById('leaveEnd').value = '';
   document.getElementById('leaveReason').value = '';
+  fileInput.value = '';
+  document.getElementById('leaveAttachmentPreview').innerHTML = '';
   await renderLeaveHist();
 }
 
@@ -679,6 +729,7 @@ async function renderLeaveHist() {
         <div><strong>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</strong></div>
         <div class="rmeta">${r.start_date} → ${r.end_date}</div>
         ${r.reason ? `<div class="rmeta">${escapeHtml(r.reason)}</div>` : ''}
+        ${r.attachment_url ? `<div class="rmeta"><a href="${r.attachment_url}" target="_blank" rel="noopener">🖼 រូបភាពបញ្ជាក់</a></div>` : ''}
         ${r.status === 'rejected' && r.admin_note ? `<div class="rmeta">មូលហេតុបដិសេធ៖ ${escapeHtml(r.admin_note)}</div>` : ''}
       </div>
       <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
@@ -800,6 +851,7 @@ async function downloadPayrollPDF() {
 }
 
 document.getElementById('leaveSubmitBtn').addEventListener('click', submitLeaveRequest);
+document.getElementById('leaveAttachment').addEventListener('change', previewLeaveAttachment);
 document.getElementById('otSubmitBtn').addEventListener('click', submitOTRequest);
 document.getElementById('payrollPdfBtn').addEventListener('click', downloadPayrollPDF);
 
