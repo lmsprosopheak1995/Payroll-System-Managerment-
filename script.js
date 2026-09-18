@@ -766,11 +766,15 @@ function renderWorkplaceQR() {
   if (!settings.workplaceCode) { wrap.innerHTML = ''; return; }
   wrap.innerHTML = '<canvas id="workplaceQrCanvas"></canvas>';
   if (typeof QRCode === 'undefined') {
-    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចផ្ទុកម៉ូឌុល QR បានទេ</p>';
+    console.error('QRCode library (qrcode.js) failed to load — check that the CDN script tag loaded, or network/ad-blocker issues.');
+    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចផ្ទុកម៉ូឌុល QR បានទេ (សូមពិនិត្យ browser console)</p>';
     return;
   }
   QRCode.toCanvas(document.getElementById('workplaceQrCanvas'), settings.workplaceCode, { width: 220, margin: 1 }, function (err) {
-    if (err) wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ</p>';
+    if (err) {
+      console.error('QRCode.toCanvas failed for workplaceCode =', settings.workplaceCode, err);
+      wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (សូមពិនិត្យ browser console)</p>';
+    }
   });
 }
 
