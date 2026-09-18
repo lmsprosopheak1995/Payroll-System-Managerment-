@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ទំព័របុគ្គលិក — ស្កេនវត្តមាន</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -55,6 +56,8 @@
   #payslipTemplate th, #payslipTemplate td { border:1px solid #d1d5db; padding:6px 8px; font-size:12px; text-align:left; }
   #payslipTemplate .ps-header { text-align:center; border-bottom:2px solid #111827; padding-bottom:12px; margin-bottom:14px; }
   #payslipTemplate .ps-total-row td { font-weight:700; background:#f3f4f6; }
+  #empQrReader { width:100%; border-radius:10px; overflow:hidden; background:var(--bg); min-height:180px; }
+  .scan-hint { font-size:0.68rem; color:var(--text-muted); margin:8px 0 0; text-align:center; }
 </style>
 </head>
 <body>
@@ -95,6 +98,12 @@
     <div id="clockTabContent" class="tab-content active">
       <div class="portal-card" style="margin-bottom:14px;">
         <div class="clock-box" id="clockBox"></div>
+        <div style="margin-top:14px;">
+          <button class="secondary" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR ផ្ទាល់ខ្លួន</button>
+          <div id="empQrReader" style="display:none; margin-top:10px;"></div>
+          <p class="scan-hint" id="empScanHint" style="display:none;">*ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
+          <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
+        </div>
       </div>
       <div class="portal-card history">
         <h2>📅 វត្តមានខែនេះ</h2>
@@ -337,6 +346,7 @@ async function doLogin() {
 }
 
 function doLogout() {
+  stopEmpScanner();
   clearSession();
   showLogin();
 }
@@ -385,14 +395,87 @@ function switchEmpTab(tab) {
   document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');
   document.getElementById('otTabContent').classList.toggle('active', tab === 'ot');
   document.getElementById('payrollTabContent').classList.toggle('active', tab === 'payroll');
+  if (tab !== 'clock') stopEmpScanner();
   if (tab === 'attendance') renderAttendanceTabEmp();
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
   if (tab === 'payroll') renderPayrollSummary();
 }
+
+// ==== In-page QR self-scan (clock tab) ====
+let empHtml5QrCodeInstance = null;
+let empScannerRunning = false;
+let empScanBusy = false;
+
+function toggleEmpScanner() {
+  if (empScannerRunning) stopEmpScanner();
+  else startEmpScanner();
+}
+
+function startEmpScanner() {
+  if (typeof Html5Qrcode === 'undefined') {
+    alert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
+    return;
+  }
+  document.getElementById('empQrReader').style.display = '';
+  document.getElementById('empScanHint').style.display = '';
+  document.getElementById('empScanToggleBtn').textContent = '⏹ បញ្ឈប់ការស្កេន';
+  document.getElementById('empScanResult').textContent = '';
+  empHtml5QrCodeInstance = new Html5Qrcode('empQrReader');
+  empHtml5QrCodeInstance.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: 220 },
+    (decodedText) => handleEmpScan(decodedText),
+    () => {}
+  ).then(() => {
+    empScannerRunning = true;
+  }).catch(() => {
+    document.getElementById('empQrReader').style.display = 'none';
+    document.getElementById('empScanHint').style.display = 'none';
+    document.getElementById('empScanToggleBtn').textContent = '📷 ស្កេនកូដ QR ផ្ទាល់ខ្លួន';
+    const r = document.getElementById('empScanResult');
+    r.style.color = 'var(--danger)';
+    r.textContent = '✕ មិនអាចបើកកាមេរ៉ាបានទេ សូមផ្ដល់សិទ្ធិប្រើកាមេរ៉ា ឬពិនិត្យថាទំព័រនេះបើកតាម https:// / localhost';
+  });
+}
+
+function stopEmpScanner() {
+  if (empHtml5QrCodeInstance && empScannerRunning) {
+    empHtml5QrCodeInstance.stop().then(() => {
+      empHtml5QrCodeInstance.clear();
+      empScannerRunning = false;
+      document.getElementById('empQrReader').style.display = 'none';
+      document.getElementById('empScanHint').style.display = 'none';
+      document.getElementById('empScanToggleBtn').textContent = '📷 ស្កេនកូដ QR ផ្ទាល់ខ្លួន';
+    }).catch(() => {});
+  }
+}
+
+async function handleEmpScan(decodedText) {
+  if (empScanBusy) return;
+  const session = getSession();
+  const scannedId = (decodedText || '').trim();
+  const resultEl = document.getElementById('empScanResult');
+  if (scannedId !== session.id) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = '✕ កូដ QR នេះមិនមែនជារបស់អ្នកទេ';
+    return;
+  }
+  empScanBusy = true;
+  resultEl.style.color = 'var(--success)';
+  resultEl.textContent = '✓ បានស្គាល់អត្តសញ្ញាណ កំពុងកត់ត្រា...';
+  stopEmpScanner();
+  const rec = await getTodayRecord();
+  if (!rec || !rec.checkin) await clockIn();
+  else if (!rec.checkout) await clockOut();
+  else resultEl.textContent = 'ℹ អ្នកបានកត់ត្រាទាំងចូល និងចេញរួចសម្រាប់ថ្ងៃនេះ';
+  empScanBusy = false;
+}
+
 document.querySelectorAll('#empTabs .tab-btn').forEach(btn => {
   btn.addEventListener('click', () => switchEmpTab(btn.dataset.etab));
 });
+document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
 document.getElementById('payrollMonthInput').addEventListener('change', renderPayrollSummary);
 
