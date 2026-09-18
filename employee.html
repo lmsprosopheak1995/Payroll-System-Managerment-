@@ -372,12 +372,12 @@ async function loadSettings() {
 async function loadEmployeeRecord() {
   const session = getSession();
   const { data, error } = await supabaseClient.from('employees')
-    .select('id, name, position, dept, phone, email, start_date, salary, status').eq('id', session.id).maybeSingle();
-  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '' }; return; }
+    .select('id, name, position, dept, phone, email, start_date, salary, status, username').eq('id', session.id).maybeSingle();
+  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '', username: '' }; return; }
   currentEmployee = {
     id: data.id, name: data.name, position: data.position || '', dept: data.dept || '',
     phone: data.phone || '', email: data.email || '', startDate: data.start_date || '',
-    salary: parseFloat(data.salary) || 0, status: data.status || 'active',
+    salary: parseFloat(data.salary) || 0, status: data.status || 'active', username: data.username || '',
   };
 }
 
@@ -385,12 +385,13 @@ function renderEmpInfo() {
   const grid = document.getElementById('empInfoGrid');
   if (!currentEmployee) { grid.innerHTML = ''; return; }
   const items = [
-    ['អត្តលេខ', currentEmployee.id],
+    ['អត្តលេខ', currentEmployee.username || currentEmployee.id],
     ['តួនាទី', currentEmployee.position || '-'],
     ['ផ្នែក', currentEmployee.dept || '-'],
     ['ទូរស័ព្ទ', currentEmployee.phone || '-'],
     ['អ៊ីមែល', currentEmployee.email || '-'],
     ['ថ្ងៃចូលធ្វើការ', currentEmployee.startDate || '-'],
+    ['ប្រាក់គោល', '$' + fmtUSD(currentEmployee.salary)],
   ];
   grid.innerHTML = items.map(([l, v]) => `<div class="item"><div class="lbl">${escapeHtml(l)}</div><div class="val">${escapeHtml(String(v))}</div></div>`).join('');
 }
