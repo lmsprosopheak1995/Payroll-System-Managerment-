@@ -291,6 +291,45 @@ function fmtUSD(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleStrin
 function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
 function fmtHours(n) { return (Math.round((n || 0) * 100) / 100).toString(); }
 
+// ---- Shift rules (វេនព្រឹក 07:00-11:00, វេនថ្ងៃ 12:00-16:00) ----
+const SHIFT = {
+  morningStart: 7 * 60,    // 07:00 — ស្កេនចូលមុនម៉ោងនេះ តម្រឹមមក 07:00
+  morningEnd: 11 * 60,     // 11:00 — ចេញសម្រាកបាយ
+  afternoonStart: 12 * 60, // 12:00 — ស្កេនចូលវិញមុនម៉ោងនេះ តម្រឹមមក 12:00
+  afternoonEnd: 16 * 60,   // 16:00 — ម៉ោងចេញធម្មតា
+  otThreshold: 17 * 60,    // 17:00 — ចាប់ពីម៉ោងនេះឡើងទៅ ទើបគិត OT (រាប់ចាប់ពី 16:00)
+  otMealBlockHours: 2,     // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+};
+
+// គណនាម៉ោងធម្មតា និងម៉ោង OT (គិតជានាទី) ពីម៉ោងស្កេនជាក់ស្តែង
+function computeWorkMinutes(checkin, checkout, breakOut, breakIn) {
+  const rawIn = timeToMinutes(checkin);
+  let rawOut = timeToMinutes(checkout);
+  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn };
+  if (rawOut < rawIn) rawOut += 24 * 60;
+
+  // វេនព្រឹក៖ ចូលមុន 07:00 → គិតត្រឹម 07:00, ចេញបាយក្រោយ 11:00 → គិតត្រឹម 11:00
+  const morningIn = Math.max(rawIn, SHIFT.morningStart);
+  let morningOut = SHIFT.morningEnd;
+  const bo = timeToMinutes(breakOut);
+  if (bo !== null && bo < morningOut) morningOut = bo;
+
+  // វេនថ្ងៃ៖ ស្កេនចូលវិញមុន 12:00 → គិតត្រឹម 12:00
+  let afternoonIn = SHIFT.afternoonStart;
+  const bi = timeToMinutes(breakIn);
+  if (bi !== null && bi > afternoonIn) afternoonIn = bi;
+  afternoonIn = Math.max(afternoonIn, rawIn);
+  const afternoonOut = Math.min(rawOut, SHIFT.afternoonEnd);
+
+  const morningMinutes = Math.max(0, Math.min(morningOut, rawOut) - morningIn);
+  const afternoonMinutes = Math.max(0, afternoonOut - afternoonIn);
+  const normalMinutes = Math.min(morningMinutes + afternoonMinutes, settings.standardHours * 60);
+
+  // OT៖ ស្កេនចេញ 16:00–16:59 មិនគិត OT; ចាប់ពី 17:00 ឡើងទៅ គិតពី 16:00 ដល់ម៉ោងស្កេនចេញ
+  const otMinutes = rawOut >= SHIFT.otThreshold ? rawOut - SHIFT.afternoonEnd : 0;
+  return { normalMinutes, otMinutes, rawIn };
+}
+
 // ---- payroll math (mirrors the admin app's calculation) ----
 function computeRow(salary, record) {
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
@@ -300,32 +339,24 @@ function computeRow(salary, record) {
   const checkout = record?.checkout || '';
   const breakOut = record?.breakOut || '';
   const breakIn = record?.breakIn || '';
-  let normalHours = 0, otHours = 0, late = false;
+  let normalHours = 0, otHours = 0, late = false, fullDay = false;
 
   if (status === 'present' && checkin && checkout) {
-    const inMin = timeToMinutes(checkin);
-    let outMin = timeToMinutes(checkout);
-    if (outMin < inMin) outMin += 24 * 60;
-    let totalMinutes = outMin - inMin;
-    if (breakOut && breakIn) {
-      let boMin = timeToMinutes(breakOut);
-      let biMin = timeToMinutes(breakIn);
-      if (boMin < inMin) boMin += 24 * 60;
-      if (biMin < boMin) biMin += 24 * 60;
-      if (boMin >= inMin && boMin <= outMin && biMin >= boMin && biMin <= outMin) totalMinutes -= (biMin - boMin);
-    }
-    const totalHours = Math.max(totalMinutes, 0) / 60;
-    normalHours = Math.min(totalHours, settings.standardHours);
-    otHours = Math.max(totalHours - settings.standardHours, 0);
+    const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn);
+    normalHours = w.normalMinutes / 60;
+    otHours = w.otMinutes / 60;
+    fullDay = w.normalMinutes >= settings.standardHours * 60;
     const startMin = timeToMinutes(settings.standardStart);
-    if (startMin !== null && inMin > startMin) late = true;
+    if (startMin !== null && w.rawIn > startMin) late = true;
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
   const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * normalHours);
   const otPay = round4(hourlyRate * settings.otMultiplier * otHours);
-  const foodPayRiel = (status === 'leave' || normalHours > 0) ? settings.foodDaily : 0;
-  const foodOtPayRiel = otHours > 0 ? settings.foodOT : 0;
+  // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
+  const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
+  // ប្រាក់បាយ OT៖ បន្ថែម foodOT រៀងរាល់ 2 ម៉ោង OT (OT 2ម៉ោង = 1 ដង, OT 4ម៉ោង = 2 ដង)
+  const foodOtPayRiel = Math.floor(otHours / SHIFT.otMealBlockHours + 1e-9) * settings.foodOT;
   const exchangeRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
   const foodPay = round4(foodPayRiel / exchangeRate);
   const foodOtPay = round4(foodOtPayRiel / exchangeRate);
