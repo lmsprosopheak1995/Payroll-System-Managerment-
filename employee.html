@@ -28,6 +28,9 @@
   .who-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
   .who-row .name { font-weight:700; font-size:1rem; }
   .who-row .logout { font-size:0.72rem; background:transparent; color:var(--text-muted); border:1px solid var(--border); padding:5px 10px; }
+  .emp-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+  .emp-info-grid .item .lbl { color:var(--text-muted); font-size:0.66rem; margin-bottom:2px; }
+  .emp-info-grid .item .val { font-size:0.78rem; font-weight:600; word-break:break-word; }
   .clock-box { text-align:center; padding:22px 10px; border:1px solid var(--border); border-radius:12px; margin-bottom:18px; }
   .clock-box .time { font-size:1.8rem; font-weight:700; margin-bottom:10px; }
   .clock-box .status-line { font-size:0.78rem; color:var(--text-muted); margin-bottom:14px; }
@@ -85,6 +88,7 @@
         <div class="name" id="empNameDisplay"></div>
         <button class="logout" id="logoutBtn">ចាកចេញ</button>
       </div>
+      <div class="emp-info-grid" id="empInfoGrid"></div>
     </div>
 
     <div class="tabs" id="empTabs">
@@ -367,9 +371,28 @@ async function loadSettings() {
 
 async function loadEmployeeRecord() {
   const session = getSession();
-  const { data, error } = await supabaseClient.from('employees').select('id, name, position, salary').eq('id', session.id).maybeSingle();
-  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', salary: 0 }; return; }
-  currentEmployee = { id: data.id, name: data.name, position: data.position || '', salary: parseFloat(data.salary) || 0 };
+  const { data, error } = await supabaseClient.from('employees')
+    .select('id, name, position, dept, phone, email, start_date, salary, status').eq('id', session.id).maybeSingle();
+  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '' }; return; }
+  currentEmployee = {
+    id: data.id, name: data.name, position: data.position || '', dept: data.dept || '',
+    phone: data.phone || '', email: data.email || '', startDate: data.start_date || '',
+    salary: parseFloat(data.salary) || 0, status: data.status || 'active',
+  };
+}
+
+function renderEmpInfo() {
+  const grid = document.getElementById('empInfoGrid');
+  if (!currentEmployee) { grid.innerHTML = ''; return; }
+  const items = [
+    ['អត្តលេខ', currentEmployee.id],
+    ['តួនាទី', currentEmployee.position || '-'],
+    ['ផ្នែក', currentEmployee.dept || '-'],
+    ['ទូរស័ព្ទ', currentEmployee.phone || '-'],
+    ['អ៊ីមែល', currentEmployee.email || '-'],
+    ['ថ្ងៃចូលធ្វើការ', currentEmployee.startDate || '-'],
+  ];
+  grid.innerHTML = items.map(([l, v]) => `<div class="item"><div class="lbl">${escapeHtml(l)}</div><div class="val">${escapeHtml(String(v))}</div></div>`).join('');
 }
 
 async function showMain() {
@@ -380,6 +403,7 @@ async function showMain() {
   document.getElementById('mainCard').style.display = '';
   document.getElementById('empNameDisplay').textContent = session.name;
   await Promise.all([loadSettings(), loadEmployeeRecord()]);
+  renderEmpInfo();
   const thisMonth = todayStr().slice(0, 7);
   document.getElementById('attMonthInput').value = thisMonth;
   document.getElementById('payrollMonthInput').value = thisMonth;
