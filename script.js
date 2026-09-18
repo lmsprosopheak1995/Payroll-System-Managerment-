@@ -19,6 +19,13 @@ const DEFAULT_SETTINGS = {
   exchangeRate: 4100,
 };
 
+// ---- password hashing (SHA-256, requires https:// or localhost) ----
+async function sha256Hex(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ---- row <-> object mapping ----
 function rowToEmployee(r) {
   return {
@@ -31,11 +38,12 @@ function rowToEmployee(r) {
     startDate: r.start_date || '',
     salary: r.salary ?? '',
     status: r.status || 'active',
+    username: r.username || '',
   };
 }
 
 function employeeToRow(e) {
-  return {
+  const row = {
     id: e.id,
     name: e.name,
     position: e.position,
@@ -45,7 +53,10 @@ function employeeToRow(e) {
     start_date: e.startDate || null,
     salary: e.salary === '' || e.salary === undefined ? null : e.salary,
     status: e.status,
+    username: e.username || null,
   };
+  if (e.newPasswordHash) row.password_hash = e.newPasswordHash;
+  return row;
 }
 
 function rowToAttRecord(r) {
@@ -515,6 +526,8 @@ function openAddModal() {
   document.getElementById('empStartDate').value = '';
   document.getElementById('empSalary').value = '';
   document.getElementById('empStatus').value = 'active';
+  document.getElementById('empUsername').value = '';
+  document.getElementById('empPassword').value = '';
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('empName').focus();
 }
@@ -533,6 +546,8 @@ function openEditModal(id) {
   document.getElementById('empStartDate').value = e.startDate || '';
   document.getElementById('empSalary').value = e.salary || '';
   document.getElementById('empStatus').value = e.status || 'active';
+  document.getElementById('empUsername').value = e.username || '';
+  document.getElementById('empPassword').value = '';
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -540,13 +555,20 @@ function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
 
-function saveEmployee() {
+async function saveEmployee() {
   const name = document.getElementById('empName').value.trim();
   const position = document.getElementById('empPosition').value.trim();
   const dept = document.getElementById('empDept').value.trim();
 
   if (!name || !position || !dept) {
     alert('សូមបំពេញព័ត៌មានចាំបាច់៖ ឈ្មោះ តួនាទី និងផ្នែក');
+    return;
+  }
+
+  const username = document.getElementById('empUsername').value.trim();
+  const passwordInput = document.getElementById('empPassword').value;
+  if (username && passwordInput === '' && !editingId) {
+    alert('សូមកំណត់ពាក្យសម្ងាត់សម្រាប់គណនីថ្មីនេះ');
     return;
   }
 
@@ -559,6 +581,7 @@ function saveEmployee() {
     startDate: document.getElementById('empStartDate').value,
     salary: document.getElementById('empSalary').value,
     status: document.getElementById('empStatus').value,
+    username,
   };
 
   let savedEmp;
@@ -571,9 +594,14 @@ function saveEmployee() {
     employees.push(savedEmp);
   }
 
+  if (passwordInput) {
+    savedEmp.newPasswordHash = await sha256Hex(passwordInput);
+  }
+
   closeModal();
   renderAll();
   upsertEmployee(savedEmp);
+  delete savedEmp.newPasswordHash;
 }
 
 function deleteEmployee(id) {

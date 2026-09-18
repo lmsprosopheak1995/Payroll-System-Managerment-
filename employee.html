@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ទំព័របុគ្គលិក — ស្កេនវត្តមាន</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  body { display:flex; align-items:flex-start; justify-content:center; padding:24px 14px; }
+  .portal { width:100%; max-width:420px; }
+  .portal-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+  .portal h1 { font-size: 1.05rem; text-align:center; margin: 0 0 4px; }
+  .portal .sub { text-align:center; color:var(--text-muted); font-size:0.75rem; margin:0 0 18px; }
+  .portal .form-group { margin-bottom: 14px; }
+  .portal input { width:100%; padding:10px 12px; font-size:0.9rem; }
+  .portal button.primary-btn { width:100%; padding:11px; font-size:0.9rem; }
+  .portal .error-msg { color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none; }
+  .who-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .who-row .name { font-weight:700; font-size:1rem; }
+  .who-row .logout { font-size:0.72rem; background:transparent; color:var(--text-muted); border:1px solid var(--border); padding:5px 10px; }
+  .clock-box { text-align:center; padding:22px 10px; border:1px solid var(--border); border-radius:12px; margin-bottom:18px; }
+  .clock-box .time { font-size:1.8rem; font-weight:700; margin-bottom:10px; }
+  .clock-box .status-line { font-size:0.78rem; color:var(--text-muted); margin-bottom:14px; }
+  .big-btn { width:100%; padding:16px; font-size:1rem; border-radius:10px; }
+  .big-btn.checkout { background: var(--danger); }
+  .big-btn.checkout:hover { background: var(--danger-hover); }
+  .done-msg { font-size:0.85rem; color:var(--success); font-weight:700; }
+  .history h2 { font-size:0.85rem; margin: 0 0 10px; }
+  .hist-row { display:flex; justify-content:space-between; gap:8px; font-size:0.75rem; padding:8px 4px; border-bottom:1px solid var(--border); }
+  .hist-row .d { color:var(--text-muted); min-width:78px; }
+  .hist-empty { text-align:center; color:var(--text-muted); font-size:0.78rem; padding:16px; }
+  #portalLoading { text-align:center; color:var(--text-muted); font-size:0.8rem; padding:30px 0; }
+</style>
+</head>
+<body>
+<div class="portal">
+  <div id="portalLoading">កំពុងផ្ទុក...</div>
+
+  <div class="portal-card" id="loginCard" style="display:none;">
+    <h1>👤 ទំព័របុគ្គលិក</h1>
+    <p class="sub">ចូលគណនីដើម្បីស្កេនវត្តមាន និងមើលវត្តមានផ្ទាល់ខ្លួន</p>
+    <p class="error-msg" id="loginError"></p>
+    <div class="form-group">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ឈ្មោះអ្នកប្រើ</label>
+      <input type="text" id="loginUsername" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់</label>
+      <input type="password" id="loginPassword" autocomplete="current-password">
+    </div>
+    <button class="primary-btn" id="loginBtn">ចូលគណនី</button>
+  </div>
+
+  <div id="mainCard" style="display:none;">
+    <div class="portal-card" style="margin-bottom:14px;">
+      <div class="who-row">
+        <div class="name" id="empNameDisplay"></div>
+        <button class="logout" id="logoutBtn">ចាកចេញ</button>
+      </div>
+      <div class="clock-box" id="clockBox"></div>
+    </div>
+    <div class="portal-card history">
+      <h2>📅 វត្តមានខែនេះ</h2>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc3pmY3hsa2dmcmxqZnFzYWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTIyNzcsImV4cCI6MjEwNTI2ODI3N30.KEjw8VKbrFgSnNGkd0rqCneEvAaJ9ENuGFT5M4eu0jk';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const SESSION_KEY = 'emp_portal_session';
+const KHMER_WEEKDAYS = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
+
+function todayStr() {
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+function nowTimeStr() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function weekdayLabel(dateStr) {
+  return KHMER_WEEKDAYS[new Date(dateStr + 'T00:00:00').getDay()];
+}
+async function sha256Hex(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function getSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; }
+}
+function setSession(s) { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
+
+function showLogin(errorMsg) {
+  document.getElementById('portalLoading').style.display = 'none';
+  document.getElementById('mainCard').style.display = 'none';
+  document.getElementById('loginCard').style.display = '';
+  const err = document.getElementById('loginError');
+  if (errorMsg) { err.textContent = errorMsg; err.style.display = 'block'; } else { err.style.display = 'none'; }
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!username || !password) { showLogin('សូមបំពេញឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់'); return; }
+  const hash = await sha256Hex(password);
+  const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password_hash: hash });
+  if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
+  if (!data || data.length === 0) { showLogin('ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+  setSession({ id: data[0].id, name: data[0].name });
+  document.getElementById('loginPassword').value = '';
+  await showMain();
+}
+
+function doLogout() {
+  clearSession();
+  showLogin();
+}
+
+async function showMain() {
+  const session = getSession();
+  if (!session) { showLogin(); return; }
+  document.getElementById('portalLoading').style.display = 'none';
+  document.getElementById('loginCard').style.display = 'none';
+  document.getElementById('mainCard').style.display = '';
+  document.getElementById('empNameDisplay').textContent = session.name;
+  await renderClockBox();
+  await renderHistory();
+}
+
+async function getTodayRecord() {
+  const session = getSession();
+  const today = todayStr();
+  const { data, error } = await supabaseClient.from('attendance').select('*')
+    .eq('date', today).eq('employee_id', session.id).maybeSingle();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+async function renderClockBox() {
+  const box = document.getElementById('clockBox');
+  box.innerHTML = '<div class="status-line">កំពុងផ្ទុក...</div>';
+  const rec = await getTodayRecord();
+  const time = nowTimeStr();
+
+  if (!rec || !rec.checkin) {
+    box.innerHTML = `
+      <div class="time">${time}</div>
+      <div class="status-line">អ្នកមិនទាន់កត់ត្រាម៉ោងចូលថ្ងៃនេះទេ</div>
+      <button class="big-btn" id="clockInBtn">✅ កត់ត្រាម៉ោងចូល</button>
+    `;
+    document.getElementById('clockInBtn').addEventListener('click', clockIn);
+  } else if (!rec.checkout) {
+    box.innerHTML = `
+      <div class="time">${time}</div>
+      <div class="status-line">ចូលធ្វើការម៉ោង <strong>${rec.checkin}</strong></div>
+      <button class="big-btn checkout" id="clockOutBtn">🚪 កត់ត្រាម៉ោងចេញ</button>
+    `;
+    document.getElementById('clockOutBtn').addEventListener('click', clockOut);
+  } else {
+    box.innerHTML = `
+      <div class="done-msg">✓ ថ្ងៃនេះកត់ត្រារួចរាល់</div>
+      <div class="status-line" style="margin-top:6px;">ចូល ${rec.checkin} · ចេញ ${rec.checkout}</div>
+    `;
+  }
+}
+
+async function clockIn() {
+  const session = getSession();
+  const today = todayStr();
+  const row = { date: today, employee_id: session.id, status: 'present', checkin: nowTimeStr(), checkout: '', break_out: '', break_in: '' };
+  const { error } = await supabaseClient.from('attendance').upsert(row, { onConflict: 'date,employee_id' });
+  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  await renderClockBox();
+  await renderHistory();
+}
+
+async function clockOut() {
+  const session = getSession();
+  const today = todayStr();
+  const { error } = await supabaseClient.from('attendance')
+    .update({ checkout: nowTimeStr() })
+    .eq('date', today).eq('employee_id', session.id);
+  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  await renderClockBox();
+  await renderHistory();
+}
+
+async function renderHistory() {
+  const session = getSession();
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
+  const month = todayStr().slice(0, 7);
+  const { data, error } = await supabaseClient.from('attendance').select('*')
+    .eq('employee_id', session.id).gte('date', month + '-01').lte('date', month + '-31')
+    .order('date', { ascending: false });
+  if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
+  if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានកំណត់ត្រាខែនេះទេ</div>'; return; }
+  list.innerHTML = data.map(r => {
+    const parts = [];
+    if (r.checkin) parts.push('ចូល ' + r.checkin);
+    if (r.checkout) parts.push('ចេញ ' + r.checkout);
+    const right = parts.length ? parts.join(' · ') : (STATUS_LABELS[r.status] || '-');
+    return `<div class="hist-row"><span class="d">${r.date} (${weekdayLabel(r.date)})</span><span>${right}</span></div>`;
+  }).join('');
+}
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+(function init() {
+  const session = getSession();
+  if (session) showMain(); else showLogin();
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,10 @@
 <div class="container">
   <header>
     <h1>🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</h1>
-    <button id="addBtn">➕ បន្ថែមបុគ្គលិកថ្មី</button>
+    <div style="display:flex; gap:8px;">
+      <a href="employee.html" target="_blank" class="secondary" style="text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; border-radius:6px; border:1px solid var(--border); color:var(--text); font-size:0.8rem; font-weight:600;">👤 ទំព័រចូលបុគ្គលិក</a>
+      <button id="addBtn">➕ បន្ថែមបុគ្គលិកថ្មី</button>
+    </div>
   </header>
 
   <div class="tabs">
@@ -220,6 +223,18 @@
         <option value="active">កំពុងបម្រើការ</option>
         <option value="inactive">ឈប់បម្រើការ</option>
       </select>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+    <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">គណនីសម្រាប់ចូលទំព័របុគ្គលិក (ស្កេន/មើលវត្តមានផ្ទាល់ខ្លួន)</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ឈ្មោះអ្នកប្រើ (Username)</label>
+        <input type="text" id="empUsername" placeholder="ឧ. sopheak01" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>ពាក្យសម្ងាត់</label>
+        <input type="password" id="empPassword" placeholder="ទុកទទេប្រសិនមិនប្តូរ" autocomplete="new-password">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="secondary" id="cancelBtn">បោះបង់</button>
