@@ -125,7 +125,7 @@
         <div class="attendance-stats" id="empAttStats" style="margin-bottom:12px;"></div>
         <div class="table-wrap" style="box-shadow:none;">
           <table class="att-mini-table">
-            <thead><tr><th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញ</th><th>ស្ថានភាព</th><th>ធម្មតា(ម៉ោង)</th><th>ថែម(ម៉ោង)</th><th>សរុប($)</th></tr></thead>
+            <thead><tr><th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th><th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា(ម៉ោង)</th><th>ថែម(ម៉ោង)</th><th>សរុប($)</th></tr></thead>
             <tbody id="empAttBody"></tbody>
           </table>
         </div>
@@ -309,7 +309,7 @@ function computeRow(salary, record) {
   const foodOtPay = round4(foodOtPayRiel / exchangeRate);
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
-  return { status, checkin, checkout, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel };
 }
 
 function todayStr() {
@@ -646,7 +646,7 @@ async function loadMonthAttendance(month) {
 async function renderAttendanceTabEmp() {
   const month = document.getElementById('attMonthInput').value || todayStr().slice(0, 7);
   const tbody = document.getElementById('empAttBody');
-  tbody.innerHTML = '<tr><td colspan="8">កំពុងផ្ទុក...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11">កំពុងផ្ទុក...</td></tr>';
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
@@ -662,8 +662,11 @@ async function renderAttendanceTabEmp() {
       <td>${date.slice(8)}</td>
       <td>${weekdayLabel(date)}</td>
       <td>${r.checkin || '-'}</td>
+      <td>${r.breakOut || '-'}</td>
+      <td>${r.breakIn || '-'}</td>
       <td>${r.checkout || '-'}</td>
-      <td>${r.late ? '<span class="badge inactive">យឺត</span>' : (STATUS_LABELS[r.status] || '-')}</td>
+      <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
+      <td>${STATUS_LABELS[r.status] || '-'}</td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
       <td>$${fmtUSD(r.total)}</td>
