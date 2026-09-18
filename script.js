@@ -101,7 +101,16 @@ const DEFAULT_SETTINGS = {
   foodOT: 2000,
   workDaysPerMonth: 26,
   exchangeRate: 4100,
+  workplaceCode: null,
 };
+
+// ---- Workplace QR code (random code posted at the office entrance) ----
+function generateWorkplaceCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = 'WP-';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
 
 // ---- row <-> object mapping ----
 function rowToEmployee(r) {
@@ -188,7 +197,7 @@ async function loadSettings() {
     return;
   }
   if (!data) {
-    settings = { ...DEFAULT_SETTINGS };
+    settings = { ...DEFAULT_SETTINGS, workplaceCode: generateWorkplaceCode() };
     await upsertSettings();
     return;
   }
@@ -200,7 +209,13 @@ async function loadSettings() {
     foodOT: data.food_ot ?? DEFAULT_SETTINGS.foodOT,
     workDaysPerMonth: data.work_days_per_month ?? DEFAULT_SETTINGS.workDaysPerMonth,
     exchangeRate: data.exchange_rate ?? DEFAULT_SETTINGS.exchangeRate,
+    workplaceCode: data.workplace_code ?? null,
   };
+  // បង្កើតកូដម្តងដំបូង ប្រសិនបើមិនទាន់មាន (ស្រប migration ចាស់ដែលមិនទាន់មាន column នេះ)
+  if (!settings.workplaceCode) {
+    settings.workplaceCode = generateWorkplaceCode();
+    await upsertSettings();
+  }
 }
 
 // ---- write to Supabase ----
@@ -240,6 +255,7 @@ async function upsertSettings() {
     food_ot: settings.foodOT,
     work_days_per_month: settings.workDaysPerMonth,
     exchange_rate: settings.exchangeRate,
+    workplace_code: settings.workplaceCode,
   };
   const { error } = await supabaseClient.from('app_settings').upsert(row, { onConflict: 'id' });
   if (error) {
@@ -741,6 +757,40 @@ function renderAll() {
   renderAttendanceTab();
   renderScanLog();
   renderRequestsTab();
+  renderWorkplaceQR();
+}
+
+// ---- Workplace QR (posted at the entrance, self-scanned by employees) ----
+function renderWorkplaceQR() {
+  const wrap = document.getElementById('workplaceQrCanvasWrap');
+  if (!wrap) return;
+  if (!settings.workplaceCode) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<canvas id="workplaceQrCanvas"></canvas>';
+  if (typeof QRCode === 'undefined') {
+    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចផ្ទុកម៉ូឌុល QR បានទេ</p>';
+    return;
+  }
+  QRCode.toCanvas(document.getElementById('workplaceQrCanvas'), settings.workplaceCode, { width: 220, margin: 1 }, function (err) {
+    if (err) wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ</p>';
+  });
+}
+
+async function regenerateWorkplaceQR() {
+  if (!confirm('បង្កើតកូដ QR កន្លែងធ្វើការថ្មី? QR ចាស់ដែលបានបិទ/បោះពុម្ពនឹងលែងប្រើការបាន')) return;
+  settings.workplaceCode = generateWorkplaceCode();
+  await upsertSettings();
+  renderWorkplaceQR();
+}
+
+function downloadWorkplaceQR() {
+  const canvas = document.getElementById('workplaceQrCanvas');
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'workplace_qr.png';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function openAddModal() {
@@ -1039,6 +1089,8 @@ document.getElementById('qrDownloadBtn').addEventListener('click', downloadEmplo
 document.getElementById('qrOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'qrOverlay') closeQRModal();
 });
+document.getElementById('workplaceQrRegenBtn').addEventListener('click', regenerateWorkplaceQR);
+document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
