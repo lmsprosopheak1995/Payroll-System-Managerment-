@@ -764,18 +764,21 @@ function renderWorkplaceQR() {
   const wrap = document.getElementById('workplaceQrCanvasWrap');
   if (!wrap) return;
   if (!settings.workplaceCode) { wrap.innerHTML = ''; return; }
-  wrap.innerHTML = '<canvas id="workplaceQrCanvas"></canvas>';
-  if (typeof QRCode === 'undefined') {
-    console.error('QRCode library (qrcode.js) failed to load — check that the CDN script tag loaded, or network/ad-blocker issues.');
+  if (typeof qrcode === 'undefined') {
+    console.error('QR library (qrcode-generator) failed to load — check that the CDN script tag loaded, or network/ad-blocker issues.');
     wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចផ្ទុកម៉ូឌុល QR បានទេ (សូមពិនិត្យ browser console)</p>';
     return;
   }
-  QRCode.toCanvas(document.getElementById('workplaceQrCanvas'), settings.workplaceCode, { width: 220, margin: 1 }, function (err) {
-    if (err) {
-      console.error('QRCode.toCanvas failed for workplaceCode =', settings.workplaceCode, err);
-      wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (សូមពិនិត្យ browser console)</p>';
-    }
-  });
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(settings.workplaceCode);
+    qr.make();
+    const dataUrl = qr.createDataURL(6, 8);
+    wrap.innerHTML = `<img id="workplaceQrImg" src="${dataUrl}" alt="Workplace QR" style="max-width:220px;width:100%;border-radius:8px;">`;
+  } catch (e) {
+    console.error('QR generation failed for workplaceCode =', settings.workplaceCode, e);
+    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (សូមពិនិត្យ browser console)</p>';
+  }
 }
 
 async function regenerateWorkplaceQR() {
@@ -786,11 +789,11 @@ async function regenerateWorkplaceQR() {
 }
 
 function downloadWorkplaceQR() {
-  const canvas = document.getElementById('workplaceQrCanvas');
-  if (!canvas) return;
+  const img = document.getElementById('workplaceQrImg');
+  if (!img) return;
   const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
-  a.download = 'workplace_qr.png';
+  a.href = img.src;
+  a.download = 'workplace_qr.gif';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
