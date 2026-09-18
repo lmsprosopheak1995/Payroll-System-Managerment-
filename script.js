@@ -511,6 +511,15 @@ function uid() {
   return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
+function generateEmployeeCode() {
+  const used = new Set(employees.map(e => (e.username || '').toUpperCase()));
+  let code;
+  do {
+    code = 'B-' + String(Math.floor(1000 + Math.random() * 9000));
+  } while (used.has(code));
+  return code;
+}
+
 // ==== Leave / Overtime requests (admin approval) ====
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
 const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
@@ -745,7 +754,7 @@ function openAddModal() {
   document.getElementById('empStartDate').value = '';
   document.getElementById('empSalary').value = '';
   document.getElementById('empStatus').value = 'active';
-  document.getElementById('empUsername').value = '';
+  document.getElementById('empUsername').value = generateEmployeeCode();
   document.getElementById('empPassword').value = '';
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('empName').focus();
@@ -1001,6 +1010,9 @@ function downloadEmployeeQR() {
 }
 
 document.getElementById('addBtn').addEventListener('click', openAddModal);
+document.getElementById('empUsernameRegenBtn').addEventListener('click', () => {
+  document.getElementById('empUsername').value = generateEmployeeCode();
+});
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('saveBtn').addEventListener('click', saveEmployee);
 document.getElementById('exportBtn').addEventListener('click', exportCSV);
