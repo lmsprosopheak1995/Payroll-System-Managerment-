@@ -79,7 +79,7 @@ h1 { font-size: 1.15rem; margin: 0; }
   margin-bottom: 18px;
   align-items: center;
 }
-input, select {
+input, select, textarea {
   font-family: inherit;
   font-size: 0.8rem;
   padding: 6px 9px;
@@ -88,6 +88,10 @@ input, select {
   background: var(--card-bg);
   color: var(--text);
 }
+textarea { width: 100%; resize: vertical; }
+.badge.pending { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+.badge.approved { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.badge.rejected { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
 #searchInput { flex: 1; min-width: 180px; }
 button {
   font-family: inherit;

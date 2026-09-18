@@ -6,6 +6,8 @@
 <title>ទំព័របុគ្គលិក — ស្កេនវត្តមាន</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
   body { display:flex; align-items:flex-start; justify-content:center; padding:24px 14px; }
   .portal { width:100%; max-width:420px; }
@@ -37,6 +39,22 @@
   .hist-row .d { color:var(--text-muted); min-width:78px; }
   .hist-empty { text-align:center; color:var(--text-muted); font-size:0.78rem; padding:16px; }
   #portalLoading { text-align:center; color:var(--text-muted); font-size:0.8rem; padding:30px 0; }
+  .portal .tabs { margin-bottom:14px; overflow-x:auto; flex-wrap:nowrap; }
+  .portal .tab-btn { font-size:0.72rem; padding:7px 2px; margin-right:10px; white-space:nowrap; }
+  .req-row { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:0.75rem; padding:10px 4px; border-bottom:1px solid var(--border); }
+  .req-row .rmeta { color:var(--text-muted); font-size:0.7rem; margin-top:2px; }
+  .req-row .rright { text-align:right; white-space:nowrap; }
+  .att-mini-table { width:100%; border-collapse:collapse; font-size:0.7rem; }
+  .att-mini-table th, .att-mini-table td { padding:5px 4px; border-bottom:1px solid var(--border); text-align:center; }
+  .att-mini-table th { color:var(--text-muted); font-weight:600; font-size:0.63rem; }
+  .payroll-line { display:flex; justify-content:space-between; font-size:0.8rem; padding:7px 2px; border-bottom:1px solid var(--border); }
+  .payroll-line.total { font-weight:700; font-size:0.9rem; border-bottom:none; padding-top:12px; }
+  #payslipTemplate { display:none; position:fixed; left:-9999px; top:0; width:680px; background:#ffffff; color:#111827; padding:32px; font-family:'Khmer OS','Noto Sans Khmer',system-ui,sans-serif; }
+  #payslipTemplate * { color:#111827 !important; }
+  #payslipTemplate table { width:100%; border-collapse:collapse; margin-top:14px; }
+  #payslipTemplate th, #payslipTemplate td { border:1px solid #d1d5db; padding:6px 8px; font-size:12px; text-align:left; }
+  #payslipTemplate .ps-header { text-align:center; border-bottom:2px solid #111827; padding-bottom:12px; margin-bottom:14px; }
+  #payslipTemplate .ps-total-row td { font-weight:700; background:#f3f4f6; }
 </style>
 </head>
 <body>
@@ -64,14 +82,122 @@
         <div class="name" id="empNameDisplay"></div>
         <button class="logout" id="logoutBtn">ចាកចេញ</button>
       </div>
-      <div class="clock-box" id="clockBox"></div>
     </div>
-    <div class="portal-card history">
-      <h2>📅 វត្តមានខែនេះ</h2>
-      <div id="historyList"></div>
+
+    <div class="tabs" id="empTabs">
+      <button class="tab-btn active" data-etab="clock">🕐 ម៉ោងធ្វើការ</button>
+      <button class="tab-btn" data-etab="attendance">📅 វត្តមាន</button>
+      <button class="tab-btn" data-etab="leave">📝 សុំច្បាប់</button>
+      <button class="tab-btn" data-etab="ot">⏱ សុំថែមម៉ោង</button>
+      <button class="tab-btn" data-etab="payroll">💰 ប្រាក់ខែ</button>
+    </div>
+
+    <div id="clockTabContent" class="tab-content active">
+      <div class="portal-card" style="margin-bottom:14px;">
+        <div class="clock-box" id="clockBox"></div>
+      </div>
+      <div class="portal-card history">
+        <h2>📅 វត្តមានខែនេះ</h2>
+        <div id="historyList"></div>
+      </div>
+    </div>
+
+    <div id="attendanceTabContent" class="tab-content">
+      <div class="portal-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+          <h2 style="margin:0;font-size:0.9rem;">តារាងវត្តមានការងារ</h2>
+          <input type="month" id="attMonthInput" style="font-size:0.78rem;">
+        </div>
+        <div class="attendance-stats" id="empAttStats" style="margin-bottom:12px;"></div>
+        <div class="table-wrap" style="box-shadow:none;">
+          <table class="att-mini-table">
+            <thead><tr><th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញ</th><th>ស្ថានភាព</th><th>ធម្មតា(ម៉ោង)</th><th>ថែម(ម៉ោង)</th><th>សរុប($)</th></tr></thead>
+            <tbody id="empAttBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="leaveTabContent" class="tab-content">
+      <div class="portal-card" style="margin-bottom:14px;">
+        <h2 style="margin:0 0 12px;font-size:0.9rem;">ស្នើសុំច្បាប់</h2>
+        <p class="error-msg" id="leaveError"></p>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ប្រភេទច្បាប់</label>
+          <select id="leaveType">
+            <option value="annual">ច្បាប់ប្រចាំឆ្នាំ</option>
+            <option value="sick">ច្បាប់ឈឺ</option>
+            <option value="unpaid">ច្បាប់គ្មានប្រាក់ខែ</option>
+            <option value="other">ផ្សេងៗ</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពីថ្ងៃ</label>
+            <input type="date" id="leaveStart">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ដល់ថ្ងៃ</label>
+            <input type="date" id="leaveEnd">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ</label>
+          <textarea id="leaveReason" rows="3"></textarea>
+        </div>
+        <button class="primary-btn" id="leaveSubmitBtn">ដាក់ស្នើសុំ</button>
+      </div>
+      <div class="portal-card history">
+        <h2 style="font-size:0.85rem;margin:0 0 10px;">ប្រវត្តិសំណើច្បាប់</h2>
+        <div id="leaveHistList"></div>
+      </div>
+    </div>
+
+    <div id="otTabContent" class="tab-content">
+      <div class="portal-card" style="margin-bottom:14px;">
+        <h2 style="margin:0 0 12px;font-size:0.9rem;">ស្នើសុំធ្វើការថែមម៉ោង</h2>
+        <p class="error-msg" id="otError"></p>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ថ្ងៃ</label>
+          <input type="date" id="otDate">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចាប់ផ្តើម</label>
+            <input type="time" id="otStart">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងបញ្ចប់</label>
+            <input type="time" id="otEnd">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ</label>
+          <textarea id="otReason" rows="3"></textarea>
+        </div>
+        <button class="primary-btn" id="otSubmitBtn">ដាក់ស្នើសុំ</button>
+      </div>
+      <div class="portal-card history">
+        <h2 style="font-size:0.85rem;margin:0 0 10px;">ប្រវត្តិសំណើថែមម៉ោង</h2>
+        <div id="otHistList"></div>
+      </div>
+    </div>
+
+    <div id="payrollTabContent" class="tab-content">
+      <div class="portal-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <h2 style="margin:0;font-size:0.9rem;">ប្រាក់ខែ (Payroll)</h2>
+          <input type="month" id="payrollMonthInput" style="font-size:0.78rem;">
+        </div>
+        <div id="payrollSummary"></div>
+        <button class="primary-btn" id="payrollPdfBtn" style="margin-top:14px;">⬇ ទាញយក Payroll Slip (PDF)</button>
+      </div>
     </div>
   </div>
 </div>
+
+<!-- Hidden template rendered to canvas then exported as PDF -->
+<div id="payslipTemplate"></div>
 
 <script>
 const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
@@ -81,6 +207,90 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const SESSION_KEY = 'emp_portal_session';
 const KHMER_WEEKDAYS = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
+const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const DEFAULT_SETTINGS = {
+  standardStart: '08:00', standardHours: 8, otMultiplier: 1.5,
+  foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
+};
+
+let currentEmployee = null; // { id, name, salary }
+let settings = { ...DEFAULT_SETTINGS };
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function timeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+function daysInMonth(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const count = new Date(y, m, 0).getDate();
+  const dates = [];
+  for (let d = 1; d <= count; d++) dates.push(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  return dates;
+}
+function datesInRange(startStr, endStr) {
+  const dates = [];
+  let d = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  while (d <= end) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+function fmtUSD(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }); }
+function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
+function fmtHours(n) { return (Math.round((n || 0) * 100) / 100).toString(); }
+
+// ---- payroll math (mirrors the admin app's calculation) ----
+function computeRow(salary, record) {
+  const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
+  const hourlyRate = settings.standardHours > 0 ? dailyRate / settings.standardHours : 0;
+  const status = record?.status || '';
+  const checkin = record?.checkin || '';
+  const checkout = record?.checkout || '';
+  const breakOut = record?.breakOut || '';
+  const breakIn = record?.breakIn || '';
+  let normalHours = 0, otHours = 0, late = false;
+
+  if (status === 'present' && checkin && checkout) {
+    const inMin = timeToMinutes(checkin);
+    let outMin = timeToMinutes(checkout);
+    if (outMin < inMin) outMin += 24 * 60;
+    let totalMinutes = outMin - inMin;
+    if (breakOut && breakIn) {
+      let boMin = timeToMinutes(breakOut);
+      let biMin = timeToMinutes(breakIn);
+      if (boMin < inMin) boMin += 24 * 60;
+      if (biMin < boMin) biMin += 24 * 60;
+      if (boMin >= inMin && boMin <= outMin && biMin >= boMin && biMin <= outMin) totalMinutes -= (biMin - boMin);
+    }
+    const totalHours = Math.max(totalMinutes, 0) / 60;
+    normalHours = Math.min(totalHours, settings.standardHours);
+    otHours = Math.max(totalHours - settings.standardHours, 0);
+    const startMin = timeToMinutes(settings.standardStart);
+    if (startMin !== null && inMin > startMin) late = true;
+  }
+
+  const round4 = n => Math.round(n * 10000) / 10000;
+  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * normalHours);
+  const otPay = round4(hourlyRate * settings.otMultiplier * otHours);
+  const foodPayRiel = (status === 'leave' || normalHours > 0) ? settings.foodDaily : 0;
+  const foodOtPayRiel = otHours > 0 ? settings.foodOT : 0;
+  const exchangeRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
+  const foodPay = round4(foodPayRiel / exchangeRate);
+  const foodOtPay = round4(foodOtPayRiel / exchangeRate);
+  const total = round4(normalPay + otPay + foodPay + foodOtPay);
+  const riel = Math.round(total * settings.exchangeRate);
+  return { status, checkin, checkout, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel };
+}
 
 function todayStr() {
   const d = new Date();
@@ -131,6 +341,27 @@ function doLogout() {
   showLogin();
 }
 
+async function loadSettings() {
+  const { data, error } = await supabaseClient.from('app_settings').select('*').eq('id', 1).maybeSingle();
+  if (error || !data) { settings = { ...DEFAULT_SETTINGS }; return; }
+  settings = {
+    standardStart: data.standard_start ?? DEFAULT_SETTINGS.standardStart,
+    standardHours: data.standard_hours ?? DEFAULT_SETTINGS.standardHours,
+    otMultiplier: data.ot_multiplier ?? DEFAULT_SETTINGS.otMultiplier,
+    foodDaily: data.food_daily ?? DEFAULT_SETTINGS.foodDaily,
+    foodOT: data.food_ot ?? DEFAULT_SETTINGS.foodOT,
+    workDaysPerMonth: data.work_days_per_month ?? DEFAULT_SETTINGS.workDaysPerMonth,
+    exchangeRate: data.exchange_rate ?? DEFAULT_SETTINGS.exchangeRate,
+  };
+}
+
+async function loadEmployeeRecord() {
+  const session = getSession();
+  const { data, error } = await supabaseClient.from('employees').select('id, name, position, salary').eq('id', session.id).maybeSingle();
+  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', salary: 0 }; return; }
+  currentEmployee = { id: data.id, name: data.name, position: data.position || '', salary: parseFloat(data.salary) || 0 };
+}
+
 async function showMain() {
   const session = getSession();
   if (!session) { showLogin(); return; }
@@ -138,9 +369,32 @@ async function showMain() {
   document.getElementById('loginCard').style.display = 'none';
   document.getElementById('mainCard').style.display = '';
   document.getElementById('empNameDisplay').textContent = session.name;
+  await Promise.all([loadSettings(), loadEmployeeRecord()]);
+  const thisMonth = todayStr().slice(0, 7);
+  document.getElementById('attMonthInput').value = thisMonth;
+  document.getElementById('payrollMonthInput').value = thisMonth;
   await renderClockBox();
   await renderHistory();
+  switchEmpTab('clock');
 }
+
+function switchEmpTab(tab) {
+  document.querySelectorAll('#empTabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.etab === tab));
+  document.getElementById('clockTabContent').classList.toggle('active', tab === 'clock');
+  document.getElementById('attendanceTabContent').classList.toggle('active', tab === 'attendance');
+  document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');
+  document.getElementById('otTabContent').classList.toggle('active', tab === 'ot');
+  document.getElementById('payrollTabContent').classList.toggle('active', tab === 'payroll');
+  if (tab === 'attendance') renderAttendanceTabEmp();
+  if (tab === 'leave') renderLeaveHist();
+  if (tab === 'ot') renderOTHist();
+  if (tab === 'payroll') renderPayrollSummary();
+}
+document.querySelectorAll('#empTabs .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchEmpTab(btn.dataset.etab));
+});
+document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
+document.getElementById('payrollMonthInput').addEventListener('change', renderPayrollSummary);
 
 async function getTodayRecord() {
   const session = getSession();
@@ -218,6 +472,228 @@ async function renderHistory() {
     return `<div class="hist-row"><span class="d">${r.date} (${weekdayLabel(r.date)})</span><span>${right}</span></div>`;
   }).join('');
 }
+
+// ==== Monthly attendance table (វត្តមាន tab) ====
+async function loadMonthAttendance(month) {
+  const session = getSession();
+  const { data, error } = await supabaseClient.from('attendance').select('*')
+    .eq('employee_id', session.id).gte('date', month + '-01').lte('date', monthEndStr(month));
+  const map = {};
+  if (!error && data) data.forEach(r => { map[r.date] = { status: r.status || '', checkin: r.checkin || '', checkout: r.checkout || '', breakOut: r.break_out || '', breakIn: r.break_in || '' }; });
+  return map;
+}
+
+async function renderAttendanceTabEmp() {
+  const month = document.getElementById('attMonthInput').value || todayStr().slice(0, 7);
+  const tbody = document.getElementById('empAttBody');
+  tbody.innerHTML = '<tr><td colspan="8">កំពុងផ្ទុក...</td></tr>';
+  const dayMap = await loadMonthAttendance(month);
+  const dates = daysInMonth(month);
+  const salary = currentEmployee ? currentEmployee.salary : 0;
+  let totals = { total: 0, workDays: 0, lateDays: 0, leaveDays: 0 };
+
+  tbody.innerHTML = dates.map(date => {
+    const r = computeRow(salary, dayMap[date]);
+    totals.total += r.total;
+    if (r.status === 'present') totals.workDays++;
+    if (r.status === 'leave') totals.leaveDays++;
+    if (r.late) totals.lateDays++;
+    return `<tr>
+      <td>${date.slice(8)}</td>
+      <td>${weekdayLabel(date)}</td>
+      <td>${r.checkin || '-'}</td>
+      <td>${r.checkout || '-'}</td>
+      <td>${r.late ? '<span class="badge inactive">យឺត</span>' : (STATUS_LABELS[r.status] || '-')}</td>
+      <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
+      <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
+      <td>$${fmtUSD(r.total)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('empAttStats').innerHTML = `
+    <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
+    <div class="stat-card"><div class="num">${totals.leaveDays}</div><div class="label">ថ្ងៃច្បាប់</div></div>
+    <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>
+  `;
+}
+
+async function summarizeMonth(month) {
+  const dayMap = await loadMonthAttendance(month);
+  const dates = daysInMonth(month);
+  const salary = currentEmployee ? currentEmployee.salary : 0;
+  let t = { workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
+  dates.forEach(date => {
+    const r = computeRow(salary, dayMap[date]);
+    if (r.status === 'present') t.workDays++;
+    if (r.status === 'leave') t.leaveDays++;
+    if (r.status === 'absent') t.absentDays++;
+    if (r.late) t.lateDays++;
+    t.normalHours += r.normalHours; t.otHours += r.otHours;
+    t.normalPay += r.normalPay; t.otPay += r.otPay;
+    t.foodPay += r.foodPay; t.foodOtPay += r.foodOtPay;
+    t.total += r.total; t.riel += r.riel;
+  });
+  return t;
+}
+
+// ==== ស្នើសុំច្បាប់ ====
+async function submitLeaveRequest() {
+  const session = getSession();
+  const leaveType = document.getElementById('leaveType').value;
+  const start = document.getElementById('leaveStart').value;
+  const end = document.getElementById('leaveEnd').value;
+  const reason = document.getElementById('leaveReason').value.trim();
+  const err = document.getElementById('leaveError');
+  err.style.display = 'none';
+  if (!start || !end) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
+  if (end < start) { err.textContent = 'ថ្ងៃបញ្ចប់ត្រូវនៅក្រោយថ្ងៃចាប់ផ្តើម'; err.style.display = 'block'; return; }
+  const { error } = await supabaseClient.from('leave_requests').insert({
+    employee_id: session.id, leave_type: leaveType, start_date: start, end_date: end, reason, status: 'pending',
+  });
+  if (error) { err.textContent = 'ដាក់ស្នើសុំមិនជោគជ័យ៖ ' + error.message; err.style.display = 'block'; return; }
+  document.getElementById('leaveStart').value = '';
+  document.getElementById('leaveEnd').value = '';
+  document.getElementById('leaveReason').value = '';
+  await renderLeaveHist();
+}
+
+async function renderLeaveHist() {
+  const session = getSession();
+  const list = document.getElementById('leaveHistList');
+  list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
+  const { data, error } = await supabaseClient.from('leave_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
+  if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
+  if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
+  list.innerHTML = data.map(r => `
+    <div class="req-row">
+      <div>
+        <div><strong>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</strong></div>
+        <div class="rmeta">${r.start_date} → ${r.end_date}</div>
+        ${r.reason ? `<div class="rmeta">${escapeHtml(r.reason)}</div>` : ''}
+        ${r.status === 'rejected' && r.admin_note ? `<div class="rmeta">មូលហេតុបដិសេធ៖ ${escapeHtml(r.admin_note)}</div>` : ''}
+      </div>
+      <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
+    </div>
+  `).join('');
+}
+
+// ==== ស្នើសុំថែមម៉ោង ====
+async function submitOTRequest() {
+  const session = getSession();
+  const date = document.getElementById('otDate').value;
+  const start = document.getElementById('otStart').value;
+  const end = document.getElementById('otEnd').value;
+  const reason = document.getElementById('otReason').value.trim();
+  const err = document.getElementById('otError');
+  err.style.display = 'none';
+  if (!date || !start || !end) { err.textContent = 'សូមបំពេញថ្ងៃ និងម៉ោង'; err.style.display = 'block'; return; }
+  const { error } = await supabaseClient.from('overtime_requests').insert({
+    employee_id: session.id, work_date: date, start_time: start, end_time: end, reason, status: 'pending',
+  });
+  if (error) { err.textContent = 'ដាក់ស្នើសុំមិនជោគជ័យ៖ ' + error.message; err.style.display = 'block'; return; }
+  document.getElementById('otDate').value = '';
+  document.getElementById('otStart').value = '';
+  document.getElementById('otEnd').value = '';
+  document.getElementById('otReason').value = '';
+  await renderOTHist();
+}
+
+async function renderOTHist() {
+  const session = getSession();
+  const list = document.getElementById('otHistList');
+  list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
+  const { data, error } = await supabaseClient.from('overtime_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
+  if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
+  if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
+  list.innerHTML = data.map(r => `
+    <div class="req-row">
+      <div>
+        <div><strong>${r.work_date}</strong></div>
+        <div class="rmeta">${r.start_time} - ${r.end_time}</div>
+        ${r.reason ? `<div class="rmeta">${escapeHtml(r.reason)}</div>` : ''}
+        ${r.status === 'rejected' && r.admin_note ? `<div class="rmeta">មូលហេតុបដិសេធ៖ ${escapeHtml(r.admin_note)}</div>` : ''}
+      </div>
+      <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
+    </div>
+  `).join('');
+}
+
+// ==== ប្រាក់ខែ (Payroll) ====
+async function renderPayrollSummary() {
+  const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
+  const box = document.getElementById('payrollSummary');
+  box.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
+  const t = await summarizeMonth(month);
+  box.innerHTML = `
+    <div class="payroll-line"><span>ថ្ងៃធ្វើការ</span><span>${t.workDays} ថ្ងៃ</span></div>
+    <div class="payroll-line"><span>ថ្ងៃច្បាប់</span><span>${t.leaveDays} ថ្ងៃ</span></div>
+    <div class="payroll-line"><span>ម៉ោងធម្មតា</span><span>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</span></div>
+    <div class="payroll-line"><span>ម៉ោងថែម</span><span>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</span></div>
+    <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * settings.exchangeRate)} ៛</span></div>
+    <div class="payroll-line total"><span>សរុប</span><span>$${fmtUSD(t.total)} (${fmtRiel(t.riel)} ៛)</span></div>
+  `;
+}
+
+function buildPayslipHtml(t, month) {
+  return `
+    <div class="ps-header">
+      <div style="font-size:18px; font-weight:700;">បង្កាន់ដៃប្រាក់ខែ / PAYROLL SLIP</div>
+      <div style="font-size:12px; color:#6b7280; margin-top:4px;">ខែ ${month}</div>
+    </div>
+    <table>
+      <tr><td style="width:35%;"><strong>ឈ្មោះបុគ្គលិក</strong></td><td>${escapeHtml(currentEmployee.name)}</td></tr>
+      <tr><td><strong>តួនាទី</strong></td><td>${escapeHtml(currentEmployee.position || '-')}</td></tr>
+      <tr><td><strong>ប្រាក់ខែមូលដ្ឋាន</strong></td><td>$${fmtUSD(currentEmployee.salary)}</td></tr>
+    </table>
+    <table>
+      <tr><th>ព័ត៌មាន</th><th style="text-align:right;">ចំនួន</th></tr>
+      <tr><td>ថ្ងៃធ្វើការ</td><td style="text-align:right;">${t.workDays} ថ្ងៃ</td></tr>
+      <tr><td>ថ្ងៃច្បាប់</td><td style="text-align:right;">${t.leaveDays} ថ្ងៃ</td></tr>
+      <tr><td>ថ្ងៃអវត្តមាន</td><td style="text-align:right;">${t.absentDays} ថ្ងៃ</td></tr>
+      <tr><td>ថ្ងៃមកយឺត</td><td style="text-align:right;">${t.lateDays} ថ្ងៃ</td></tr>
+      <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</td></tr>
+      <tr><td>ម៉ោងថែម / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</td></tr>
+      <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td style="text-align:right;">${fmtRiel(t.foodPay * settings.exchangeRate)} ៛</td></tr>
+      <tr><td>ប្រាក់បាយថែមម៉ោង</td><td style="text-align:right;">${fmtRiel(t.foodOtPay * settings.exchangeRate)} ៛</td></tr>
+      <tr class="ps-total-row"><td>សរុប</td><td style="text-align:right;">$${fmtUSD(t.total)} &nbsp;/&nbsp; ${fmtRiel(t.riel)} ៛</td></tr>
+    </table>
+    <div style="margin-top:18px; font-size:11px; color:#6b7280;">បង្កើតនៅថ្ងៃទី ${todayStr()}</div>
+  `;
+}
+
+async function downloadPayrollPDF() {
+  const btn = document.getElementById('payrollPdfBtn');
+  const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
+  if (!currentEmployee) return;
+  btn.disabled = true;
+  btn.textContent = 'កំពុងបង្កើត PDF...';
+  try {
+    const t = await summarizeMonth(month);
+    const el = document.getElementById('payslipTemplate');
+    el.innerHTML = buildPayslipHtml(t, month);
+    el.style.display = 'block';
+    await new Promise(r => setTimeout(r, 50)); // let layout settle before rasterizing
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+    el.style.display = 'none';
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = 210;
+    const imgWidth = pageWidth - 20;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgWidth, imgHeight);
+    pdf.save(`payslip_${currentEmployee.name}_${month}.pdf`);
+  } catch (e) {
+    alert('មិនអាចបង្កើត PDF បានទេ៖ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ ទាញយក Payroll Slip (PDF)';
+  }
+}
+
+document.getElementById('leaveSubmitBtn').addEventListener('click', submitLeaveRequest);
+document.getElementById('otSubmitBtn').addEventListener('click', submitOTRequest);
+document.getElementById('payrollPdfBtn').addEventListener('click', downloadPayrollPDF);
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });

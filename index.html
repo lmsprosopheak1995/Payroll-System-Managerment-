@@ -55,6 +55,7 @@
     <button class="tab-btn active" data-tab="employees">👥 បញ្ជីបុគ្គលិក</button>
     <button class="tab-btn" data-tab="attendance">🗓 តារាងវត្តមានការងារ</button>
     <button class="tab-btn" data-tab="scan">📷 ស្កេនចូល-ចេញ</button>
+    <button class="tab-btn" data-tab="requests">📝 សំណើច្បាប់/ថែមម៉ោង <span id="pendingReqBadge"></span></button>
   </div>
 
   <div id="employeesTab" class="tab-content active">
@@ -157,6 +158,35 @@
         <h3 style="margin:14px 0 8px;font-size:0.85rem;">ប្រវត្តិស្កេនថ្ងៃនេះ</h3>
         <div class="scan-log" id="scanLog"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="requestsTab" class="tab-content">
+    <div class="toolbar">
+      <select id="reqStatusFilter">
+        <option value="pending">កំពុងរង់ចាំ</option>
+        <option value="">គ្រប់ស្ថានភាព</option>
+        <option value="approved">អនុម័ត</option>
+        <option value="rejected">បដិសេធ</option>
+      </select>
+    </div>
+
+    <h3 style="font-size:0.9rem;margin:0 0 10px;">📝 សំណើសុំច្បាប់</h3>
+    <div class="table-wrap" style="margin-bottom:24px;">
+      <table>
+        <thead><tr><th>បុគ្គលិក</th><th>ប្រភេទ</th><th>ពីថ្ងៃ</th><th>ដល់ថ្ងៃ</th><th>មូលហេតុ</th><th>ស្ថានភាព</th><th>សកម្មភាព</th></tr></thead>
+        <tbody id="leaveReqBody"></tbody>
+      </table>
+      <div class="empty-state" id="leaveReqEmpty" style="display:none;">មិនមានសំណើច្បាប់ទេ</div>
+    </div>
+
+    <h3 style="font-size:0.9rem;margin:0 0 10px;">⏱ សំណើសុំថែមម៉ោង</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>បុគ្គលិក</th><th>ថ្ងៃ</th><th>ម៉ោង</th><th>មូលហេតុ</th><th>ស្ថានភាព</th><th>សកម្មភាព</th></tr></thead>
+        <tbody id="otReqBody"></tbody>
+      </table>
+      <div class="empty-state" id="otReqEmpty" style="display:none;">មិនមានសំណើថែមម៉ោងទេ</div>
     </div>
   </div>
 

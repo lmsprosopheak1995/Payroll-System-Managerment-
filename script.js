@@ -8,6 +8,8 @@ let employees = [];
 let editingId = null;
 let attendance = {};
 let settings = {};
+let leaveRequests = [];
+let overtimeRequests = [];
 
 // ==== Admin authentication gate ====
 // ការចូលប្រើទំព័រនេះទាមទារពាក្យសម្ងាត់អ្នកគ្រប់គ្រង។ session ស្ថិតនៅក្នុង sessionStorage
@@ -37,7 +39,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
-    await Promise.all([loadData(), loadAttendance(), loadSettings()]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests()]);
     renderAll();
     return;
   }
@@ -509,6 +511,144 @@ function uid() {
   return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
+// ==== Leave / Overtime requests (admin approval) ====
+const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+
+async function loadLeaveRequests() {
+  const { data, error } = await supabaseClient.from('leave_requests').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('Load leave requests failed', error); leaveRequests = []; return; }
+  leaveRequests = data || [];
+}
+
+async function loadOvertimeRequests() {
+  const { data, error } = await supabaseClient.from('overtime_requests').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('Load overtime requests failed', error); overtimeRequests = []; return; }
+  overtimeRequests = data || [];
+}
+
+function empName(id) {
+  const e = employees.find(x => x.id === id);
+  return e ? e.name : id;
+}
+
+function datesInRange(startStr, endStr) {
+  const dates = [];
+  let d = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  while (d <= end) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+function renderRequestsTab() {
+  const filter = document.getElementById('reqStatusFilter').value;
+  const leaveRows = leaveRequests.filter(r => !filter || r.status === filter);
+  const otRows = overtimeRequests.filter(r => !filter || r.status === filter);
+  const pendingCount = leaveRequests.filter(r => r.status === 'pending').length + overtimeRequests.filter(r => r.status === 'pending').length;
+  const badge = document.getElementById('pendingReqBadge');
+  if (badge) badge.textContent = pendingCount > 0 ? `(${pendingCount})` : '';
+
+  const leaveBody = document.getElementById('leaveReqBody');
+  const leaveEmpty = document.getElementById('leaveReqEmpty');
+  if (leaveRows.length === 0) {
+    leaveBody.innerHTML = '';
+    leaveEmpty.style.display = 'block';
+  } else {
+    leaveEmpty.style.display = 'none';
+    leaveBody.innerHTML = leaveRows.map(r => `
+      <tr>
+        <td>${escapeHtml(empName(r.employee_id))}</td>
+        <td>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</td>
+        <td>${r.start_date}</td>
+        <td>${r.end_date}</td>
+        <td style="max-width:220px;white-space:normal;">${escapeHtml(r.reason || '-')}</td>
+        <td><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
+        <td>
+          ${r.status === 'pending' ? `
+            <div class="row-actions">
+              <button class="secondary" onclick="approveLeaveRequest('${r.id}')">✓ អនុម័ត</button>
+              <button class="danger" onclick="rejectLeaveRequest('${r.id}')">✕ បដិសេធ</button>
+            </div>` : (r.admin_note ? escapeHtml(r.admin_note) : '-')}
+        </td>
+      </tr>`).join('');
+  }
+
+  const otBody = document.getElementById('otReqBody');
+  const otEmpty = document.getElementById('otReqEmpty');
+  if (otRows.length === 0) {
+    otBody.innerHTML = '';
+    otEmpty.style.display = 'block';
+  } else {
+    otEmpty.style.display = 'none';
+    otBody.innerHTML = otRows.map(r => `
+      <tr>
+        <td>${escapeHtml(empName(r.employee_id))}</td>
+        <td>${r.work_date}</td>
+        <td>${r.start_time} - ${r.end_time}</td>
+        <td style="max-width:220px;white-space:normal;">${escapeHtml(r.reason || '-')}</td>
+        <td><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
+        <td>
+          ${r.status === 'pending' ? `
+            <div class="row-actions">
+              <button class="secondary" onclick="approveOTRequest('${r.id}')">✓ អនុម័ត</button>
+              <button class="danger" onclick="rejectOTRequest('${r.id}')">✕ បដិសេធ</button>
+            </div>` : (r.admin_note ? escapeHtml(r.admin_note) : '-')}
+        </td>
+      </tr>`).join('');
+  }
+}
+
+async function approveLeaveRequest(id) {
+  const req = leaveRequests.find(r => r.id === id);
+  if (!req) return;
+  const { error } = await supabaseClient.from('leave_requests')
+    .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
+  // Mark each day in the approved range as 'leave' on the attendance sheet.
+  const dates = datesInRange(req.start_date, req.end_date);
+  for (const date of dates) {
+    const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
+    if (!attendance[date]) attendance[date] = {};
+    attendance[date][req.employee_id] = rec;
+    await upsertAttendanceRecord(date, req.employee_id, rec);
+  }
+  req.status = 'approved';
+  renderAttendanceTab();
+  renderRequestsTab();
+}
+
+async function rejectLeaveRequest(id) {
+  const note = prompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖') || '';
+  const { error } = await supabaseClient.from('leave_requests')
+    .update({ status: 'rejected', admin_note: note, decided_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
+  const req = leaveRequests.find(r => r.id === id);
+  if (req) { req.status = 'rejected'; req.admin_note = note; }
+  renderRequestsTab();
+}
+
+async function approveOTRequest(id) {
+  const { error } = await supabaseClient.from('overtime_requests')
+    .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
+  const req = overtimeRequests.find(r => r.id === id);
+  if (req) req.status = 'approved';
+  renderRequestsTab();
+}
+
+async function rejectOTRequest(id) {
+  const note = prompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖') || '';
+  const { error } = await supabaseClient.from('overtime_requests')
+    .update({ status: 'rejected', admin_note: note, decided_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
+  const req = overtimeRequests.find(r => r.id === id);
+  if (req) { req.status = 'rejected'; req.admin_note = note; }
+  renderRequestsTab();
+}
+
 function renderStats() {
   const total = employees.length;
   const active = employees.filter(e => e.status === 'active').length;
@@ -590,6 +730,7 @@ function renderAll() {
   renderTable();
   renderAttendanceTab();
   renderScanLog();
+  renderRequestsTab();
 }
 
 function openAddModal() {
@@ -893,7 +1034,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('employeesTab').classList.toggle('active', tab === 'employees');
     document.getElementById('attendanceTab').classList.toggle('active', tab === 'attendance');
     document.getElementById('scanTab').classList.toggle('active', tab === 'scan');
+    document.getElementById('requestsTab').classList.toggle('active', tab === 'requests');
     if (tab === 'attendance') renderAttendanceTab();
+    if (tab === 'requests') renderRequestsTab();
     if (tab === 'scan') {
       renderScanLog();
       setScanResult('idle', 'ស្កេនកូដ QR របស់បុគ្គលិកដើម្បីកត់ត្រាម៉ោងចូល ឬចេញ');
@@ -902,6 +1045,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     }
   });
 });
+document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
 
 document.getElementById('attendanceMonth').value = todayStr().slice(0, 7);
 document.getElementById('adminSetupBtn').addEventListener('click', doAdminSetup);
