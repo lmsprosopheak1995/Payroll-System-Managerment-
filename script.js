@@ -10,6 +10,7 @@ let attendance = {};
 let settings = {};
 let leaveRequests = [];
 let overtimeRequests = [];
+let payrollItems = [];
 
 // ==== Admin authentication gate ====
 // ការចូលប្រើទំព័រនេះទាមទារពាក្យសម្ងាត់អ្នកគ្រប់គ្រង។ session ស្ថិតនៅក្នុង sessionStorage
@@ -39,7 +40,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests()]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems()]);
     renderAll();
     return;
   }
@@ -439,11 +440,19 @@ function renderAttendanceTab() {
     </tr>`;
   }).join('');
 
+  const adj = getPayrollAdjustmentUSD(emp.id, month);
+  const netUSD = totals.total + adj.net;
+  const netRiel = netUSD * (settings.exchangeRate || 0);
+
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ចំណាយសរុប ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ចំណាយសរុប (រៀល)</div></div>
+    <div class="stat-card"><div class="num">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
+    <div class="stat-card"><div class="num">-$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
+    <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
   `;
 }
 
@@ -550,6 +559,230 @@ async function loadOvertimeRequests() {
   const { data, error } = await supabaseClient.from('overtime_requests').select('*').order('created_at', { ascending: false });
   if (error) { console.error('Load overtime requests failed', error); overtimeRequests = []; return; }
   overtimeRequests = data || [];
+}
+
+// ==== Benefits / Deductions (payroll items) ====
+async function loadPayrollItems() {
+  const { data, error } = await supabaseClient.from('payroll_items').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('Load payroll items failed', error); payrollItems = []; return; }
+  payrollItems = (data || []).map(row => ({
+    id: row.id,
+    employeeId: row.employee_id,
+    type: row.type,
+    name: row.name,
+    recurrence: row.recurrence,
+    month: row.month || '',
+    currency: row.currency,
+    amount: parseFloat(row.amount) || 0,
+  }));
+}
+
+async function upsertPayrollItemRow(item) {
+  const row = {
+    id: item.id,
+    employee_id: item.employeeId,
+    type: item.type,
+    name: item.name,
+    recurrence: item.recurrence,
+    month: item.recurrence === 'variable' ? item.month : null,
+    currency: item.currency,
+    amount: item.amount,
+  };
+  const { data, error } = await supabaseClient.from('payroll_items').upsert(row, { onConflict: 'id' }).select().single();
+  if (error) {
+    console.error('Save payroll item failed', error);
+    alert('រក្សាទុកធាតុមិនជោគជ័យ៖ ' + error.message);
+    return null;
+  }
+  return data;
+}
+
+async function deletePayrollItemRow(id) {
+  const { error } = await supabaseClient.from('payroll_items').delete().eq('id', id);
+  if (error) { console.error('Delete payroll item failed', error); alert('លុបមិនជោគជ័យ៖ ' + error.message); }
+}
+
+// Amounts applicable to a given employee+month, converted to both currencies for display/summing.
+function getPayrollItemsForEmpMonth(empId, month) {
+  return payrollItems.filter(p => p.employeeId === empId && (p.recurrence === 'fixed' || p.month === month));
+}
+
+function payrollItemToUSD(item) {
+  return item.currency === 'USD' ? item.amount : (settings.exchangeRate > 0 ? item.amount / settings.exchangeRate : 0);
+}
+
+function payrollItemToRiel(item) {
+  return item.currency === 'KHR' ? item.amount : item.amount * (settings.exchangeRate || 0);
+}
+
+function getPayrollAdjustmentUSD(empId, month) {
+  const items = getPayrollItemsForEmpMonth(empId, month);
+  const benefits = items.filter(p => p.type === 'benefit').reduce((s, p) => s + payrollItemToUSD(p), 0);
+  const deductions = items.filter(p => p.type === 'deduction').reduce((s, p) => s + payrollItemToUSD(p), 0);
+  return { benefits, deductions, net: benefits - deductions };
+}
+
+function currentPayrollMonth() {
+  const input = document.getElementById('payrollMonth');
+  return (input && input.value) || todayStr().slice(0, 7);
+}
+
+function currentPayrollEmployeeId() {
+  const sel = document.getElementById('payrollEmployeeSelect');
+  return sel ? sel.value : '';
+}
+
+function renderPayrollEmployeeSelect() {
+  const sel = document.getElementById('payrollEmployeeSelect');
+  const activeEmployees = employees.filter(e => e.status === 'active');
+  const currentVal = sel.value;
+  sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  if (activeEmployees.some(e => e.id === currentVal)) {
+    sel.value = currentVal;
+  } else if (activeEmployees.length > 0) {
+    sel.value = activeEmployees[0].id;
+  }
+}
+
+function fmtItemAmount(item) {
+  return item.currency === 'USD' ? `$${item.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${item.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} ៛`;
+}
+
+function renderPayrollTab() {
+  renderPayrollEmployeeSelect();
+  const activeEmployees = employees.filter(e => e.status === 'active');
+  const benefitBody = document.getElementById('benefitBody');
+  const deductionBody = document.getElementById('deductionBody');
+  const benefitEmpty = document.getElementById('benefitEmpty');
+  const deductionEmpty = document.getElementById('deductionEmpty');
+
+  if (activeEmployees.length === 0) {
+    benefitBody.innerHTML = ''; deductionBody.innerHTML = '';
+    benefitEmpty.style.display = 'block'; deductionEmpty.style.display = 'block';
+    document.getElementById('payrollStats').innerHTML = '';
+    return;
+  }
+
+  const empId = currentPayrollEmployeeId();
+  const month = currentPayrollMonth();
+  const items = payrollItems.filter(p => p.employeeId === empId);
+
+  const renderRows = (list) => list.map(p => `
+    <tr>
+      <td style="text-align:left;">${escapeHtml(p.name)}</td>
+      <td>${p.recurrence === 'fixed' ? '<span class="badge active">ថេរ</span>' : '<span class="badge pending">ប្រែប្រួល</span>'}</td>
+      <td>${p.recurrence === 'variable' ? (p.month || '-') : 'រាល់ខែ'}</td>
+      <td>${fmtItemAmount(p)}</td>
+      <td>
+        <div class="row-actions" style="justify-content:center;">
+          <button class="secondary" onclick="openEditPayrollItemModal('${p.id}')">✏️ កែ</button>
+          <button class="danger" onclick="deletePayrollItem('${p.id}')">🗑 លុប</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  const benefits = items.filter(p => p.type === 'benefit');
+  const deductions = items.filter(p => p.type === 'deduction');
+
+  benefitBody.innerHTML = renderRows(benefits);
+  benefitEmpty.style.display = benefits.length === 0 ? 'block' : 'none';
+  deductionBody.innerHTML = renderRows(deductions);
+  deductionEmpty.style.display = deductions.length === 0 ? 'block' : 'none';
+
+  const adj = getPayrollAdjustmentUSD(empId, month);
+  document.getElementById('payrollStats').innerHTML = `
+    <div class="stat-card"><div class="num">$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍សរុប ($)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់សរុប ($)</div></div>
+    <div class="stat-card"><div class="num">${adj.net >= 0 ? '+' : ''}$${fmtUSD(adj.net)}</div><div class="label">សុទ្ធ (បូក/ដកលើប្រាក់ខែ)</div></div>
+  `;
+
+  renderAttendanceTab();
+}
+
+function openAddPayrollItemModal(type) {
+  const empId = currentPayrollEmployeeId();
+  if (!empId) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
+  document.getElementById('piId').value = '';
+  document.getElementById('piType').value = type;
+  document.getElementById('payrollItemModalTitle').textContent = type === 'benefit' ? 'បន្ថែមអត្ថប្រយោជន៍' : 'បន្ថែមប្រាក់កាត់';
+  document.getElementById('piName').value = '';
+  document.getElementById('piRecurrence').value = 'fixed';
+  document.getElementById('piCurrency').value = 'USD';
+  document.getElementById('piAmount').value = '';
+  document.getElementById('piMonth').value = currentPayrollMonth();
+  onPiRecurrenceChange();
+  document.getElementById('payrollItemOverlay').classList.add('open');
+  document.getElementById('piName').focus();
+}
+
+function openEditPayrollItemModal(id) {
+  const p = payrollItems.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('piId').value = p.id;
+  document.getElementById('piType').value = p.type;
+  document.getElementById('payrollItemModalTitle').textContent = p.type === 'benefit' ? 'កែប្រែអត្ថប្រយោជន៍' : 'កែប្រែប្រាក់កាត់';
+  document.getElementById('piName').value = p.name;
+  document.getElementById('piRecurrence').value = p.recurrence;
+  document.getElementById('piCurrency').value = p.currency;
+  document.getElementById('piAmount').value = p.amount;
+  document.getElementById('piMonth').value = p.month || currentPayrollMonth();
+  onPiRecurrenceChange();
+  document.getElementById('payrollItemOverlay').classList.add('open');
+}
+
+function onPiRecurrenceChange() {
+  const isVariable = document.getElementById('piRecurrence').value === 'variable';
+  document.getElementById('piMonthGroup').style.display = isVariable ? '' : 'none';
+}
+
+function closePayrollItemModal() {
+  document.getElementById('payrollItemOverlay').classList.remove('open');
+}
+
+async function savePayrollItem() {
+  const name = document.getElementById('piName').value.trim();
+  const amount = parseFloat(document.getElementById('piAmount').value);
+  if (!name || isNaN(amount) || amount < 0) {
+    alert('សូមបំពេញឈ្មោះធាតុ និងទឹកប្រាក់ត្រឹមត្រូវ');
+    return;
+  }
+  const recurrence = document.getElementById('piRecurrence').value;
+  const month = document.getElementById('piMonth').value || currentPayrollMonth();
+  if (recurrence === 'variable' && !month) {
+    alert('សូមជ្រើសរើសខែសម្រាប់ធាតុប្រែប្រួល');
+    return;
+  }
+
+  const id = document.getElementById('piId').value;
+  const item = {
+    id: id || uid(),
+    employeeId: currentPayrollEmployeeId(),
+    type: document.getElementById('piType').value,
+    name,
+    recurrence,
+    month: recurrence === 'variable' ? month : '',
+    currency: document.getElementById('piCurrency').value,
+    amount,
+  };
+
+  if (id) {
+    const idx = payrollItems.findIndex(x => x.id === id);
+    if (idx !== -1) payrollItems[idx] = item;
+  } else {
+    payrollItems.push(item);
+  }
+  closePayrollItemModal();
+  renderPayrollTab();
+  await upsertPayrollItemRow(item);
+}
+
+function deletePayrollItem(id) {
+  const p = payrollItems.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`តើអ្នកប្រាកដជាចង់លុប "${p.name}" មែនទេ?`)) return;
+  payrollItems = payrollItems.filter(x => x.id !== id);
+  renderPayrollTab();
+  deletePayrollItemRow(id);
 }
 
 function empName(id) {
@@ -753,7 +986,7 @@ function renderAll() {
   renderStats();
   renderDeptFilter();
   renderTable();
-  renderAttendanceTab();
+  renderPayrollTab();
   renderScanLog();
   renderRequestsTab();
   renderWorkplaceQR();
@@ -1057,6 +1290,13 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 });
 document.getElementById('attendanceEmployeeSelect').addEventListener('change', renderAttendanceTab);
 document.getElementById('attendanceMonth').addEventListener('change', renderAttendanceTab);
+document.getElementById('payrollEmployeeSelect').addEventListener('change', renderPayrollTab);
+document.getElementById('payrollMonth').addEventListener('change', renderPayrollTab);
+document.getElementById('addBenefitBtn').addEventListener('click', () => openAddPayrollItemModal('benefit'));
+document.getElementById('addDeductionBtn').addEventListener('click', () => openAddPayrollItemModal('deduction'));
+document.getElementById('payrollItemOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'payrollItemOverlay') closePayrollItemModal();
+});
 document.getElementById('exportAttendanceBtn').addEventListener('click', exportAttendanceCSV);
 document.getElementById('attendanceSettingsBtn').addEventListener('click', openSettingsModal);
 document.getElementById('settingsCancelBtn').addEventListener('click', closeSettingsModal);
@@ -1077,6 +1317,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('attendanceTab').classList.toggle('active', tab === 'attendance');
     document.getElementById('scanTab').classList.toggle('active', tab === 'scan');
     document.getElementById('requestsTab').classList.toggle('active', tab === 'requests');
+    document.getElementById('payrollTab').classList.toggle('active', tab === 'payroll');
+    if (tab === 'payroll') renderPayrollTab();
     if (tab === 'attendance') renderAttendanceTab();
     if (tab === 'requests') renderRequestsTab();
     if (tab === 'scan') {
@@ -1090,6 +1332,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
 
 document.getElementById('attendanceMonth').value = todayStr().slice(0, 7);
+document.getElementById('payrollMonth').value = todayStr().slice(0, 7);
 document.getElementById('adminSetupBtn').addEventListener('click', doAdminSetup);
 document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
 document.getElementById('adminLoginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doAdminLogin(); });

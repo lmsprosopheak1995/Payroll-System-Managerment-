@@ -56,6 +56,7 @@
     <button class="tab-btn" data-tab="attendance">🗓 តារាងវត្តមានការងារ</button>
     <button class="tab-btn" data-tab="scan">📷 ស្កេនចូល-ចេញ</button>
     <button class="tab-btn" data-tab="requests">📝 សំណើច្បាប់/ថែមម៉ោង <span id="pendingReqBadge"></span></button>
+    <button class="tab-btn" data-tab="payroll">💰 អត្ថប្រយោជន៍ & ប្រាក់កាត់</button>
   </div>
 
   <div id="employeesTab" class="tab-content active">
@@ -202,6 +203,51 @@
     </div>
   </div>
 
+  <div id="payrollTab" class="tab-content">
+    <div class="attendance-controls">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="payrollEmployeeSelect" style="min-width:170px;"></select>
+        <input type="month" id="payrollMonth">
+      </div>
+      <p style="font-size:0.7rem;color:var(--text-muted);margin:0;max-width:360px;">
+        *ធាតុ "ថេរ" អនុវត្តរាល់ខែដោយស្វ័យប្រវត្តិ។ ធាតុ "ប្រែប្រួល" អនុវត្តតែក្នុងខែដែលបានកំណត់ប៉ុណ្ណោះ។ ទាំងពីរនឹងបូក/ដក ចូលទៅក្នុងប្រាក់ខែសុទ្ធនៅក្នុងផ្ទាំង "តារាងវត្តមាន" ដោយស្វ័យប្រវត្តិ។
+      </p>
+    </div>
+
+    <div class="attendance-stats" id="payrollStats"></div>
+    <br>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;" id="payrollGrid">
+      <div>
+        <h3 style="font-size:0.85rem;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;">
+          🟢 អត្ថប្រយោជន៍
+          <button id="addBenefitBtn" style="padding:4px 10px;font-size:0.72rem;">➕ បន្ថែម</button>
+        </h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>ខែ</th><th>ទឹកប្រាក់</th><th>សកម្មភាព</th></tr></thead>
+            <tbody id="benefitBody"></tbody>
+          </table>
+          <div class="empty-state" id="benefitEmpty" style="display:none;padding:20px;">មិនមានធាតុអត្ថប្រយោជន៍ទេ</div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:0.85rem;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;">
+          🔴 ប្រាក់កាត់
+          <button id="addDeductionBtn" style="padding:4px 10px;font-size:0.72rem;">➕ បន្ថែម</button>
+        </h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>ខែ</th><th>ទឹកប្រាក់</th><th>សកម្មភាព</th></tr></thead>
+            <tbody id="deductionBody"></tbody>
+          </table>
+          <div class="empty-state" id="deductionEmpty" style="display:none;padding:20px;">មិនមានធាតុប្រាក់កាត់ទេ</div>
+        </div>
+      </div>
+    </div>
+    <style>@media (max-width: 720px) { #payrollGrid { grid-template-columns: 1fr !important; } }</style>
+  </div>
+
   <footer>ទិន្នន័យត្រូវបានរក្សាទុកនៅលើកម្មវិធីរុករករបស់អ្នកប៉ុណ្ណោះ</footer>
 </div>
 
@@ -248,6 +294,51 @@
     <div class="modal-actions">
       <button class="secondary" id="settingsCancelBtn">បោះបង់</button>
       <button id="settingsSaveBtn">រក្សាទុក</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="payrollItemOverlay">
+  <div class="modal">
+    <h2 id="payrollItemModalTitle">បន្ថែមអត្ថប្រយោជន៍</h2>
+    <input type="hidden" id="piId">
+    <input type="hidden" id="piType">
+    <div class="form-group">
+      <label>ឈ្មោះធាតុ *</label>
+      <input type="text" id="piName" placeholder="ឧ. ប្រាក់ធានារ៉ាប់រងសុខភាព">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ភាពញឹកញាប់ *</label>
+        <select id="piRecurrence" onchange="onPiRecurrenceChange()">
+          <option value="fixed">ថេរ (រាល់ខែ)</option>
+          <option value="variable">ប្រែប្រួល (តែមួយខែ)</option>
+        </select>
+      </div>
+      <div class="form-group" id="piMonthGroup">
+        <label>អនុវត្តខែ</label>
+        <input type="month" id="piMonth">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>រូបិយប័ណ្ណ *</label>
+        <select id="piCurrency">
+          <option value="USD">ដុល្លារ ($)</option>
+          <option value="KHR">រៀល (៛)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>ទឹកប្រាក់ *</label>
+        <input type="number" id="piAmount" placeholder="0.00" step="0.01" min="0">
+      </div>
+    </div>
+    <p style="font-size:0.72rem; color:var(--text-muted); margin:0;">
+      *ធាតុ "ថេរ" នឹងអនុវត្តរាល់ខែដោយស្វ័យប្រវត្តិ ចាប់ពីពេលបង្កើត។ ធាតុ "ប្រែប្រួល" អនុវត្តតែក្នុងខែដែលបានជ្រើសខាងលើ។
+    </p>
+    <div class="modal-actions">
+      <button class="secondary" id="piCancelBtn" onclick="closePayrollItemModal()">បោះបង់</button>
+      <button id="piSaveBtn" onclick="savePayrollItem()">រក្សាទុក</button>
     </div>
   </div>
 </div>
