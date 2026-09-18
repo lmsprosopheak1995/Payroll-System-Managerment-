@@ -129,7 +129,9 @@ async function loadSettings() {
 
 // ---- write to Supabase ----
 async function upsertEmployee(emp) {
-  const { error } = await supabaseClient.from('employees').upsert(employeeToRow(emp), { onConflict: 'id' });
+  const { error } = await supabaseClient.from('employees')
+    .upsert(employeeToRow(emp), { onConflict: 'id' })
+    .select('id, name, position, dept, phone, email, start_date, salary, status, username, created_at');
   if (error) {
     console.error('Save employee failed', error);
     alert('រក្សាទុកបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
