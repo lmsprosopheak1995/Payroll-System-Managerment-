@@ -94,7 +94,7 @@ async function changeAdminPassword() {
 }
 
 const DEFAULT_SETTINGS = {
-  standardStart: '08:00',
+  standardStart: '07:00',
   standardHours: 8,
   otMultiplier: 1.5,
   foodDaily: 2000,
@@ -953,8 +953,10 @@ function renderScanLog() {
       const r = dayRecords[e.id];
       const parts = [];
       if (r.checkin) parts.push(`ចូល ${r.checkin}`);
+      if (r.breakOut) parts.push(`ចេញបាយ ${r.breakOut}`);
+      if (r.breakIn) parts.push(`ចូលវិញ ${r.breakIn}`);
       if (r.checkout) parts.push(`ចេញ ${r.checkout}`);
-      return { name: e.name, text: parts.join(' · '), lastTime: r.checkout || r.checkin };
+      return { name: e.name, text: parts.join(' · '), lastTime: r.checkout || r.breakIn || r.breakOut || r.checkin };
     })
     .sort((a, b) => (b.lastTime || '').localeCompare(a.lastTime || ''));
 
@@ -987,11 +989,17 @@ function handleScanResult(decodedText) {
     rec.status = 'present';
     rec.checkin = time;
     setScanResult('success', `✓ ${emp.name} — កត់ត្រាម៉ោងចូល ${time}`);
+  } else if (!rec.breakOut) {
+    rec.breakOut = time;
+    setScanResult('success', `✓ ${emp.name} — កត់ត្រាចេញបាយ ${time}`);
+  } else if (!rec.breakIn) {
+    rec.breakIn = time;
+    setScanResult('success', `✓ ${emp.name} — កត់ត្រាចូលវិញ (ក្រោយបាយ) ${time}`);
   } else if (!rec.checkout) {
     rec.checkout = time;
     setScanResult('success', `✓ ${emp.name} — កត់ត្រាម៉ោងចេញ ${time}`);
   } else {
-    setScanResult('info', `ℹ ${emp.name} បានស្កេនទាំងចូល និងចេញរួចសម្រាប់ថ្ងៃនេះ (${rec.checkin} - ${rec.checkout})`);
+    setScanResult('info', `ℹ ${emp.name} បានស្កេនគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ (${rec.checkin} - ${rec.breakOut} - ${rec.breakIn} - ${rec.checkout})`);
     return;
   }
 

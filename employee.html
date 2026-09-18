@@ -229,7 +229,7 @@ const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវ�
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
 const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 const DEFAULT_SETTINGS = {
-  standardStart: '08:00', standardHours: 8, otMultiplier: 1.5,
+  standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
   workplaceCode: null,
 };
@@ -504,8 +504,10 @@ async function handleEmpScan(decodedText) {
   stopEmpScanner();
   const rec = await getTodayRecord();
   if (!rec || !rec.checkin) await clockIn();
+  else if (!rec.break_out) await clockBreakOut();
+  else if (!rec.break_in) await clockBreakIn();
   else if (!rec.checkout) await clockOut();
-  else resultEl.textContent = 'ℹ អ្នកបានកត់ត្រាទាំងចូល និងចេញរួចសម្រាប់ថ្ងៃនេះ';
+  else resultEl.textContent = 'ℹ អ្នកបានកត់ត្រាគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ';
   empScanBusy = false;
 }
 
@@ -538,19 +540,55 @@ async function renderClockBox() {
       <button class="big-btn" id="clockInBtn">✅ កត់ត្រាម៉ោងចូល</button>
     `;
     document.getElementById('clockInBtn').addEventListener('click', clockIn);
-  } else if (!rec.checkout) {
+  } else if (!rec.break_out) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូលធ្វើការម៉ោង <strong>${rec.checkin}</strong></div>
+      <button class="big-btn checkout" id="clockBreakOutBtn">🍚 កត់ត្រាចេញបាយ</button>
+    `;
+    document.getElementById('clockBreakOutBtn').addEventListener('click', clockBreakOut);
+  } else if (!rec.break_in) {
+    box.innerHTML = `
+      <div class="time">${time}</div>
+      <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ <strong>${rec.break_out}</strong></div>
+      <button class="big-btn" id="clockBreakInBtn">🍽 កត់ត្រាចូលវិញ (ក្រោយបាយ)</button>
+    `;
+    document.getElementById('clockBreakInBtn').addEventListener('click', clockBreakIn);
+  } else if (!rec.checkout) {
+    box.innerHTML = `
+      <div class="time">${time}</div>
+      <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ ${rec.break_out} · ចូលវិញ <strong>${rec.break_in}</strong></div>
       <button class="big-btn checkout" id="clockOutBtn">🚪 កត់ត្រាម៉ោងចេញ</button>
     `;
     document.getElementById('clockOutBtn').addEventListener('click', clockOut);
   } else {
     box.innerHTML = `
       <div class="done-msg">✓ ថ្ងៃនេះកត់ត្រារួចរាល់</div>
-      <div class="status-line" style="margin-top:6px;">ចូល ${rec.checkin} · ចេញ ${rec.checkout}</div>
+      <div class="status-line" style="margin-top:6px;">ចូល ${rec.checkin} · ចេញបាយ ${rec.break_out} · ចូលវិញ ${rec.break_in} · ចេញ ${rec.checkout}</div>
     `;
   }
+}
+
+async function clockBreakOut() {
+  const session = getSession();
+  const today = todayStr();
+  const { error } = await supabaseClient.from('attendance')
+    .update({ break_out: nowTimeStr() })
+    .eq('date', today).eq('employee_id', session.id);
+  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  await renderClockBox();
+  await renderHistory();
+}
+
+async function clockBreakIn() {
+  const session = getSession();
+  const today = todayStr();
+  const { error } = await supabaseClient.from('attendance')
+    .update({ break_in: nowTimeStr() })
+    .eq('date', today).eq('employee_id', session.id);
+  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  await renderClockBox();
+  await renderHistory();
 }
 
 async function clockIn() {
@@ -587,6 +625,8 @@ async function renderHistory() {
   list.innerHTML = data.map(r => {
     const parts = [];
     if (r.checkin) parts.push('ចូល ' + r.checkin);
+    if (r.break_out) parts.push('ចេញបាយ ' + r.break_out);
+    if (r.break_in) parts.push('ចូលវិញ ' + r.break_in);
     if (r.checkout) parts.push('ចេញ ' + r.checkout);
     const right = parts.length ? parts.join(' · ') : (STATUS_LABELS[r.status] || '-');
     return `<div class="hist-row"><span class="d">${r.date} (${weekdayLabel(r.date)})</span><span>${right}</span></div>`;
