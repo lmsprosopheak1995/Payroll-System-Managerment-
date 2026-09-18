@@ -741,7 +741,6 @@ function renderTable() {
       <td><span class="badge ${e.status}">${e.status === 'active' ? 'កំពុងបម្រើការ' : 'ឈប់បម្រើការ'}</span></td>
       <td>
         <div class="row-actions">
-          <button class="secondary" onclick="showEmployeeQR('${e.id}')">🔲 QR</button>
           <button class="secondary" onclick="openEditModal('${e.id}')">✏️ កែ</button>
           <button class="danger" onclick="deleteEmployee('${e.id}')">🗑 លុប</button>
         </div>
@@ -1028,38 +1027,6 @@ function stopScanner() {
 }
 
 // ---- Employee QR code (for scanning) ----
-function showEmployeeQR(id) {
-  const emp = employees.find(x => x.id === id);
-  if (!emp) return;
-  document.getElementById('qrModalName').textContent = emp.name;
-  const wrap = document.getElementById('qrCanvasWrap');
-  wrap.innerHTML = '<canvas id="qrCanvas"></canvas>';
-  if (typeof QRCode !== 'undefined') {
-    QRCode.toCanvas(document.getElementById('qrCanvas'), emp.id, { width: 200, margin: 1 }, function (err) {
-      if (err) wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ</p>';
-    });
-  } else {
-    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចផ្ទុកម៉ូឌុល QR បានទេ</p>';
-  }
-  document.getElementById('qrOverlay').classList.add('open');
-}
-
-function closeQRModal() {
-  document.getElementById('qrOverlay').classList.remove('open');
-}
-
-function downloadEmployeeQR() {
-  const canvas = document.getElementById('qrCanvas');
-  if (!canvas) return;
-  const name = document.getElementById('qrModalName').textContent || 'employee';
-  const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
-  a.download = `qr_${name}.png`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
 document.getElementById('addBtn').addEventListener('click', openAddModal);
 document.getElementById('empUsernameRegenBtn').addEventListener('click', () => {
   document.getElementById('empUsername').value = generateEmployeeCode();
@@ -1084,11 +1051,6 @@ document.getElementById('settingsOverlay').addEventListener('click', (e) => {
 });
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
-document.getElementById('qrCloseBtn').addEventListener('click', closeQRModal);
-document.getElementById('qrDownloadBtn').addEventListener('click', downloadEmployeeQR);
-document.getElementById('qrOverlay').addEventListener('click', (e) => {
-  if (e.target.id === 'qrOverlay') closeQRModal();
-});
 document.getElementById('workplaceQrRegenBtn').addEventListener('click', regenerateWorkplaceQR);
 document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
 document.querySelectorAll('.tab-btn').forEach(btn => {
