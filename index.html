@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</h1>
+    <button id="addBtn">➕ បន្ថែមបុគ្គលិកថ្មី</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="employees">👥 បញ្ជីបុគ្គលិក</button>
+    <button class="tab-btn" data-tab="attendance">🗓 តារាងវត្តមានការងារ</button>
+    <button class="tab-btn" data-tab="scan">📷 ស្កេនចូល-ចេញ</button>
+  </div>
+
+  <div id="employeesTab" class="tab-content active">
+    <div class="stats" id="statsRow"></div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="🔍 ស្វែងរកតាមឈ្មោះ ឬតួនាទី...">
+      <select id="deptFilter">
+        <option value="">គ្រប់ផ្នែក</option>
+      </select>
+      <select id="statusFilter">
+        <option value="">គ្រប់ស្ថានភាព</option>
+        <option value="active">កំពុងបម្រើការ</option>
+        <option value="inactive">ឈប់បម្រើការ</option>
+      </select>
+      <button class="secondary" id="exportBtn">⬇ នាំចេញ CSV</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ឈ្មោះ</th>
+            <th>តួនាទី</th>
+            <th>ផ្នែក</th>
+            <th>ទូរស័ព្ទ</th>
+            <th>ថ្ងៃចូលធ្វើការ</th>
+            <th>ស្ថានភាព</th>
+            <th>សកម្មភាព</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        មិនទាន់មានទិន្នន័យបុគ្គលិកទេ សូមចុច "បន្ថែមបុគ្គលិកថ្មី" ដើម្បីចាប់ផ្តើម។
+      </div>
+    </div>
+  </div>
+
+  <div id="attendanceTab" class="tab-content">
+    <div class="attendance-controls">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="attendanceEmployeeSelect" style="min-width:170px;"></select>
+        <input type="month" id="attendanceMonth">
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="secondary" id="attendanceSettingsBtn">⚙ ការកំណត់</button>
+        <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
+      </div>
+    </div>
+    <div class="attendance-stats" id="attendanceStats"></div>
+    <br>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2">ថ្ងៃទី</th>
+            <th rowspan="2">ថ្ងៃ</th>
+            <th colspan="4">ម៉ោងធ្វើការ</th>
+            <th rowspan="2">យឺត</th>
+            <th rowspan="2">ស្ថានភាព</th>
+            <th rowspan="2">ធម្មតា (ម៉ោង)</th>
+            <th rowspan="2">ប្រាក់ខែ</th>
+            <th rowspan="2">ថែមម៉ោង (ម៉ោង)</th>
+            <th rowspan="2">ប្រាក់ថែមម៉ោង</th>
+            <th rowspan="2">បាយថ្ងៃត្រង់</th>
+            <th rowspan="2">បាយថែមម៉ោង</th>
+            <th rowspan="2">សរុប ($)</th>
+            <th rowspan="2">សរុប (៛)</th>
+          </tr>
+          <tr>
+            <th>ចូល</th>
+            <th>ចេញ</th>
+            <th>ចូល</th>
+            <th>ចេញ</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+      </table>
+      <div class="empty-state" id="attendanceEmpty" style="display:none;">
+        មិនមានបុគ្គលិកសកម្មទេ សូមបន្ថែមបុគ្គលិកជាមុនសិន។
+      </div>
+    </div>
+  </div>
+
+  <div id="scanTab" class="tab-content">
+    <div class="scan-layout">
+      <div class="scan-camera-card">
+        <div id="qrReader"></div>
+        <div class="scan-camera-actions">
+          <button id="scanStartBtn">▶ ចាប់ផ្តើមស្កេន</button>
+          <button class="secondary" id="scanStopBtn" style="display:none;">⏹ បញ្ឈប់ការស្កេន</button>
+        </div>
+        <p class="scan-hint">*ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost (មិនអាចប្រើបានលើឯកសារបើកផ្ទាល់ file:// ទេ)។</p>
+      </div>
+      <div class="scan-result-card">
+        <div id="scanResultBox" class="scan-result-box scan-result-idle">
+          ស្កេនកូដ QR របស់បុគ្គលិកដើម្បីកត់ត្រាម៉ោងចូល ឬចេញ
+        </div>
+        <h3 style="margin:14px 0 8px;font-size:0.85rem;">ប្រវត្តិស្កេនថ្ងៃនេះ</h3>
+        <div class="scan-log" id="scanLog"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>ទិន្នន័យត្រូវបានរក្សាទុកនៅលើកម្មវិធីរុករករបស់អ្នកប៉ុណ្ណោះ</footer>
+</div>
+
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2>ការកំណត់ប្រាក់ខែ និងម៉ោងធ្វើការ</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ម៉ោងចូលធម្មតា</label>
+        <input type="time" id="setStandardStart">
+      </div>
+      <div class="form-group">
+        <label>ចំនួនម៉ោងធម្មតា/ថ្ងៃ</label>
+        <input type="number" id="setStandardHours" step="0.5" min="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>អត្រាថែមម៉ោង (គុណ)</label>
+        <input type="number" id="setOtMultiplier" step="0.1" min="1">
+      </div>
+      <div class="form-group">
+        <label>ចំនួនថ្ងៃធ្វើការ/ខែ</label>
+        <input type="number" id="setWorkDays" step="1" min="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ប្រាក់បាយ/ថ្ងៃ (៛)</label>
+        <input type="number" id="setFoodDaily" step="100" min="0">
+      </div>
+      <div class="form-group">
+        <label>ប្រាក់បាយថែមម៉ោង (៛)</label>
+        <input type="number" id="setFoodOT" step="100" min="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>អត្រាប្តូររូបិយប័ណ្ណ (1$ = ? រៀល)</label>
+      <input type="number" id="setExchangeRate" step="1" min="0">
+    </div>
+    <p style="font-size:0.8rem; color:var(--text-muted); margin:0;">
+      *ប្រាក់ខែ និងប្រាក់បាយសម្រាប់ថ្ងៃឈប់សម្រាក (ច្បាប់) ត្រូវបានគណនាដូចជាថ្ងៃពេញលេញមួយ។ ប្រាក់ឈ្នួល/ម៉ោង គណនាចេញពីប្រាក់ខែក្នុងទម្រង់ព័ត៌មានបុគ្គលិកនីមួយៗ។
+    </p>
+    <div class="modal-actions">
+      <button class="secondary" id="settingsCancelBtn">បោះបង់</button>
+      <button id="settingsSaveBtn">រក្សាទុក</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">បន្ថែមបុគ្គលិកថ្មី</h2>
+    <input type="hidden" id="empId">
+    <div class="form-group">
+      <label>ឈ្មោះពេញ *</label>
+      <input type="text" id="empName" placeholder="ឧ. សុខ សុភា">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>តួនាទី *</label>
+        <input type="text" id="empPosition" placeholder="ឧ. គណនេយ្យករ">
+      </div>
+      <div class="form-group">
+        <label>ផ្នែក *</label>
+        <input type="text" id="empDept" placeholder="ឧ. ហិរញ្ញវត្ថុ" list="deptList">
+        <datalist id="deptList"></datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ទូរស័ព្ទ</label>
+        <input type="text" id="empPhone" placeholder="0xx xxx xxx">
+      </div>
+      <div class="form-group">
+        <label>អ៊ីមែល</label>
+        <input type="email" id="empEmail" placeholder="name@example.com">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ថ្ងៃចូលធ្វើការ</label>
+        <input type="date" id="empStartDate">
+      </div>
+      <div class="form-group">
+        <label>ប្រាក់ខែ (USD)</label>
+        <input type="number" id="empSalary" placeholder="0.00" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>ស្ថានភាព</label>
+      <select id="empStatus">
+        <option value="active">កំពុងបម្រើការ</option>
+        <option value="inactive">ឈប់បម្រើការ</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" id="cancelBtn">បោះបង់</button>
+      <button id="saveBtn">រក្សាទុក</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="qrOverlay">
+  <div class="modal" style="max-width:300px; text-align:center;">
+    <h2 id="qrModalName" style="font-size:0.95rem;"></h2>
+    <div id="qrCanvasWrap" style="display:flex; justify-content:center; margin:10px 0;"></div>
+    <p style="font-size:0.7rem; color:var(--text-muted);">ឱ្យបុគ្គលិកនេះស្កេនកូដនេះនៅផ្ទាំង "ស្កេនចូល-ចេញ" ដើម្បីកត់ត្រាម៉ោង</p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="secondary" id="qrCloseBtn">បិទ</button>
+      <button id="qrDownloadBtn">⬇ ទាញយករូបភាព</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
