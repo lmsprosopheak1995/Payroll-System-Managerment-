@@ -66,8 +66,8 @@
     <p class="sub">ចូលគណនីដើម្បីស្កេនវត្តមាន និងមើលវត្តមានផ្ទាល់ខ្លួន</p>
     <p class="error-msg" id="loginError"></p>
     <div class="form-group">
-      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ឈ្មោះអ្នកប្រើ</label>
-      <input type="text" id="loginUsername" autocomplete="username">
+      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">អត្តលេខ (Employee ID)</label>
+      <input type="text" id="loginUsername" placeholder="ឧ. B-2808" autocomplete="username">
     </div>
     <div class="form-group">
       <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់</label>
@@ -327,10 +327,10 @@ function showLogin(errorMsg) {
 async function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
-  if (!username || !password) { showLogin('សូមបំពេញឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់'); return; }
+  if (!username || !password) { showLogin('សូមបំពេញអត្តលេខ និងពាក្យសម្ងាត់'); return; }
   const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password: password });
   if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
-  if (!data || data.length === 0) { showLogin('ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+  if (!data || data.length === 0) { showLogin('អត្តលេខ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
   setSession({ id: data[0].id, name: data[0].name });
   document.getElementById('loginPassword').value = '';
   await showMain();
