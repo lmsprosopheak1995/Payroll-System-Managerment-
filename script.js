@@ -77,7 +77,9 @@ function attRecordToRow(date, empId, rec) {
 
 // ---- load from Supabase ----
 async function loadData() {
-  const { data, error } = await supabaseClient.from('employees').select('*').order('created_at', { ascending: true });
+  const { data, error } = await supabaseClient.from('employees')
+    .select('id, name, position, dept, phone, email, start_date, salary, status, username, created_at')
+    .order('created_at', { ascending: true });
   if (error) {
     console.error('Load employees failed', error);
     alert('មិនអាចទាញយកទិន្នន័យបុគ្គលិកពី Supabase បានទេ៖ ' + error.message);
