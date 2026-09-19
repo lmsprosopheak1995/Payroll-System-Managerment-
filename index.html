@@ -41,8 +41,39 @@
 </div>
 
 <div class="container" id="mainContainer" style="display:none;">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="app-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</div>
+    <button class="nav-item active" data-tab="dashboard"><span class="ico">📊</span><span class="lbl">Dashboard</span></button>
+    <button class="nav-item" data-tab="superstars"><span class="ico">⭐</span><span class="lbl">Super Stars</span></button>
+    <button class="nav-item" data-tab="orgchart"><span class="ico">🗂</span><span class="lbl">Org Chart</span></button>
+    <button class="nav-item" data-tab="employees"><span class="ico">👥</span><span class="lbl">បញ្ជីបុគ្គលិក</span></button>
+    <div class="nav-group">
+      <button class="nav-item nav-parent"><span class="ico">🗓</span><span class="lbl">Attendances</span><span class="chev">‹</span></button>
+      <div class="nav-sub">
+        <button class="nav-item" data-tab="attendance"><span class="dot"></span><span class="lbl">តារាងវត្តមានការងារ</span></button>
+        <button class="nav-item" data-tab="scan"><span class="dot"></span><span class="lbl">ស្កេនចូល-ចេញ</span></button>
+      </div>
+    </div>
+    <button class="nav-item" data-tab="activities"><span class="ico">📍</span><span class="lbl">Activities</span></button>
+    <button class="nav-item" data-tab="kpi"><span class="ico">🎯</span><span class="lbl">KPI</span></button>
+    <button class="nav-item" data-tab="requests"><span class="ico">📝</span><span class="lbl">Leave / Overtime <span id="pendingReqBadge"></span></span></button>
+    <button class="nav-item" data-tab="notify"><span class="ico">🔔</span><span class="lbl">Push Notifications</span></button>
+    <button class="nav-item" data-tab="feedback"><span class="ico">💬</span><span class="lbl">Feedback <span id="fbNewBadge"></span></span></button>
+    <button class="nav-item" data-tab="shift"><span class="ico">🕒</span><span class="lbl">Shift</span></button>
+    <div class="nav-group">
+      <button class="nav-item nav-parent"><span class="ico">💰</span><span class="lbl">Payrolls</span><span class="chev">‹</span></button>
+      <div class="nav-sub">
+        <button class="nav-item" data-tab="payroll"><span class="dot"></span><span class="lbl">អត្ថប្រយោជន៍ & ប្រាក់កាត់</span></button>
+        <button class="nav-item" data-tab="deduct"><span class="dot"></span><span class="lbl">យឺត/ច្បាប់ → កាត់លុយ</span></button>
+      </div>
+    </div>
+    <button class="nav-item" data-tab="setting"><span class="ico">⚙️</span><span class="lbl">Setting</span></button>
+  </nav>
+  <div class="app-main">
   <header>
-    <h1>🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</h1>
+    <div style="display:flex;align-items:center;gap:10px;"><button class="secondary" id="sidebarToggle" aria-label="menu">☰</button><h1>🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</h1></div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <a href="employee.html" target="_blank" class="secondary" style="text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; border-radius:6px; border:1px solid var(--border); color:var(--text); font-size:0.8rem; font-weight:600;">👤 ទំព័រចូលបុគ្គលិក</a>
       <button class="secondary" id="changeAdminPwBtn">🔑 ប្តូរពាក្យសម្ងាត់</button>
@@ -51,16 +82,7 @@
     </div>
   </header>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="employees">👥 បញ្ជីបុគ្គលិក</button>
-    <button class="tab-btn" data-tab="attendance">🗓 តារាងវត្តមានការងារ</button>
-    <button class="tab-btn" data-tab="scan">📷 ស្កេនចូល-ចេញ</button>
-    <button class="tab-btn" data-tab="requests">📝 សំណើច្បាប់/ថែមម៉ោង <span id="pendingReqBadge"></span></button>
-    <button class="tab-btn" data-tab="payroll">💰 អត្ថប្រយោជន៍ & ប្រាក់កាត់</button>
-    <button class="tab-btn" data-tab="deduct">⏰ យឺត/ច្បាប់ → កាត់លុយ / អត្ថប្រយោជន៍</button>
-  </div>
-
-  <div id="employeesTab" class="tab-content active">
+  <div id="employeesTab" class="tab-content">
     <div class="stats" id="statsRow"></div>
 
     <div class="toolbar">
@@ -112,16 +134,6 @@
         <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
       </div>
     </div>
-    <details class="scan-result-card" id="holidayBox" style="margin-bottom:14px;">
-      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
-        <input type="date" id="holidayDate">
-        <input type="text" id="holidayName" placeholder="ឈ្មោះថ្ងៃបុណ្យ" style="min-width:200px;">
-        <button id="holidayAddBtn">➕ បន្ថែមថ្ងៃបុណ្យ</button>
-      </div>
-      <p id="holidayWarn" class="scan-hint" style="color:var(--danger);display:none;"></p>
-      <div id="holidayList" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
-    </details>
     <div class="attendance-stats" id="attendanceStats"></div>
     <br>
     <div class="table-wrap">
@@ -325,6 +337,196 @@
     <style>@media (max-width: 720px) { #payrollGrid { grid-template-columns: 1fr !important; } }</style>
   </div>
 
+  <div id="dashboardTab" class="tab-content active">
+    <div class="attendance-controls">
+      <h2 class="page-title">📊 Dashboard</h2>
+      <input type="month" id="dashMonth">
+    </div>
+    <h3 class="sec-title">ថ្ងៃនេះ · <span id="dashToday"></span></h3>
+    <div class="attendance-stats" id="dashTodayStats"></div>
+    <h3 class="sec-title">ខែនេះ (ប្រាក់ខែប៉ាន់ស្មាន)</h3>
+    <div class="attendance-stats" id="dashMonthStats"></div>
+    <div class="dash-grid">
+      <div class="scan-result-card">
+        <h3 class="sec-title" style="margin-top:0;">វត្តមាន ៧ ថ្ងៃចុងក្រោយ</h3>
+        <div id="dashChart" class="bar-chart"></div>
+      </div>
+      <div class="scan-result-card">
+        <h3 class="sec-title" style="margin-top:0;">តាមផ្នែក</h3>
+        <div class="table-wrap" style="box-shadow:none;"><table style="min-width:0;"><thead><tr><th>ផ្នែក</th><th>បុគ្គលិក</th><th>ប្រាក់ខែគោល ($)</th></tr></thead><tbody id="dashDeptBody"></tbody></table></div>
+      </div>
+    </div>
+    <div class="scan-result-card" id="dashAlerts" style="margin-top:14px;"></div>
+  </div>
+
+  <div id="superstarsTab" class="tab-content">
+    <div class="attendance-controls">
+      <h2 class="page-title">⭐ Super Stars — បុគ្គលិកឆ្នើមប្រចាំខែ</h2>
+      <input type="month" id="starMonth">
+    </div>
+    <div id="starPodium" class="podium"></div>
+    <p class="scan-hint">ពិន្ទុ = KPI 60% + វត្តមាន 40% (បើមិនមាន KPI ប្រើវត្តមានតែម្យ៉ាង)។ ពិន្ទុវត្តមាន = 100 − (5 × ថ្ងៃយឺត) − (10 × ថ្ងៃអវត្តមាន)។ ត្រូវមានថ្ងៃមកធ្វើការយ៉ាងតិច ១ ថ្ងៃ។</p>
+    <div class="table-wrap">
+      <table><thead><tr><th>#</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃមក</th><th>យឺត</th><th>អវត្តមាន</th><th>វត្តមាន</th><th>KPI</th><th>ពិន្ទុសរុប</th></tr></thead><tbody id="starBody"></tbody></table>
+      <div class="empty-state" id="starEmpty" style="display:none;">មិនទាន់មានទិន្នន័យវត្តមានក្នុងខែនេះទេ</div>
+    </div>
+  </div>
+
+  <div id="orgchartTab" class="tab-content">
+    <div class="attendance-controls">
+      <h2 class="page-title">🗂 Org Chart — រចនាសម្ព័ន្ធតាមផ្នែក</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="orgSearch" placeholder="🔍 អត្តលេខ / ឈ្មោះ / តួនាទី / ផ្នែក..." style="min-width:220px;">
+        <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;"><input type="checkbox" id="orgShowInactive"> បង្ហាញអ្នកឈប់ផង</label>
+      </div>
+    </div>
+    <div id="orgChart"></div>
+  </div>
+
+  <div id="activitiesTab" class="tab-content">
+    <div class="attendance-controls">
+      <h2 class="page-title">📍 Activities — កត់ត្រាសកម្មភាព</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="month" id="actMonth">
+        <input type="text" id="actSearch" placeholder="🔍 ត្រងតាមអត្តលេខ / ឈ្មោះ..." style="min-width:200px;">
+      </div>
+    </div>
+    <p class="scan-hint danger-text" id="actWarn" style="display:none;"></p>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin:0;"><label>បុគ្គលិក</label><div class="live-search"><input type="text" id="actEmpSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off"><div class="ls-panel"></div></div><select id="actEmployeeSelect" style="display:none;"></select></div>
+        <div class="form-group" style="margin:0;"><label>ថ្ងៃ</label><input type="date" id="actDate"></div>
+        <div class="form-group" style="margin:0;flex:1 1 180px;"><label>ចំណងជើង</label><input type="text" id="actTitle" placeholder="ឧ. ជួបអតិថិជន / ដឹកទំនិញ" style="width:100%;"></div>
+        <div class="form-group" style="margin:0;flex:2 1 220px;"><label>កំណត់ចំណាំ</label><input type="text" id="actNote" style="width:100%;"></div>
+        <button id="actAddBtn">➕ បន្ថែម</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>ថ្ងៃ</th><th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ចំណងជើង</th><th>កំណត់ចំណាំ</th><th>សកម្មភាព</th></tr></thead><tbody id="actBody"></tbody></table>
+      <div class="empty-state" id="actEmpty" style="display:none;">មិនមានសកម្មភាពក្នុងខែនេះទេ</div>
+    </div>
+  </div>
+
+  <div id="kpiTab" class="tab-content">
+    <div class="attendance-controls">
+      <h2 class="page-title">🎯 KPI — វាយតម្លៃលទ្ធផល</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div class="live-search"><input type="text" id="kpiSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off"><div class="ls-panel"></div></div><select id="kpiEmployeeSelect" style="display:none;"></select>
+        <input type="month" id="kpiMonth">
+        <button class="secondary" id="kpiCopyBtn">📋 ចម្លងពីខែមុន</button>
+      </div>
+    </div>
+    <p class="scan-hint danger-text" id="kpiWarn" style="display:none;"></p>
+    <div class="attendance-stats" id="kpiSummary"></div>
+    <br>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin:0;flex:2 1 200px;"><label>ឈ្មោះសូចនាករ (KPI)</label><input type="text" id="kpiName" placeholder="ឧ. គុណភាពការងារ" style="width:100%;"></div>
+        <div class="form-group" style="margin:0;"><label>ទម្ងន់ (%)</label><input type="number" id="kpiWeight" min="0" max="100" step="1" style="width:100px;"></div>
+        <div class="form-group" style="margin:0;"><label>ពិន្ទុ (0–100)</label><input type="number" id="kpiScore" min="0" max="100" step="1" style="width:110px;"></div>
+        <button id="kpiAddBtn">➕ បន្ថែម</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>សូចនាករ</th><th>ទម្ងន់ (%)</th><th>ពិន្ទុ (0–100)</th><th>សកម្មភាព</th></tr></thead><tbody id="kpiBody"></tbody></table>
+      <div class="empty-state" id="kpiEmpty" style="display:none;">មិនទាន់មាន KPI សម្រាប់បុគ្គលិក/ខែនេះទេ</div>
+    </div>
+    <h3 class="sec-title">ពិន្ទុ KPI របស់បុគ្គលិកទាំងអស់ ក្នុងខែនេះ</h3>
+    <div class="table-wrap">
+      <table><thead><tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ចំនួន KPI</th><th>ទម្ងន់សរុប</th><th>ពិន្ទុ</th><th>ថ្នាក់</th></tr></thead><tbody id="kpiAllBody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="notifyTab" class="tab-content">
+    <div class="attendance-controls"><h2 class="page-title">🔔 Push Notifications — ប្រកាសជូនបុគ្គលិក</h2></div>
+    <p class="scan-hint danger-text" id="annWarn" style="display:none;"></p>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <div class="form-group"><label>ចំណងជើង</label><input type="text" id="annTitle" style="width:100%;"></div>
+      <div class="form-group"><label>ខ្លឹមសារ</label><textarea id="annText" rows="3"></textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin:0;"><label>ផ្ញើទៅ</label>
+          <select id="annTargetType"><option value="all">បុគ្គលិកទាំងអស់</option><option value="dept">តាមផ្នែក</option><option value="employee">បុគ្គលិកម្នាក់</option></select>
+        </div>
+        <div class="form-group" style="margin:0;display:none;" id="annDeptWrap"><label>ផ្នែក</label><select id="annDeptSelect"></select></div>
+        <div class="form-group" style="margin:0;display:none;" id="annEmpWrap"><label>បុគ្គលិក</label><div class="live-search"><input type="text" id="annEmpSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off"><div class="ls-panel"></div></div><select id="annEmployeeSelect" style="display:none;"></select></div>
+        <button id="annSendBtn">📤 ផ្ញើ</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>ថ្ងៃ</th><th>ចំណងជើង</th><th>ខ្លឹមសារ</th><th>ផ្ញើទៅ</th><th>សកម្មភាព</th></tr></thead><tbody id="annList"></tbody></table>
+      <div class="empty-state" id="annEmpty" style="display:none;">មិនទាន់មានប្រកាសទេ</div>
+    </div>
+  </div>
+
+  <div id="feedbackTab" class="tab-content">
+    <div class="attendance-controls">
+      <h2 class="page-title">💬 Feedback — មតិកែលម្អពីបុគ្គលិក</h2>
+      <select id="fbFilter"><option value="">ទាំងអស់</option><option value="new">ថ្មី</option><option value="replied">បានឆ្លើយតប</option></select>
+    </div>
+    <p class="scan-hint danger-text" id="fbWarn" style="display:none;"></p>
+    <div id="fbList"></div>
+    <div class="empty-state" id="fbEmpty" style="display:none;">មិនទាន់មានមតិកែលម្អទេ</div>
+  </div>
+
+  <div id="shiftTab" class="tab-content">
+    <div class="attendance-controls"><h2 class="page-title">🕒 Shift — គ្រប់គ្រងវេនការងារ</h2></div>
+    <p class="scan-hint danger-text" id="shiftWarn" style="display:none;"></p>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <input type="hidden" id="shiftEditId">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin:0;flex:1 1 180px;"><label>ឈ្មោះវេន</label><input type="text" id="shiftName" placeholder="ឧ. វេនល្ងាច" style="width:100%;"></div>
+        <div class="form-group" style="margin:0;"><label>ចូលធ្វើការ</label><input type="time" id="shiftStart" value="07:00"></div>
+        <div class="form-group" style="margin:0;"><label>ចេញសម្រាកបាយ</label><input type="time" id="shiftBreakOut" value="11:00"></div>
+        <div class="form-group" style="margin:0;"><label>ចូលវិញ</label><input type="time" id="shiftBreakIn" value="12:00"></div>
+        <div class="form-group" style="margin:0;"><label>ចេញពីធ្វើការ</label><input type="time" id="shiftEnd" value="16:00"></div>
+        <button id="shiftSaveBtn">💾 រក្សាទុកវេន</button>
+        <button class="secondary" id="shiftCancelBtn" style="display:none;">បោះបង់</button>
+      </div>
+      <p class="scan-hint">*ការកាត់ម៉ោងស្កេនមុនម៉ោង និងច្បាប់ OT (ចេញលើស 1 ម៉ោងទើបគិត OT) អនុវត្តតាមវេននីមួយៗ។ វេនឆ្លងអធ្រាត្រមិនទាន់គាំទ្រ។</p>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>វេន</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th><th>ម៉ោងធម្មតា</th><th>បុគ្គលិក</th><th>សកម្មភាព</th></tr></thead><tbody id="shiftBody"></tbody></table>
+    </div>
+    <h3 class="sec-title">ចាត់តាំងវេនឲ្យបុគ្គលិក</h3>
+    <div style="margin-bottom:10px;"><input type="text" id="shiftAssignSearch" placeholder="🔍 អត្តលេខ ឬ ឈ្មោះ..." style="min-width:220px;"></div>
+    <div class="table-wrap">
+      <table><thead><tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ផ្នែក</th><th>វេន</th></tr></thead><tbody id="shiftAssignBody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="settingTab" class="tab-content">
+    <div class="attendance-controls"><h2 class="page-title">⚙️ Setting — ការកំណត់រួម</h2></div>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <h3 class="sec-title" style="margin-top:0;">💵 ប្រាក់ខែ & ម៉ោងធ្វើការ</h3>
+      <div id="settingSummary" class="setting-grid"></div>
+      <div style="margin-top:12px;"><button id="settingEditBtn">✏️ កែប្រែការកំណត់</button></div>
+    </div>
+    <details class="scan-result-card" id="holidayBox" style="margin-bottom:14px;">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
+        <input type="date" id="holidayDate">
+        <input type="text" id="holidayName" placeholder="ឈ្មោះថ្ងៃបុណ្យ" style="min-width:200px;">
+        <button id="holidayAddBtn">➕ បន្ថែមថ្ងៃបុណ្យ</button>
+      </div>
+      <p id="holidayWarn" class="scan-hint" style="color:var(--danger);display:none;"></p>
+      <div id="holidayList" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+    </details>
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <h3 class="sec-title" style="margin-top:0;">🔐 សុវត្ថិភាព & QR</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="secondary" id="settingPwBtn">🔑 ប្តូរពាក្យសម្ងាត់អ្នកគ្រប់គ្រង</button>
+        <button class="secondary" id="settingQrBtn">📷 កូដ QR កន្លែងធ្វើការ (ផ្ទាំងស្កេន)</button>
+      </div>
+    </div>
+    <div class="scan-result-card">
+      <h3 class="sec-title" style="margin-top:0;">🗄 ស្ថានភាពតារាង Supabase (មុខងារថ្មី)</h3>
+      <div id="tableStatus" class="setting-grid"></div>
+      <p class="scan-hint">តារាងណាដែលមាន ✕ សូមដំណើរការ <strong>features.sql</strong> ក្នុង Supabase → SQL Editor រួចផ្ទុកទំព័រឡើងវិញ។</p>
+    </div>
+  </div>
+
+  </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="settingsOverlay">
@@ -487,6 +689,7 @@
   </div>
 </div>
 
+<script src="features.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

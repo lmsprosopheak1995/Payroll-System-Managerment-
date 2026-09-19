@@ -40,7 +40,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays()]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null)]);
     renderAll();
     return;
   }
@@ -316,43 +316,64 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
-// ---- Shift rules (វេនព្រឹក 07:00-11:00, វេនថ្ងៃ 12:00-16:00) ----
+// ---- វេនការងារ (Shift) ----
 const SHIFT = {
-  morningStart: 7 * 60,    // 07:00 — ស្កេនចូលមុនម៉ោងនេះ តម្រឹមមក 07:00
-  morningEnd: 11 * 60,     // 11:00 — ចេញសម្រាកបាយ
-  afternoonStart: 12 * 60, // 12:00 — ស្កេនចូលវិញមុនម៉ោងនេះ តម្រឹមមក 12:00
-  afternoonEnd: 16 * 60,   // 16:00 — ម៉ោងចេញធម្មតា
-  otThreshold: 17 * 60,    // 17:00 — ចាប់ពីម៉ោងនេះឡើងទៅ ទើបគិត OT (រាប់ចាប់ពី 16:00)
-  otMealBlockHours: 2,     // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+  otMealBlockHours: 2,   // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+  otAfterMinutes: 60,    // ស្កេនចេញយឺតជាង ម៉ោងចេញ +60 នាទី ទើបគិត OT (រាប់ចាប់ពីម៉ោងចេញ)
 };
+// វេនលំនាំដើម៖ ព្រឹក 07:00–11:00 · ថ្ងៃ 12:00–16:00
+const DEFAULT_SHIFT = { id: 'default', name: 'វេនស្តង់ដារ', start: 7 * 60, breakOut: 11 * 60, breakIn: 12 * 60, end: 16 * 60 };
 
-// គណនាម៉ោងធម្មតា និងម៉ោង OT (គិតជានាទី) ពីម៉ោងស្កេនជាក់ស្តែង
-function computeWorkMinutes(checkin, checkout, breakOut, breakIn) {
+function shiftFromRow(r) {
+  return { id: r.id, name: r.name, start: timeToMinutes(r.start_time), breakOut: timeToMinutes(r.break_out), breakIn: timeToMinutes(r.break_in), end: timeToMinutes(r.end_time) };
+}
+function shiftTotalMinutes(sh) {
+  return Math.max(0, sh.breakOut - sh.start) + Math.max(0, sh.end - sh.breakIn);
+}
+// ម៉ោងចាប់ផ្តើមសម្រាប់កំណត់ថាយឺត (វេនលំនាំដើមប្រើ "ម៉ោងចូលស្តង់ដារ" ក្នុងការកំណត់)
+function lateStartMinutes(sh) {
+  if (sh.id === 'default') { const m = timeToMinutes(settings.standardStart); return m === null ? sh.start : m; }
+  return sh.start;
+}
+let shifts = [];       // rows from table `shifts`
+let shiftAssign = {};  // employee_id -> shift_id
+function getEmpShift(empId) {
+  const sid = shiftAssign[empId];
+  const row = sid && shifts.find(x => x.id === sid);
+  if (!row) return DEFAULT_SHIFT;
+  const sh = shiftFromRow(row);
+  return (sh.start === null || sh.breakOut === null || sh.breakIn === null || sh.end === null) ? DEFAULT_SHIFT : sh;
+}
+
+// គណនាម៉ោងធម្មតា និងម៉ោង OT (គិតជានាទី) ពីម៉ោងស្កេនជាក់ស្តែង តាមវេន
+function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
+  shift = shift || DEFAULT_SHIFT;
+  const shiftTotal = shiftTotalMinutes(shift);
   const rawIn = timeToMinutes(checkin);
   let rawOut = timeToMinutes(checkout);
-  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn };
+  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
   if (rawOut < rawIn) rawOut += 24 * 60;
 
-  // វេនព្រឹក៖ ចូលមុន 07:00 → គិតត្រឹម 07:00, ចេញបាយក្រោយ 11:00 → គិតត្រឹម 11:00
-  const morningIn = Math.max(rawIn, SHIFT.morningStart);
-  let morningOut = SHIFT.morningEnd;
+  // ព្រឹក៖ ស្កេនចូលមុនម៉ោងចូល → តម្រឹមមកម៉ោងចូល; ចេញសម្រាកក្រោយម៉ោងកំណត់ → គិតត្រឹមម៉ោងកំណត់
+  const morningIn = Math.max(rawIn, shift.start);
+  let morningOut = shift.breakOut;
   const bo = timeToMinutes(breakOut);
   if (bo !== null && bo < morningOut) morningOut = bo;
 
-  // វេនថ្ងៃ៖ ស្កេនចូលវិញមុន 12:00 → គិតត្រឹម 12:00
-  let afternoonIn = SHIFT.afternoonStart;
+  // រសៀល៖ ស្កេនចូលវិញមុនម៉ោងកំណត់ → តម្រឹមមកម៉ោងកំណត់
+  let afternoonIn = shift.breakIn;
   const bi = timeToMinutes(breakIn);
   if (bi !== null && bi > afternoonIn) afternoonIn = bi;
   afternoonIn = Math.max(afternoonIn, rawIn);
-  const afternoonOut = Math.min(rawOut, SHIFT.afternoonEnd);
+  const afternoonOut = Math.min(rawOut, shift.end);
 
   const morningMinutes = Math.max(0, Math.min(morningOut, rawOut) - morningIn);
   const afternoonMinutes = Math.max(0, afternoonOut - afternoonIn);
-  const normalMinutes = Math.min(morningMinutes + afternoonMinutes, settings.standardHours * 60);
+  const normalMinutes = Math.min(morningMinutes + afternoonMinutes, shiftTotal);
 
-  // OT៖ ស្កេនចេញ 16:00–16:59 មិនគិត OT; ចាប់ពី 17:00 ឡើងទៅ គិតពី 16:00 ដល់ម៉ោងស្កេនចេញ
-  const otMinutes = rawOut >= SHIFT.otThreshold ? rawOut - SHIFT.afternoonEnd : 0;
-  return { normalMinutes, otMinutes, rawIn };
+  // OT៖ ស្កេនចេញក្នុង 1 ម៉ោងដំបូងក្រោយម៉ោងចេញ មិនគិត OT; បើលើសនោះ គិតពីម៉ោងចេញរហូតដល់ម៉ោងស្កេនចេញ
+  const otMinutes = rawOut >= shift.end + SHIFT.otAfterMinutes ? rawOut - shift.end : 0;
+  return { normalMinutes, otMinutes, rawIn, shiftTotal };
 }
 
 // ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
@@ -428,12 +449,12 @@ function computeRow(emp, record, date) {
   let normalHours = 0, otHours = 0, late = false, fullDay = false;
 
   if (status === 'present' && checkin && checkout) {
-    const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn);
+    const sh = getEmpShift(emp.id);
+    const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn, sh);
     normalHours = w.normalMinutes / 60;
     otHours = w.otMinutes / 60;
-    fullDay = w.normalMinutes >= settings.standardHours * 60;
-    const startMin = timeToMinutes(settings.standardStart);
-    if (startMin !== null && w.rawIn > startMin) late = true;
+    fullDay = w.shiftTotal > 0 && w.normalMinutes >= w.shiftTotal;
+    if (w.rawIn > lateStartMinutes(sh)) late = true;
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
@@ -1163,6 +1184,7 @@ function renderAll() {
   renderWorkplaceQR();
   renderDeductTab();
   renderHolidayBox();
+  if (typeof renderFeatures === 'function') renderFeatures();
 }
 
 // ---- Workplace QR (posted at the entrance, self-scanned by employees) ----
@@ -1485,7 +1507,7 @@ function calcDeductionRow(emp, month) {
   const salary = parseFloat(emp.salary) || 0;
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const exRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
-  const startMin = timeToMinutes(settings.standardStart);
+  const startMin = lateStartMinutes(getEmpShift(emp.id));
   const approved = leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved');
 
   let lateDays = 0, lateMinutes = 0, leaveDays = 0, deductibleLeaveDays = 0;
@@ -1646,30 +1668,47 @@ document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
 document.getElementById('workplaceQrRegenBtn').addEventListener('click', regenerateWorkplaceQR);
 document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    if (btn.scrollIntoView) btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-    const tab = btn.dataset.tab;
-    document.getElementById('employeesTab').classList.toggle('active', tab === 'employees');
-    document.getElementById('attendanceTab').classList.toggle('active', tab === 'attendance');
-    document.getElementById('scanTab').classList.toggle('active', tab === 'scan');
-    document.getElementById('requestsTab').classList.toggle('active', tab === 'requests');
-    document.getElementById('payrollTab').classList.toggle('active', tab === 'payroll');
-    document.getElementById('deductTab').classList.toggle('active', tab === 'deduct');
-    if (tab === 'deduct') renderDeductTab();
-    if (tab === 'payroll') renderPayrollTab();
-    if (tab === 'attendance') renderAttendanceTab();
-    if (tab === 'requests') renderRequestsTab();
-    if (tab === 'scan') {
-      renderScanLog();
-      setScanResult('idle', 'ស្កេនកូដ QR របស់បុគ្គលិកដើម្បីកត់ត្រាម៉ោងចូល ឬចេញ');
-    } else {
-      stopScanner();
-    }
-  });
-});
+function closeSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (sb) sb.classList.remove('open');
+  const bd = document.getElementById('sidebarBackdrop');
+  if (bd) bd.classList.remove('show');
+}
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const open = !sb.classList.contains('open');
+  sb.classList.toggle('open', open);
+  document.getElementById('sidebarBackdrop').classList.toggle('show', open);
+}
+
+function showTab(tab) {
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tab + 'Tab'));
+  const btn = document.querySelector(`.nav-item[data-tab="${tab}"]`);
+  if (btn) {
+    const g = btn.closest('.nav-group');
+    if (g) g.classList.add('open');
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest' });
+  }
+  closeSidebar();
+  window.scrollTo({ top: 0 });
+  if (tab === 'deduct') renderDeductTab();
+  if (tab === 'payroll') renderPayrollTab();
+  if (tab === 'attendance') renderAttendanceTab();
+  if (tab === 'requests') renderRequestsTab();
+  if (typeof onFeatureTab === 'function') onFeatureTab(tab);
+  if (tab === 'scan') {
+    renderScanLog();
+    setScanResult('idle', 'ស្កេនកូដ QR របស់បុគ្គលិកដើម្បីកត់ត្រាម៉ោងចូល ឬចេញ');
+  } else {
+    stopScanner();
+  }
+}
+
+document.querySelectorAll('.nav-item[data-tab]').forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
+document.querySelectorAll('.nav-parent').forEach(btn => btn.addEventListener('click', () => btn.closest('.nav-group').classList.toggle('open')));
+document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
 initDeductControls();
 ['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
@@ -1688,4 +1727,5 @@ document.getElementById('adminLoginPassword').addEventListener('keydown', e => {
 document.getElementById('logoutBtn').addEventListener('click', doAdminLogout);
 document.getElementById('changeAdminPwBtn').addEventListener('click', changeAdminPassword);
 
+if (typeof initFeatures === 'function') initFeatures();
 checkAdminAuthAndInit();

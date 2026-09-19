@@ -100,6 +100,9 @@
       <button class="tab-btn" data-etab="leave">📝 សុំច្បាប់</button>
       <button class="tab-btn" data-etab="ot">⏱ សុំថែមម៉ោង</button>
       <button class="tab-btn" data-etab="payroll">💰 ប្រាក់ខែ</button>
+      <button class="tab-btn" data-etab="activities">📍 សកម្មភាព</button>
+      <button class="tab-btn" data-etab="feedback">💬 មតិកែលម្អ</button>
+      <button class="tab-btn" data-etab="notify">🔔 ដំណឹង <span id="nfBadge"></span></button>
     </div>
 
     <div id="clockTabContent" class="tab-content active">
@@ -226,6 +229,42 @@
       </div>
     </div>
 
+    <div id="activitiesTabContent" class="tab-content">
+      <div class="portal-card">
+        <h2 style="margin:0 0 10px;font-size:0.9rem;">📍 កត់ត្រាសកម្មភាព</h2>
+        <div class="form-group"><label>ថ្ងៃ</label><input type="date" id="actEDate" style="width:100%;"></div>
+        <div class="form-group"><label>ចំណងជើង</label><input type="text" id="actETitle" placeholder="ឧ. ជួបអតិថិជន / ដឹកទំនិញ" style="width:100%;"></div>
+        <div class="form-group"><label>កំណត់ចំណាំ</label><textarea id="actENote" rows="2"></textarea></div>
+        <button class="primary-btn" id="actEAddBtn">➕ បន្ថែមសកម្មភាព</button>
+        <p class="scan-hint danger-text" id="actEWarn" style="display:none;"></p>
+        <div id="actEList" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <div id="feedbackTabContent" class="tab-content">
+      <div class="portal-card">
+        <h2 style="margin:0 0 10px;font-size:0.9rem;">💬 ផ្ញើមតិកែលម្អទៅអ្នកគ្រប់គ្រង</h2>
+        <div class="form-group"><label>ប្រភេទ</label>
+          <select id="fbECat" style="width:100%;"><option>ការងារ</option><option>ប្រាក់ខែ</option><option>បរិយាកាសការងារ</option><option>ផ្សេងៗ</option></select></div>
+        <div class="form-group"><label>មតិ</label><textarea id="fbEMsg" rows="4" placeholder="សរសេរមតិរបស់អ្នក..."></textarea></div>
+        <button class="primary-btn" id="fbESendBtn">📤 ផ្ញើ</button>
+        <p class="scan-hint danger-text" id="fbEWarn" style="display:none;"></p>
+        <h3 style="font-size:0.82rem;margin:16px 0 8px;">ប្រវត្តិមតិរបស់ខ្ញុំ</h3>
+        <div id="fbEList"></div>
+      </div>
+    </div>
+
+    <div id="notifyTabContent" class="tab-content">
+      <div class="portal-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <h2 style="margin:0;font-size:0.9rem;">🔔 ដំណឹង / ប្រកាស</h2>
+          <button class="secondary" id="nfEnableBtn" style="font-size:0.72rem;">🔔 បើកការជូនដំណឹងលើកម្មវិធីរុករក</button>
+        </div>
+        <div id="nfList"></div>
+        <p class="scan-hint">ដំណឹងថ្មីត្រូវបានពិនិត្យរាល់ ១ នាទី ពេលបើកទំព័រនេះ។</p>
+      </div>
+    </div>
+
     <div id="payrollTabContent" class="tab-content">
       <div class="portal-card">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
@@ -293,43 +332,57 @@ function fmtUSD(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleStrin
 function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
 function fmtHours(n) { return (Math.round((n || 0) * 100) / 100).toString(); }
 
-// ---- Shift rules (វេនព្រឹក 07:00-11:00, វេនថ្ងៃ 12:00-16:00) ----
+// ---- វេនការងារ (Shift) ----
 const SHIFT = {
-  morningStart: 7 * 60,    // 07:00 — ស្កេនចូលមុនម៉ោងនេះ តម្រឹមមក 07:00
-  morningEnd: 11 * 60,     // 11:00 — ចេញសម្រាកបាយ
-  afternoonStart: 12 * 60, // 12:00 — ស្កេនចូលវិញមុនម៉ោងនេះ តម្រឹមមក 12:00
-  afternoonEnd: 16 * 60,   // 16:00 — ម៉ោងចេញធម្មតា
-  otThreshold: 17 * 60,    // 17:00 — ចាប់ពីម៉ោងនេះឡើងទៅ ទើបគិត OT (រាប់ចាប់ពី 16:00)
-  otMealBlockHours: 2,     // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+  otMealBlockHours: 2,   // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+  otAfterMinutes: 60,    // ស្កេនចេញយឺតជាង ម៉ោងចេញ +60 នាទី ទើបគិត OT (រាប់ចាប់ពីម៉ោងចេញ)
 };
+// វេនលំនាំដើម៖ ព្រឹក 07:00–11:00 · ថ្ងៃ 12:00–16:00
+const DEFAULT_SHIFT = { id: 'default', name: 'វេនស្តង់ដារ', start: 7 * 60, breakOut: 11 * 60, breakIn: 12 * 60, end: 16 * 60 };
 
-// គណនាម៉ោងធម្មតា និងម៉ោង OT (គិតជានាទី) ពីម៉ោងស្កេនជាក់ស្តែង
-function computeWorkMinutes(checkin, checkout, breakOut, breakIn) {
+function shiftFromRow(r) {
+  return { id: r.id, name: r.name, start: timeToMinutes(r.start_time), breakOut: timeToMinutes(r.break_out), breakIn: timeToMinutes(r.break_in), end: timeToMinutes(r.end_time) };
+}
+function shiftTotalMinutes(sh) {
+  return Math.max(0, sh.breakOut - sh.start) + Math.max(0, sh.end - sh.breakIn);
+}
+// ម៉ោងចាប់ផ្តើមសម្រាប់កំណត់ថាយឺត (វេនលំនាំដើមប្រើ "ម៉ោងចូលស្តង់ដារ" ក្នុងការកំណត់)
+function lateStartMinutes(sh) {
+  if (sh.id === 'default') { const m = timeToMinutes(settings.standardStart); return m === null ? sh.start : m; }
+  return sh.start;
+}
+let currentShift = null; // វេនរបស់បុគ្គលិកដែលកំពុងចូល (null = វេនលំនាំដើម)
+function getEmpShift() { return currentShift || DEFAULT_SHIFT; }
+
+// គណនាម៉ោងធម្មតា និងម៉ោង OT (គិតជានាទី) ពីម៉ោងស្កេនជាក់ស្តែង តាមវេន
+function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
+  shift = shift || DEFAULT_SHIFT;
+  const shiftTotal = shiftTotalMinutes(shift);
   const rawIn = timeToMinutes(checkin);
   let rawOut = timeToMinutes(checkout);
-  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn };
+  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
   if (rawOut < rawIn) rawOut += 24 * 60;
 
-  // វេនព្រឹក៖ ចូលមុន 07:00 → គិតត្រឹម 07:00, ចេញបាយក្រោយ 11:00 → គិតត្រឹម 11:00
-  const morningIn = Math.max(rawIn, SHIFT.morningStart);
-  let morningOut = SHIFT.morningEnd;
+  // ព្រឹក៖ ស្កេនចូលមុនម៉ោងចូល → តម្រឹមមកម៉ោងចូល; ចេញសម្រាកក្រោយម៉ោងកំណត់ → គិតត្រឹមម៉ោងកំណត់
+  const morningIn = Math.max(rawIn, shift.start);
+  let morningOut = shift.breakOut;
   const bo = timeToMinutes(breakOut);
   if (bo !== null && bo < morningOut) morningOut = bo;
 
-  // វេនថ្ងៃ៖ ស្កេនចូលវិញមុន 12:00 → គិតត្រឹម 12:00
-  let afternoonIn = SHIFT.afternoonStart;
+  // រសៀល៖ ស្កេនចូលវិញមុនម៉ោងកំណត់ → តម្រឹមមកម៉ោងកំណត់
+  let afternoonIn = shift.breakIn;
   const bi = timeToMinutes(breakIn);
   if (bi !== null && bi > afternoonIn) afternoonIn = bi;
   afternoonIn = Math.max(afternoonIn, rawIn);
-  const afternoonOut = Math.min(rawOut, SHIFT.afternoonEnd);
+  const afternoonOut = Math.min(rawOut, shift.end);
 
   const morningMinutes = Math.max(0, Math.min(morningOut, rawOut) - morningIn);
   const afternoonMinutes = Math.max(0, afternoonOut - afternoonIn);
-  const normalMinutes = Math.min(morningMinutes + afternoonMinutes, settings.standardHours * 60);
+  const normalMinutes = Math.min(morningMinutes + afternoonMinutes, shiftTotal);
 
-  // OT៖ ស្កេនចេញ 16:00–16:59 មិនគិត OT; ចាប់ពី 17:00 ឡើងទៅ គិតពី 16:00 ដល់ម៉ោងស្កេនចេញ
-  const otMinutes = rawOut >= SHIFT.otThreshold ? rawOut - SHIFT.afternoonEnd : 0;
-  return { normalMinutes, otMinutes, rawIn };
+  // OT៖ ស្កេនចេញក្នុង 1 ម៉ោងដំបូងក្រោយម៉ោងចេញ មិនគិត OT; បើលើសនោះ គិតពីម៉ោងចេញរហូតដល់ម៉ោងស្កេនចេញ
+  const otMinutes = rawOut >= shift.end + SHIFT.otAfterMinutes ? rawOut - shift.end : 0;
+  return { normalMinutes, otMinutes, rawIn, shiftTotal };
 }
 
 // ---- payroll math (mirrors the admin app's calculation) ----
@@ -368,12 +421,12 @@ function computeRow(salary, record, date) {
   let normalHours = 0, otHours = 0, late = false, fullDay = false;
 
   if (status === 'present' && checkin && checkout) {
-    const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn);
+    const sh = getEmpShift();
+    const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn, sh);
     normalHours = w.normalMinutes / 60;
     otHours = w.otMinutes / 60;
-    fullDay = w.normalMinutes >= settings.standardHours * 60;
-    const startMin = timeToMinutes(settings.standardStart);
-    if (startMin !== null && w.rawIn > startMin) late = true;
+    fullDay = w.shiftTotal > 0 && w.normalMinutes >= w.shiftTotal;
+    if (w.rawIn > lateStartMinutes(sh)) late = true;
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
@@ -479,6 +532,7 @@ function renderEmpInfo() {
     ['ទូរស័ព្ទ', currentEmployee.phone || '-'],
     ['អ៊ីមែល', currentEmployee.email || '-'],
     ['ថ្ងៃចូលធ្វើការ', currentEmployee.startDate || '-'],
+    ['វេនការងារ', (() => { const s = getEmpShift(); return `${s.name} (${fmtMinEmp(s.start)}–${fmtMinEmp(s.end)})`; })()],
     ['ប្រាក់គោល', '$' + fmtUSD(currentEmployee.salary)],
   ];
   grid.innerHTML = items.map(([l, v]) => `<div class="item"><div class="lbl">${escapeHtml(l)}</div><div class="val">${escapeHtml(String(v))}</div></div>`).join('');
@@ -491,14 +545,146 @@ async function showMain() {
   document.getElementById('loginCard').style.display = 'none';
   document.getElementById('mainCard').style.display = '';
   document.getElementById('empNameDisplay').textContent = session.name;
-  await Promise.all([loadSettings(), loadEmployeeRecord(), loadHolidays()]);
+  await Promise.all([loadSettings(), loadEmployeeRecord(), loadHolidays(), loadMyShift()]);
   renderEmpInfo();
+  document.getElementById('actEDate').value = todayStr();
+  startAnnouncementPolling();
   const thisMonth = todayStr().slice(0, 7);
   document.getElementById('attMonthInput').value = thisMonth;
   document.getElementById('payrollMonthInput').value = thisMonth;
   await renderClockBox();
   await renderHistory();
   switchEmpTab('clock');
+}
+
+// ==== វេនការងាររបស់បុគ្គលិក ====
+async function loadMyShift() {
+  const session = getSession();
+  currentShift = null;
+  if (!session) return;
+  const { data: a, error } = await supabaseClient.from('shift_assignments').select('shift_id').eq('employee_id', session.id).maybeSingle();
+  if (error || !a) return;
+  const { data: r } = await supabaseClient.from('shifts').select('*').eq('id', a.shift_id).maybeSingle();
+  if (!r) return;
+  const sh = shiftFromRow(r);
+  if (sh.start === null || sh.breakOut === null || sh.breakIn === null || sh.end === null) return;
+  currentShift = sh;
+}
+function fmtMinEmp(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function empUid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function tableWarnEmp(elId, error) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.display = error ? 'block' : 'none';
+  if (error) el.textContent = 'មុខងារនេះមិនទាន់ត្រៀមរួចរាល់ទេ — សូមទាក់ទងអ្នកគ្រប់គ្រង។';
+}
+function sortDescBy(list, key) { return list.sort((a, b) => String(b[key] || '').localeCompare(String(a[key] || ''))); }
+
+// ==== សកម្មភាព (Activities) ====
+async function renderActivitiesEmp() {
+  const box = document.getElementById('actEList');
+  const { data, error } = await supabaseClient.from('activities').select('*').eq('employee_id', currentEmployee.id);
+  tableWarnEmp('actEWarn', error);
+  const rows = sortDescBy(data || [], 'date').slice(0, 60);
+  box.innerHTML = rows.length ? rows.map(r => `<div class="hist-item" style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+    <div><div style="font-weight:600;font-size:0.8rem;">${escapeHtml(r.title)}</div><div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(r.date)}${r.note ? ' · ' + escapeHtml(r.note) : ''}</div></div>
+    <button class="secondary" style="font-size:0.7rem;" onclick="deleteActivityEmp('${escapeHtml(r.id)}')">🗑</button></div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:0.78rem;text-align:center;padding:10px;">មិនទាន់មានសកម្មភាពទេ</div>';
+}
+async function addActivityEmp() {
+  const date = document.getElementById('actEDate').value;
+  const title = document.getElementById('actETitle').value.trim();
+  const note = document.getElementById('actENote').value.trim();
+  if (!date || !title) { alert('សូមបំពេញថ្ងៃ និងចំណងជើង'); return; }
+  const { error } = await supabaseClient.from('activities').insert({ id: empUid('act'), employee_id: currentEmployee.id, date, title, note, created_at: new Date().toISOString() });
+  if (error) { alert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message); return; }
+  document.getElementById('actETitle').value = ''; document.getElementById('actENote').value = '';
+  renderActivitiesEmp();
+}
+async function deleteActivityEmp(id) {
+  if (!confirm('លុបសកម្មភាពនេះ?')) return;
+  const { error } = await supabaseClient.from('activities').delete().eq('id', id).eq('employee_id', currentEmployee.id);
+  if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
+  renderActivitiesEmp();
+}
+
+// ==== មតិកែលម្អ (Feedback) ====
+async function renderFeedbackEmp() {
+  const box = document.getElementById('fbEList');
+  const { data, error } = await supabaseClient.from('feedback').select('*').eq('employee_id', currentEmployee.id);
+  tableWarnEmp('fbEWarn', error);
+  const rows = sortDescBy(data || [], 'created_at');
+  box.innerHTML = rows.length ? rows.map(r => `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+    <div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(r.category || '')} · ${escapeHtml(String(r.created_at || '').slice(0, 10))} · ${r.status === 'replied' ? '✅ បានឆ្លើយតប' : '⏳ រង់ចាំ'}</div>
+    <div style="white-space:pre-wrap;font-size:0.8rem;margin-top:4px;">${escapeHtml(r.message)}</div>
+    ${r.admin_reply ? `<div style="margin-top:6px;padding:6px 8px;border-radius:6px;background:color-mix(in srgb, var(--accent) 10%, transparent);font-size:0.78rem;"><strong>អ្នកគ្រប់គ្រង៖</strong> ${escapeHtml(r.admin_reply)}</div>` : ''}</div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:0.78rem;text-align:center;padding:10px;">មិនទាន់មានមតិទេ</div>';
+}
+async function sendFeedbackEmp() {
+  const message = document.getElementById('fbEMsg').value.trim();
+  if (!message) { alert('សូមសរសេរមតិ'); return; }
+  const { error } = await supabaseClient.from('feedback').insert({ id: empUid('fb'), employee_id: currentEmployee.id, category: document.getElementById('fbECat').value, message, status: 'new', created_at: new Date().toISOString() });
+  if (error) { alert('ផ្ញើមិនជោគជ័យ៖ ' + error.message); return; }
+  document.getElementById('fbEMsg').value = '';
+  alert('✓ បានផ្ញើមតិរួចរាល់ សូមអរគុណ');
+  renderFeedbackEmp();
+}
+
+// ==== ដំណឹង / ប្រកាស (Push Notifications — in-app) ====
+let annCache = [];
+let notifiedUpTo = null;
+let annTimer = null;
+const annSeenKey = () => 'ann_seen_' + (currentEmployee ? currentEmployee.id : '');
+function getAnnSeen() { try { return parseInt(localStorage.getItem(annSeenKey()), 10) || 0; } catch (e) { return 0; } }
+function setAnnSeen(ts) { try { localStorage.setItem(annSeenKey(), String(ts)); } catch (e) { /* ignore */ } }
+const annTs = r => new Date(r.created_at).getTime() || 0;
+
+async function refreshAnnouncements(allowPopup) {
+  if (!currentEmployee) return;
+  const { data, error } = await supabaseClient.from('announcements').select('*');
+  if (error) return;
+  annCache = sortDescBy((data || []).filter(r =>
+    r.target_type === 'all' ||
+    (r.target_type === 'dept' && r.target_value === currentEmployee.dept) ||
+    (r.target_type === 'employee' && r.target_value === currentEmployee.id)), 'created_at');
+  const latest = annCache.length ? annTs(annCache[0]) : 0;
+  if (notifiedUpTo === null) {
+    notifiedUpTo = latest;
+    if (getAnnSeen() === 0) setAnnSeen(latest); // ដំណើរការលើកដំបូង៖ កុំបង្ហាញជាថ្មីទាំងអស់
+  } else if (allowPopup) {
+    annCache.filter(r => annTs(r) > notifiedUpTo).forEach(r => {
+      if (window.Notification && Notification.permission === 'granted') {
+        try { new Notification(r.title, { body: r.body || '' }); } catch (e) { /* ignore */ }
+      }
+    });
+    notifiedUpTo = Math.max(notifiedUpTo, latest);
+  }
+  updateNfBadge();
+  if (document.getElementById('notifyTabContent').classList.contains('active')) renderNotifyEmp();
+}
+function updateNfBadge() {
+  const seen = getAnnSeen();
+  const n = annCache.filter(r => annTs(r) > seen).length;
+  document.getElementById('nfBadge').innerHTML = n ? `<span class="badge inactive">${n}</span>` : '';
+}
+function renderNotifyEmp() {
+  const seen = getAnnSeen();
+  const box = document.getElementById('nfList');
+  box.innerHTML = annCache.length ? annCache.map(r => `<div style="border:1px solid ${annTs(r) > seen ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:9px 11px;margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;gap:8px;"><strong style="font-size:0.82rem;">${annTs(r) > seen ? '🆕 ' : ''}${escapeHtml(r.title)}</strong><span style="font-size:0.68rem;color:var(--text-muted);">${escapeHtml(String(r.created_at || '').slice(0, 10))}</span></div>
+    <div style="white-space:pre-wrap;font-size:0.78rem;margin-top:4px;">${escapeHtml(r.body || '')}</div></div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:0.78rem;text-align:center;padding:10px;">មិនទាន់មានដំណឹងទេ</div>';
+  if (annCache.length) { setAnnSeen(annTs(annCache[0])); updateNfBadge(); }
+}
+function startAnnouncementPolling() {
+  refreshAnnouncements(false);
+  if (annTimer) clearInterval(annTimer);
+  annTimer = setInterval(() => { if (!document.hidden) refreshAnnouncements(true); }, 60000);
+}
+async function enableBrowserNotifications() {
+  if (!window.Notification) { alert('កម្មវិធីរុករកនេះមិនគាំទ្រការជូនដំណឹងទេ'); return; }
+  const p = await Notification.requestPermission();
+  alert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
 }
 
 function switchEmpTab(tab) {
@@ -510,11 +696,17 @@ function switchEmpTab(tab) {
   document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');
   document.getElementById('otTabContent').classList.toggle('active', tab === 'ot');
   document.getElementById('payrollTabContent').classList.toggle('active', tab === 'payroll');
+  document.getElementById('activitiesTabContent').classList.toggle('active', tab === 'activities');
+  document.getElementById('feedbackTabContent').classList.toggle('active', tab === 'feedback');
+  document.getElementById('notifyTabContent').classList.toggle('active', tab === 'notify');
   if (tab !== 'clock') stopEmpScanner();
   if (tab === 'attendance') renderAttendanceTabEmp();
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
   if (tab === 'payroll') renderPayrollSummary();
+  if (tab === 'activities') renderActivitiesEmp();
+  if (tab === 'feedback') renderFeedbackEmp();
+  if (tab === 'notify') renderNotifyEmp();
 }
 
 // ==== In-page QR self-scan (clock tab) ====
@@ -593,6 +785,9 @@ async function handleEmpScan(decodedText) {
   empScanBusy = false;
 }
 
+document.getElementById('actEAddBtn').addEventListener('click', addActivityEmp);
+document.getElementById('fbESendBtn').addEventListener('click', sendFeedbackEmp);
+document.getElementById('nfEnableBtn').addEventListener('click', enableBrowserNotifications);
 document.querySelectorAll('#empTabs .tab-btn').forEach(btn => {
   btn.addEventListener('click', () => switchEmpTab(btn.dataset.etab));
 });
