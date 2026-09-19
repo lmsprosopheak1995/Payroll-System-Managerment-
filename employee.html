@@ -889,21 +889,6 @@ function stopEmpScanner() {
   }
 }
 
-// ---- QR ប្តូរជានិច្ច (rotating): កូដផ្លាស់ប្តូររាល់ 30 វិនាទី ដូច្នេះរូបថត/screenshot ប្រើមិនបានយូរ ----
-const WP_WINDOW_MS = 30000;
-async function wpToken(secret, win) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret + ':' + win));
-  return 'WP1.' + win + '.' + Array.from(new Uint8Array(buf)).slice(0, 5).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function verifyWpToken(scanned) {
-  const m = /^WP1\.(\d+)\.([0-9a-f]{10})$/.exec(scanned);
-  if (!m) return 'invalid';
-  const win = parseInt(m[1], 10), nowWin = Math.floor(Date.now() / WP_WINDOW_MS);
-  if (Math.abs(nowWin - win) > 1) return 'expired'; // ទទួលតែ QR ក្នុងរយៈពេល ~1 នាទីចុងក្រោយ
-  return (await wpToken(settings.workplaceCode, win)) === scanned ? 'ok' : 'invalid';
-}
-
 function distMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000, rad = x => x * Math.PI / 180;
   const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
@@ -936,10 +921,7 @@ async function handleEmpScan(decodedText) {
   const resultEl = document.getElementById('empScanResult');
   const fail = msg => { resultEl.style.color = 'var(--danger)'; resultEl.textContent = msg; setTimeout(() => { empScanBusy = false; }, 1500); };
   if (!settings.workplaceCode) { fail('✕ មិនទាន់មានកូដ QR កន្លែងធ្វើការទេ សូមទាក់ទងអ្នកគ្រប់គ្រង'); return; }
-  let v;
-  try { v = await verifyWpToken(scannedCode); } catch (err) { fail('✕ មិនអាចផ្ទៀងផ្ទាត់កូដបានទេ (ត្រូវបើកតាម https://)'); return; }
-  if (v === 'expired') { fail('✕ QR នេះផុតកំណត់ហើយ (QR ប្តូររាល់ 30 វិនាទី) សូមស្កេនពីអេក្រង់នៅកន្លែងធ្វើការដោយផ្ទាល់'); return; }
-  if (v !== 'ok') { fail('✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ'); return; }
+  if (scannedCode !== settings.workplaceCode) { fail('✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ'); return; }
   resultEl.style.color = 'var(--text-muted)';
   resultEl.textContent = '⏳ កំពុងពិនិត្យទីតាំង...';
   const g = await checkWpGeo();

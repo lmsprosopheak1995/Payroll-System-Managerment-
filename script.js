@@ -116,13 +116,6 @@ function generateWorkplaceCode() {
   for (let i = 0; i < 16; i++) s += chars[r[i] % chars.length];
   return s;
 }
-// ---- QR ប្តូរជានិច្ច (rotating): កូដផ្លាស់ប្តូររាល់ 30 វិនាទី ដូច្នេះរូបថត/screenshot ប្រើមិនបានយូរ ----
-const WP_WINDOW_MS = 30000;
-async function wpToken(secret, win) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret + ':' + win));
-  return 'WP1.' + win + '.' + Array.from(new Uint8Array(buf)).slice(0, 5).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // ---- Avatar (រូប profile ឬអក្សរដំបូងនៃឈ្មោះ) ----
 function avatarInner(e) {
   return e && e.photo
@@ -1240,10 +1233,8 @@ function renderAll() {
   if (typeof renderFeatures === 'function') renderFeatures();
 }
 
-// ---- Workplace QR (បង្ហាញលើអេក្រង់ច្រកចូល — ប្តូររាល់ 30 វិនាទី) ----
-let wpQrTimer = null, wpQrWin = null;
-
-async function renderWorkplaceQR() {
+// ---- Workplace QR (បោះពុម្ព/បិទនៅច្រកចូល — កូដថេរ មិនប្តូរ) ----
+function renderWorkplaceQR() {
   const wrap = document.getElementById('workplaceQrCanvasWrap');
   if (!wrap) return;
   renderWpGeoInfo();
@@ -1254,29 +1245,26 @@ async function renderWorkplaceQR() {
     return;
   }
   try {
-    const win = Math.floor(Date.now() / WP_WINDOW_MS);
     const qr = qrcode(0, 'M');
-    qr.addData(await wpToken(settings.workplaceCode, win));
+    qr.addData(settings.workplaceCode);
     qr.make();
     const dataUrl = qr.createDataURL(6, 8);
-    const img = document.getElementById('workplaceQrImg');
-    if (img) img.src = dataUrl;
-    else wrap.innerHTML = `<img id="workplaceQrImg" src="${dataUrl}" alt="Workplace QR" style="max-width:220px;width:100%;border-radius:8px;">`;
-    wpQrWin = win;
+    wrap.innerHTML = `<img id="workplaceQrImg" src="${dataUrl}" alt="Workplace QR" style="max-width:220px;width:100%;border-radius:8px;">`;
   } catch (e) {
-    console.error('QR generation failed', e);
-    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (ត្រូវបើកតាម https:// ឬ localhost)</p>';
+    console.error('QR generation failed for workplaceCode =', settings.workplaceCode, e);
+    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (សូមពិនិត្យ browser console)</p>';
   }
-  if (!wpQrTimer) wpQrTimer = setInterval(wpQrTick, 1000);
 }
 
-function wpQrTick() {
-  const wrap = document.getElementById('workplaceQrCanvasWrap');
-  if (!wrap || !wrap.offsetParent || wpQrWin === null) return; // ផ្ទាំងលាក់ — មិនចាំបាច់ធ្វើអ្វី
-  const left = Math.max(0, Math.ceil(((wpQrWin + 1) * WP_WINDOW_MS - Date.now()) / 1000));
-  const cd = document.getElementById('wpQrCountdown');
-  if (cd) cd.textContent = `QR នឹងប្តូរក្នុង ${left} វិនាទី`;
-  if (Math.floor(Date.now() / WP_WINDOW_MS) !== wpQrWin) renderWorkplaceQR();
+function downloadWorkplaceQR() {
+  const img = document.getElementById('workplaceQrImg');
+  if (!img) return;
+  const a = document.createElement('a');
+  a.href = img.src;
+  a.download = 'workplace_qr.gif';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ---- ទីតាំងកន្លែងធ្វើការ (Geofence) ----
@@ -1845,6 +1833,7 @@ document.getElementById('settingsOverlay').addEventListener('click', (e) => {
 });
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
+document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
 document.getElementById('wpGeoSetBtn').addEventListener('click', () => saveWpGeo(true));
 document.getElementById('wpRadiusInput').addEventListener('change', () => saveWpGeo(false));
 function closeSidebar() {
