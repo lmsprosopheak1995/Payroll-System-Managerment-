@@ -22,6 +22,7 @@ function setAdminSession() { sessionStorage.setItem(ADMIN_SESSION_KEY, '1'); }
 function clearAdminSession() { sessionStorage.removeItem(ADMIN_SESSION_KEY); }
 
 function showAdminGate(view, errorMsg) {
+  document.getElementById('adminGate').style.display = '';
   document.getElementById('mainContainer').style.display = 'none';
   document.getElementById('adminGateLoading').style.display = 'none';
   document.getElementById('adminSetupCard').style.display = view === 'setup' ? '' : 'none';
@@ -39,6 +40,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminGateLoading').style.display = 'none';
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
+    document.getElementById('adminGate').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
     await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null)]);
     renderAll();
