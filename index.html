@@ -100,7 +100,11 @@
   <div id="attendanceTab" class="tab-content">
     <div class="attendance-controls">
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <select id="attendanceEmployeeSelect" style="min-width:170px;"></select>
+        <div class="live-search">
+          <input type="text" id="attendanceSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off">
+          <div class="ls-panel"></div>
+        </div>
+        <select id="attendanceEmployeeSelect" style="display:none;"></select>
         <input type="month" id="attendanceMonth">
       </div>
       <div style="display:flex; gap:8px;">
@@ -275,8 +279,11 @@
   <div id="payrollTab" class="tab-content">
     <div class="attendance-controls">
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <input type="text" id="payrollSearch" placeholder="🔍 អត្តលេខ ឬ ឈ្មោះ..." style="min-width:150px;">
-        <select id="payrollEmployeeSelect" style="min-width:170px;"></select>
+        <div class="live-search">
+          <input type="text" id="payrollSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off">
+          <div class="ls-panel"></div>
+        </div>
+        <select id="payrollEmployeeSelect" style="display:none;"></select>
         <input type="month" id="payrollMonth">
       </div>
       <p style="font-size:0.7rem;color:var(--text-muted);margin:0;max-width:360px;">

@@ -301,12 +301,13 @@ function renderAttendanceEmployeeSelect() {
   const sel = document.getElementById('attendanceEmployeeSelect');
   const activeEmployees = employees.filter(e => e.status === 'active');
   const currentVal = sel.value;
-  sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${e.username ? escapeHtml(e.username) + ' — ' : ''}${escapeHtml(e.name)}</option>`).join('');
   if (activeEmployees.some(e => e.id === currentVal)) {
     sel.value = currentVal;
   } else if (activeEmployees.length > 0) {
     sel.value = activeEmployees[0].id;
   }
+  if (attLive) attLive.sync();
 }
 
 function timeToMinutes(t) {
@@ -718,6 +719,76 @@ function currentPayrollEmployeeId() {
   return sel ? sel.value : '';
 }
 
+// ---- Live search (ប្រអប់ស្វែងរកភ្លាមៗ ជំនួស dropdown) ----
+// <select> ដើមនៅតែរក្សាទុកតម្លៃ (លាក់) ដើម្បីកុំឲ្យកូដផ្សេងខូច; input នេះជាអ្នកគ្រប់គ្រងវា។
+let attLive = null, payLive = null;
+
+function employeeLabel(e) { return (e.username ? e.username + ' — ' : '') + e.name; }
+
+function setupLiveSearch(inputId, selectId, onPick) {
+  const input = document.getElementById(inputId);
+  const sel = document.getElementById(selectId);
+  const panel = input.parentNode.querySelector('.ls-panel');
+  let items = [], active = -1, closeTimer = null;
+
+  const selectedLabel = () => {
+    const e = employees.find(x => x.id === sel.value);
+    return e ? employeeLabel(e) : '';
+  };
+  function render(q) {
+    items = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
+    active = items.findIndex(e => e.id === sel.value);
+    if (active < 0) active = items.length ? 0 : -1;
+    panel.innerHTML = items.length
+      ? items.map((e, i) => `<div class="ls-item${i === active ? ' active' : ''}${e.id === sel.value ? ' current' : ''}" data-id="${escapeHtml(e.id)}"><span class="ls-id">${escapeHtml(e.username || '-')}</span><span class="ls-name">${escapeHtml(e.name)}</span></div>`).join('')
+      : '<div class="ls-empty">រកមិនឃើញបុគ្គលិក</div>';
+    panel.style.display = 'block';
+    const el = panel.children[active];
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }
+  function close() { panel.style.display = 'none'; }
+  function pick(id) {
+    sel.value = id;
+    input.value = selectedLabel();
+    close();
+    input.blur();
+    onPick();
+  }
+
+  input.addEventListener('focus', () => {
+    clearTimeout(closeTimer);
+    input.select();
+    render('');
+  });
+  input.addEventListener('input', () => render(input.value));
+  input.addEventListener('blur', () => {
+    // ពន្យារបន្តិច ដើម្បីឲ្យការចុចលើបញ្ជីដំណើរការមុន
+    closeTimer = setTimeout(() => { close(); input.value = selectedLabel(); }, 150);
+  });
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (panel.style.display !== 'block') render(input.value);
+      if (!items.length) return;
+      active = ev.key === 'ArrowDown' ? (active + 1) % items.length : (active - 1 + items.length) % items.length;
+      [...panel.querySelectorAll('.ls-item')].forEach((el, i) => el.classList.toggle('active', i === active));
+      const el = panel.children[active];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (items[active]) pick(items[active].id);
+    } else if (ev.key === 'Escape') {
+      close(); input.blur();
+    }
+  });
+  panel.addEventListener('click', ev => {
+    const it = ev.target.closest('.ls-item');
+    if (it) { clearTimeout(closeTimer); pick(it.dataset.id); }
+  });
+
+  return { sync() { if (document.activeElement !== input) input.value = selectedLabel(); } };
+}
+
 function employeeMatchesSearch(e, q) {
   q = (q || '').toLowerCase().trim();
   return !q || (e.name || '').toLowerCase().includes(q) || (e.username || '').toLowerCase().includes(q);
@@ -725,8 +796,7 @@ function employeeMatchesSearch(e, q) {
 
 function renderPayrollEmployeeSelect() {
   const sel = document.getElementById('payrollEmployeeSelect');
-  const q = document.getElementById('payrollSearch') ? document.getElementById('payrollSearch').value : '';
-  const activeEmployees = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
+  const activeEmployees = employees.filter(e => e.status === 'active');
   const currentVal = sel.value;
   sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${e.username ? escapeHtml(e.username) + ' — ' : ''}${escapeHtml(e.name)}</option>`).join('');
   if (activeEmployees.some(e => e.id === currentVal)) {
@@ -734,6 +804,7 @@ function renderPayrollEmployeeSelect() {
   } else if (activeEmployees.length > 0) {
     sel.value = activeEmployees[0].id;
   }
+  if (payLive) payLive.sync();
 }
 
 function fmtItemAmount(item) {
@@ -793,10 +864,9 @@ function renderPayrollTab() {
 
 function openAddPayrollItemModal(type, forEmpId, forMonth) {
   if (forEmpId) {
-    const search = document.getElementById('payrollSearch');
-    if (search) search.value = '';
     renderPayrollEmployeeSelect();
     document.getElementById('payrollEmployeeSelect').value = forEmpId;
+    if (payLive) payLive.sync();
   }
   if (forMonth) document.getElementById('payrollMonth').value = forMonth;
   const empId = currentPayrollEmployeeId();
@@ -1556,6 +1626,7 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'modalOverlay') closeModal();
 });
 document.getElementById('attendanceEmployeeSelect').addEventListener('change', renderAttendanceTab);
+attLive = setupLiveSearch('attendanceSearch', 'attendanceEmployeeSelect', renderAttendanceTab);
 document.getElementById('attendanceMonth').addEventListener('change', renderAttendanceTab);
 document.getElementById('payrollEmployeeSelect').addEventListener('change', renderPayrollTab);
 document.getElementById('payrollMonth').addEventListener('change', renderPayrollTab);
@@ -1606,7 +1677,7 @@ document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
 ['dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
 document.querySelectorAll('.ded-leave-type').forEach(c => c.addEventListener('change', () => { readDeductControls(); renderDeductTab(); }));
 document.getElementById('dedApplyAllBtn').addEventListener('click', applyAllDeductions);
-document.getElementById('payrollSearch').addEventListener('input', renderPayrollTab);
+payLive = setupLiveSearch('payrollSearch', 'payrollEmployeeSelect', renderPayrollTab);
 document.getElementById('holidayAddBtn').addEventListener('click', addHoliday);
 
 document.getElementById('attendanceMonth').value = todayStr().slice(0, 7);

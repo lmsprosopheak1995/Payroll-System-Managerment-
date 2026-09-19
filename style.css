@@ -402,3 +402,26 @@ img, canvas, video { max-width: 100%; }
   footer { max-width: 100%; }
   th, td { padding: 7px 6px; }
 }
+
+/* ==== Live search combobox ==== */
+.live-search { position: relative; flex: 1 1 240px; min-width: 200px; max-width: 420px; }
+.live-search input { width: 100%; }
+.ls-panel {
+  display: none;
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px);
+  max-height: 260px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  z-index: 60;
+  text-align: left;
+}
+.ls-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; cursor: pointer; font-size: 0.8rem; }
+.ls-item:hover, .ls-item.active { background: color-mix(in srgb, var(--accent) 12%, var(--card-bg)); }
+.ls-item.current .ls-name { font-weight: 700; }
+.ls-id { color: var(--text-muted); font-size: 0.72rem; min-width: 64px; }
+.ls-empty { padding: 12px; text-align: center; color: var(--text-muted); font-size: 0.78rem; }
