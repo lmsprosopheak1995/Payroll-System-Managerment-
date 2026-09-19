@@ -105,9 +105,12 @@
       <table>
         <thead>
           <tr>
+            <th>រូប</th>
+            <th>អត្តលេខ</th>
             <th>ឈ្មោះ</th>
             <th>តួនាទី</th>
             <th>ផ្នែក</th>
+            <th>ប្រាក់ខែគោល ($)</th>
             <th>ទូរស័ព្ទ</th>
             <th>ថ្ងៃចូលធ្វើការ</th>
             <th>ស្ថានភាព</th>
@@ -638,6 +641,17 @@
     <h2 id="modalTitle">បន្ថែមបុគ្គលិកថ្មី</h2>
     <input type="hidden" id="empId">
     <div class="form-group">
+      <label>រូបថតប្រវត្តិរូប (Profile)</label>
+      <div style="display:flex;gap:14px;align-items:center;">
+        <div id="empPhotoPreview" class="avatar avatar-lg">?</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <input type="file" id="empPhotoInput" accept="image/*" style="display:none;">
+          <button type="button" class="secondary" id="empPhotoPickBtn">📷 ជ្រើសរូបថត</button>
+          <button type="button" class="secondary" id="empPhotoClearBtn">🗑 លុបរូបថត</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
       <label>ឈ្មោះពេញ *</label>
       <input type="text" id="empName" placeholder="ឧ. សុខ សុភា">
     </div>
@@ -688,6 +702,7 @@
           <input type="text" id="empUsername" placeholder="ឧ. B-2808" autocomplete="off" style="flex:1;">
           <button type="button" class="secondary" id="empUsernameRegenBtn" title="បង្កើតអត្តលេខថ្មី" style="flex:0 0 auto; padding:6px 10px;">🔀</button>
         </div>
+        <small id="empUsernameHint" style="display:block;margin-top:4px;font-size:0.72rem;color:var(--text-muted);"></small>
       </div>
       <div class="form-group">
         <label>ពាក្យសម្ងាត់</label>

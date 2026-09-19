@@ -288,7 +288,7 @@ function renderStars() {
     const x = top[i];
     return `<div class="podium-item rank${i + 1}">
       <div class="podium-medal">${medals[i]}</div>
-      <div class="podium-avatar">${escapeHtml((x.e.name || '?').charAt(0).toUpperCase())}</div>
+      <div class="podium-avatar">${avatarInner(x.e)}</div>
       <div class="podium-name">${escapeHtml(x.e.name)}</div>
       <div class="podium-score">⭐ ${x.final}</div>
     </div>`;
@@ -327,7 +327,7 @@ function renderOrgChart() {
           <div class="org-dept-head">📁 ${escapeHtml(k)} <span class="badge active">${groups[k].length}</span></div>
           ${groups[k].sort((a, b) => (a.position || '').localeCompare(b.position || '') || (a.name || '').localeCompare(b.name || '')).map(e => `
             <div class="org-member${e.status !== 'active' ? ' inactive' : ''}">
-              <div class="org-avatar">${escapeHtml((e.name || '?').charAt(0).toUpperCase())}</div>
+              <div class="org-avatar">${avatarInner(e)}</div>
               <div class="org-info"><div class="org-name">${escapeHtml(e.name)}</div>
               <div class="org-pos">${escapeHtml(e.position || '-')}${e.username ? ' · ' + escapeHtml(e.username) : ''}</div></div>
             </div>`).join('')}

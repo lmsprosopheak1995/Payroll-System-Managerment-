@@ -113,6 +113,16 @@ function generateWorkplaceCode() {
   return s;
 }
 
+// ---- Avatar (រូប profile ឬអក្សរដំបូងនៃឈ្មោះ) ----
+function avatarInner(e) {
+  return e && e.photo
+    ? `<img src="${e.photo}" alt="">`
+    : escapeHtml(((e && e.name) || '?').trim().charAt(0).toUpperCase() || '?');
+}
+function avatarHtml(e, cls) {
+  return `<span class="avatar ${cls || ''}">${avatarInner(e)}</span>`;
+}
+
 // ---- row <-> object mapping ----
 function rowToEmployee(r) {
   return {
@@ -126,6 +136,7 @@ function rowToEmployee(r) {
     salary: r.salary ?? '',
     status: r.status || 'active',
     username: r.username || '',
+    photo: r.photo || '',
   };
 }
 
@@ -142,6 +153,7 @@ function employeeToRow(e) {
     status: e.status,
     username: e.username || null,
   };
+  if (e._photoDirty) row.photo = e.photo || null; // ផ្ញើ photo តែពេលមានការប្តូរ
   return row;
 }
 
@@ -162,10 +174,13 @@ function attRecordToRow(date, empId, rec) {
 }
 
 // ---- load from Supabase ----
+let photoColumnAvailable = true; // false = ជួរ `photo` មិនទាន់មានក្នុងតារាង employees (ដំណើរការ employees.sql)
 async function loadData() {
-  const { data, error } = await supabaseClient.from('employees')
-    .select('id, name, position, dept, phone, email, start_date, salary, status, username, created_at')
-    .order('created_at', { ascending: true });
+  const cols = 'id, name, position, dept, phone, email, start_date, salary, status, username, created_at';
+  let res = await supabaseClient.from('employees').select(cols + ', photo').order('created_at', { ascending: true });
+  photoColumnAvailable = !res.error;
+  if (res.error) res = await supabaseClient.from('employees').select(cols).order('created_at', { ascending: true });
+  const { data, error } = res;
   if (error) {
     console.error('Load employees failed', error);
     alert('មិនអាចទាញយកទិន្នន័យបុគ្គលិកពី Supabase បានទេ៖ ' + error.message);
@@ -1139,7 +1154,7 @@ function renderTable() {
   const statusFilter = document.getElementById('statusFilter').value;
 
   let filtered = employees.filter(e => {
-    const matchesSearch = !search || (e.name || '').toLowerCase().includes(search) || (e.position || '').toLowerCase().includes(search);
+    const matchesSearch = !search || [e.name, e.position, e.username, e.dept, e.phone].some(v => (v || '').toLowerCase().includes(search));
     const matchesDept = !deptFilter || e.dept === deptFilter;
     const matchesStatus = !statusFilter || e.status === statusFilter;
     return matchesSearch && matchesDept && matchesStatus;
@@ -1160,9 +1175,12 @@ function renderTable() {
 
   tbody.innerHTML = filtered.map(e => `
     <tr>
+      <td>${avatarHtml(e)}</td>
+      <td>${escapeHtml(e.username) || '-'}</td>
       <td>${escapeHtml(e.name)}</td>
       <td>${escapeHtml(e.position)}</td>
       <td>${escapeHtml(e.dept)}</td>
+      <td>${e.salary !== '' && e.salary !== null && e.salary !== undefined ? '$' + fmtUSD(parseFloat(e.salary) || 0) : '-'}</td>
       <td>${escapeHtml(e.phone) || '-'}</td>
       <td>${e.startDate || '-'}</td>
       <td><span class="badge ${e.status}">${e.status === 'active' ? 'កំពុងបម្រើការ' : 'ឈប់បម្រើការ'}</span></td>
@@ -1229,8 +1247,51 @@ function downloadWorkplaceQR() {
   document.body.removeChild(a);
 }
 
+let pendingPhoto; // undefined = មិនប្តូរ, '' = លុប, 'data:...' = រូបថ្មី
+
+function setPhotoPreview(e) {
+  const box = document.getElementById('empPhotoPreview');
+  const src = pendingPhoto !== undefined ? pendingPhoto : (e && e.photo) || '';
+  box.innerHTML = src ? `<img src="${src}" alt="">` : escapeHtml(((document.getElementById('empName').value || (e && e.name) || '?').trim().charAt(0) || '?').toUpperCase());
+}
+
+// កាត់រូបជាការ៉េ 256×256 ហើយបង្ហាប់ជា JPEG (ទំហំតូច រក្សាទុកក្នុងតារាង employees បានដោយផ្ទាល់)
+function handlePhotoFile(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('សូមជ្រើសរើសឯកសាររូបភាព'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const size = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const side = Math.min(img.width, img.height);
+      canvas.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      pendingPhoto = canvas.toDataURL('image/jpeg', 0.8);
+      setPhotoPreview(editingId ? employees.find(x => x.id === editingId) : null);
+    };
+    img.onerror = () => alert('មិនអាចអានរូបភាពនេះបានទេ');
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setUsernameLock(locked) {
+  const input = document.getElementById('empUsername');
+  input.readOnly = locked;
+  input.style.opacity = locked ? '0.7' : '';
+  input.style.cursor = locked ? 'not-allowed' : '';
+  document.getElementById('empUsernameRegenBtn').style.display = locked ? 'none' : '';
+  const hint = document.getElementById('empUsernameHint');
+  hint.textContent = locked
+    ? '🔒 អត្តលេខមិនអាចកែប្រែបានទេ (ដោយសារបានបង្កើតរួចហើយ)'
+    : '⚠️ អត្តលេខអាចកំណត់បានតែម្តង — បន្ទាប់ពីរក្សាទុក នឹងមិនអាចកែប្រែបានទេ';
+}
+
 function openAddModal() {
   editingId = null;
+  pendingPhoto = undefined;
   document.getElementById('modalTitle').textContent = 'បន្ថែមបុគ្គលិកថ្មី';
   document.getElementById('empId').value = '';
   document.getElementById('empName').value = '';
@@ -1242,7 +1303,9 @@ function openAddModal() {
   document.getElementById('empSalary').value = '';
   document.getElementById('empStatus').value = 'active';
   document.getElementById('empUsername').value = generateEmployeeCode();
+  setUsernameLock(false);
   document.getElementById('empPassword').value = '';
+  setPhotoPreview(null);
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('empName').focus();
 }
@@ -1251,6 +1314,7 @@ function openEditModal(id) {
   const e = employees.find(x => x.id === id);
   if (!e) return;
   editingId = id;
+  pendingPhoto = undefined;
   document.getElementById('modalTitle').textContent = 'កែប្រែព័ត៌មានបុគ្គលិក';
   document.getElementById('empId').value = e.id;
   document.getElementById('empName').value = e.name || '';
@@ -1262,7 +1326,9 @@ function openEditModal(id) {
   document.getElementById('empSalary').value = e.salary || '';
   document.getElementById('empStatus').value = e.status || 'active';
   document.getElementById('empUsername').value = e.username || '';
+  setUsernameLock(!!e.username); // មានអត្តលេខរួចហើយ → ចាក់សោ
   document.getElementById('empPassword').value = '';
+  setPhotoPreview(e);
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -1280,9 +1346,14 @@ async function saveEmployee() {
     return;
   }
 
-  const username = document.getElementById('empUsername').value.trim();
   const passwordInput = document.getElementById('empPassword').value;
   const existingEmp = editingId ? employees.find(x => x.id === editingId) : null;
+  // អត្តលេខ៖ បើមានរួចហើយ មិនអាចកែបានទេ (ប្រើតម្លៃដើមជានិច្ច ទោះបីកែ HTML ក៏ដោយ)
+  const username = (existingEmp && existingEmp.username) ? existingEmp.username : document.getElementById('empUsername').value.trim();
+  if (username && !(existingEmp && existingEmp.username)) {
+    const dup = employees.find(x => x.id !== editingId && (x.username || '').toLowerCase() === username.toLowerCase());
+    if (dup) { alert(`អត្តលេខ "${username}" ត្រូវបានប្រើដោយ "${dup.name}" រួចហើយ សូមប្រើអត្តលេខផ្សេង`); return; }
+  }
   // ត្រូវការពាក្យសម្ងាត់ទាំងពេលបង្កើតគណនីថ្មី ទាំងពេលបន្ថែម username ដំបូងគេទៅឲ្យបុគ្គលិកចាស់
   // (មុននេះការត្រួតពិនិត្យអនុវត្តតែពេលបង្កើតថ្មី ធ្វើឲ្យអាចរក្សាទុក username ដោយគ្មានពាក្យសម្ងាត់ពេលកែប្រែ)
   const isFirstTimeUsername = username && (!existingEmp || !existingEmp.username);
@@ -1302,6 +1373,11 @@ async function saveEmployee() {
     status: document.getElementById('empStatus').value,
     username,
   };
+  if (pendingPhoto !== undefined) {
+    if (!photoColumnAvailable) { alert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ photo)'); return; }
+    data.photo = pendingPhoto;
+    data._photoDirty = true;
+  }
 
   let savedEmp;
   if (editingId) {
@@ -1316,6 +1392,7 @@ async function saveEmployee() {
   closeModal();
   renderAll();
   await upsertEmployee(savedEmp);
+  delete savedEmp._photoDirty;
   if (passwordInput) {
     const { error } = await supabaseClient.rpc('set_employee_password', {
       p_employee_id: savedEmp.id,
@@ -1659,6 +1736,14 @@ async function applyAllDeductions() {
 document.getElementById('addBtn').addEventListener('click', openAddModal);
 document.getElementById('empUsernameRegenBtn').addEventListener('click', () => {
   document.getElementById('empUsername').value = generateEmployeeCode();
+});
+document.getElementById('empPhotoPickBtn').addEventListener('click', () => document.getElementById('empPhotoInput').click());
+document.getElementById('empPhotoInput').addEventListener('change', ev => { handlePhotoFile(ev.target.files[0]); ev.target.value = ''; });
+document.getElementById('empPhotoClearBtn').addEventListener('click', () => { pendingPhoto = ''; setPhotoPreview(editingId ? { name: document.getElementById('empName').value } : null); });
+document.getElementById('empName').addEventListener('input', () => {
+  const cur = editingId ? employees.find(x => x.id === editingId) : null;
+  const hasPhoto = pendingPhoto !== undefined ? !!pendingPhoto : !!(cur && cur.photo);
+  if (!hasPhoto) setPhotoPreview(cur); // បង្ហាញអក្សរដំបូងនៃឈ្មោះ ពេលមិនទាន់មានរូប
 });
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('saveBtn').addEventListener('click', saveEmployee);

@@ -519,19 +519,23 @@ async function loadSettings() {
 
 async function loadEmployeeRecord() {
   const session = getSession();
-  const { data, error } = await supabaseClient.from('employees')
-    .select('id, name, position, dept, phone, email, start_date, salary, status, username').eq('id', session.id).maybeSingle();
+  const cols = 'id, name, position, dept, phone, email, start_date, salary, status, username';
+  let res = await supabaseClient.from('employees').select(cols + ', photo').eq('id', session.id).maybeSingle();
+  if (res.error) res = await supabaseClient.from('employees').select(cols).eq('id', session.id).maybeSingle(); // ជួរ photo មិនទាន់មាន
+  const { data, error } = res;
   if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '', username: '' }; return; }
   currentEmployee = {
     id: data.id, name: data.name, position: data.position || '', dept: data.dept || '',
     phone: data.phone || '', email: data.email || '', startDate: data.start_date || '',
-    salary: parseFloat(data.salary) || 0, status: data.status || 'active', username: data.username || '',
+    salary: parseFloat(data.salary) || 0, status: data.status || 'active', username: data.username || '', photo: data.photo || '',
   };
 }
 
 function renderEmpInfo() {
   const grid = document.getElementById('empInfoGrid');
   if (!currentEmployee) { grid.innerHTML = ''; return; }
+  const nameEl = document.getElementById('empNameDisplay');
+  nameEl.innerHTML = (currentEmployee.photo ? `<img class="avatar" src="${currentEmployee.photo}" alt="" style="width:44px;height:44px;vertical-align:middle;margin-right:10px;">` : '') + escapeHtml(currentEmployee.name || '');
   const items = [
     ['អត្តលេខ', currentEmployee.username || currentEmployee.id],
     ['តួនាទី', currentEmployee.position || '-'],

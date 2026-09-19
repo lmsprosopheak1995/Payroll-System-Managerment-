@@ -627,3 +627,16 @@ th { font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 7
   .stats, .attendance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .stat-card .num, .attendance-stats .stat-card .num { font-size: 0.95rem; }
 }
+
+/* ==== Avatar / រូបប្រវត្តិរូប ==== */
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, var(--card-bg));
+  color: var(--accent); font-weight: 700; font-size: 0.95rem;
+  overflow: hidden; flex: 0 0 auto; vertical-align: middle;
+  border: 1px solid var(--border);
+}
+.avatar img, .org-avatar img, .podium-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-lg { width: 76px; height: 76px; font-size: 1.8rem; }
+.org-avatar, .podium-avatar { overflow: hidden; }
