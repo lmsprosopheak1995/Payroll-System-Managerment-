@@ -1381,12 +1381,12 @@ async function saveEmployee() {
   };
   const idCard = document.getElementById('empIdCard').value.trim();
   if (idCard !== ((existingEmp && existingEmp.idCard) || '')) {
-    if (!idCardColumnAvailable) { alert('មិនទាន់អាចរក្សាទុកអត្តសញ្ញាណប័ណ្ណបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ id_card)'); return; }
+    if (!idCardColumnAvailable) { alert('មិនទាន់អាចរក្សាទុកអត្តសញ្ញាណប័ណ្ណបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ id_card)'); return; }
     data.idCard = idCard;
     data._idCardDirty = true;
   }
   if (pendingPhoto !== undefined) {
-    if (!photoColumnAvailable) { alert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ photo)'); return; }
+    if (!photoColumnAvailable) { alert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ photo)'); return; }
     data.photo = pendingPhoto;
     data._photoDirty = true;
   }
