@@ -90,6 +90,8 @@
   .banner-track::-webkit-scrollbar { display:none; }
   .banner { flex:none; width:84%; aspect-ratio:16/10; scroll-snap-align:start; border-radius:14px; padding:20px; color:#fff; display:flex; flex-direction:column; justify-content:flex-end; background:var(--brand); }
   .banner:nth-child(even) { background:linear-gradient(135deg,#8b1116,#c0262d); }
+  .banner-track { scroll-padding-left:16px; }
+  .banner-track.single .banner { width:100%; }
   .banner h3 { margin:0 0 6px; font-size:1.05rem; }
   .banner p { margin:0; font-size:0.8rem; opacity:0.92; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
   .menu-card { margin:16px; padding:4px 16px; background:var(--card-bg); border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,0.08); }
@@ -756,6 +758,7 @@ function renderHomeBanner() {
   const box = document.getElementById('homeBanner');
   if (!box) return;
   const list = annCache.slice(0, 5);
+  box.classList.toggle('single', list.length <= 1);
   box.innerHTML = list.length
     ? list.map(r => `<div class="banner"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div>`).join('')
     : '<div class="banner"><h3>សូមស្វាគមន៍</h3><p>ចុច «កត់ត្រាវត្តមាន» ដើម្បីស្កេន QR ចូល/ចេញការងារ</p></div>';
