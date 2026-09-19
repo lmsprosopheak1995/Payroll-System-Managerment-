@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ទំព័របុគ្គលិក — ស្កេនវត្តមាន</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -57,7 +60,7 @@
   .att-mini-table th { color:var(--text-muted); font-weight:600; font-size:0.63rem; }
   .payroll-line { display:flex; justify-content:space-between; font-size:0.8rem; padding:7px 2px; border-bottom:1px solid var(--border); }
   .payroll-line.total { font-weight:700; font-size:0.9rem; border-bottom:none; padding-top:12px; }
-  #payslipTemplate { display:none; position:fixed; left:-9999px; top:0; width:680px; background:#ffffff; color:#111827; padding:32px; font-family:'Khmer OS','Noto Sans Khmer',system-ui,sans-serif; }
+  #payslipTemplate { display:none; position:fixed; left:-9999px; top:0; width:680px; background:#ffffff; color:#111827; padding:32px; font-family:'Kantumruy Pro','Noto Sans Khmer','Khmer OS',system-ui,sans-serif; }
   #payslipTemplate * { color:#111827 !important; }
   #payslipTemplate table { width:100%; border-collapse:collapse; margin-top:14px; }
   #payslipTemplate th, #payslipTemplate td { border:1px solid #d1d5db; padding:6px 8px; font-size:12px; text-align:left; }
@@ -1203,6 +1206,7 @@ async function downloadPayrollPDF() {
     const el = document.getElementById('payslipTemplate');
     el.innerHTML = buildPayslipHtml(t, month);
     el.style.display = 'block';
+    if (document.fonts && document.fonts.ready) await document.fonts.ready; // ធានាថាអក្សរផ្ទុករួច
     await new Promise(r => setTimeout(r, 50)); // let layout settle before rasterizing
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
     el.style.display = 'none';
