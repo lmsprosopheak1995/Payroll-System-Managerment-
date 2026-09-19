@@ -135,6 +135,7 @@
       <div style="display:flex; gap:8px;">
         <button class="secondary" id="attendanceSettingsBtn">⚙ ការកំណត់</button>
         <button class="secondary" id="attendanceHolidayBtn">🎌 កំណត់ថ្ងៃបុណ្យ</button>
+        <button class="secondary" id="attendancePrintBtn">🖨 ព្រីនតារាងវត្តមាន</button>
         <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
       </div>
     </div>
@@ -305,6 +306,9 @@
         </div>
         <select id="payrollEmployeeSelect" style="display:none;"></select>
         <input type="month" id="payrollMonth">
+        <button class="secondary" id="payrollPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
+        <button class="secondary" id="payrollPrintSlipBtn">🖨 ព្រីន Payslip</button>
+        <button class="secondary" id="payrollPrintAllBtn">🖨 Payslip ទាំងអស់</button>
       </div>
       <p style="font-size:0.7rem;color:var(--text-muted);margin:0;max-width:360px;">
         *ធាតុ "ថេរ" អនុវត្តរាល់ខែដោយស្វ័យប្រវត្តិ។ ធាតុ "ប្រែប្រួល" អនុវត្តតែក្នុងខែដែលបានកំណត់ប៉ុណ្ណោះ។ ទាំងពីរនឹងបូក/ដក ចូលទៅក្នុងប្រាក់ខែសុទ្ធនៅក្នុងផ្ទាំង "តារាងវត្តមាន" ដោយស្វ័យប្រវត្តិ។
@@ -698,6 +702,7 @@
 </div>
 
 <script src="features.js"></script>
+<script src="print.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

@@ -130,7 +130,7 @@
       <div class="portal-card">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
           <h2 style="margin:0;font-size:0.9rem;">តារាងវត្តមានការងារ</h2>
-          <input type="month" id="attMonthInput" style="font-size:0.78rem;">
+          <div style="display:flex;gap:6px;align-items:center;"><input type="month" id="attMonthInput" style="font-size:0.78rem;"><button class="secondary" id="attPrintBtn" style="font-size:0.75rem;padding:6px 10px;">🖨 ព្រីន</button></div>
         </div>
         <div class="attendance-stats" id="empAttStats" style="margin-bottom:12px;"></div>
         <div class="table-wrap" style="box-shadow:none;">
@@ -278,6 +278,7 @@
         </div>
         <div id="payrollSummary"></div>
         <button class="primary-btn" id="payrollPdfBtn" style="margin-top:14px;">⬇ ទាញយក Payroll Slip (PDF)</button>
+        <button class="secondary" id="payrollPrintBtn" style="margin-top:8px;width:100%;">🖨 ព្រីន Payslip</button>
       </div>
     </div>
   </div>
@@ -286,6 +287,7 @@
 <!-- Hidden template rendered to canvas then exported as PDF -->
 <div id="payslipTemplate"></div>
 
+<script src="print.js"></script>
 <script>
 const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc3pmY3hsa2dmcmxqZnFzYWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTIyNzcsImV4cCI6MjEwNTI2ODI3N30.KEjw8VKbrFgSnNGkd0rqCneEvAaJ9ENuGFT5M4eu0jk';
@@ -1195,6 +1197,33 @@ function buildPayslipHtml(t, month) {
   `;
 }
 
+async function printPayslipEmp() {
+  if (!currentEmployee) return;
+  const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
+  const t = await summarizeMonth(month);
+  openPrintWindow(`Payslip ${currentEmployee.name} ${month}`, `<div class="page ps-wrap">${buildPayslipHtml(t, month)}</div>`, false);
+}
+
+function printAttendanceEmp() {
+  if (!currentEmployee) return;
+  const month = document.getElementById('attMonthInput').value || todayStr().slice(0, 7);
+  const table = document.querySelector('#attendanceTabContent .att-mini-table');
+  if (!table) return;
+  const sh = getEmpShift();
+  const html = `<div class="page">
+    <h1>តារាងវត្តមានការងារ</h1>
+    <div class="sub">ខែ ${escapeHtml(month)}</div>
+    <div class="info">
+      <div><strong>ឈ្មោះ៖</strong> ${escapeHtml(currentEmployee.name)}</div>
+      <div><strong>តួនាទី៖</strong> ${escapeHtml(currentEmployee.position || '-')}</div>
+      <div><strong>វេន៖</strong> ${escapeHtml(sh.name)} (${fmtMinEmp(sh.start)}–${fmtMinEmp(sh.end)})</div>
+    </div>
+    ${table.outerHTML}
+    <div style="margin-top:10px;font-size:10px;color:#6b7280;">បោះពុម្ពនៅថ្ងៃទី ${todayStr()}</div>
+  </div>`;
+  openPrintWindow(`វត្តមាន ${currentEmployee.name} ${month}`, html, true);
+}
+
 async function downloadPayrollPDF() {
   const btn = document.getElementById('payrollPdfBtn');
   const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
@@ -1229,6 +1258,8 @@ document.getElementById('leaveSubmitBtn').addEventListener('click', submitLeaveR
 document.getElementById('leaveAttachment').addEventListener('change', previewLeaveAttachment);
 document.getElementById('otSubmitBtn').addEventListener('click', submitOTRequest);
 document.getElementById('payrollPdfBtn').addEventListener('click', downloadPayrollPDF);
+document.getElementById('payrollPrintBtn').addEventListener('click', printPayslipEmp);
+document.getElementById('attPrintBtn').addEventListener('click', printAttendanceEmp);
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });

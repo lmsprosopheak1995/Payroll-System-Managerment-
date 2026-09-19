@@ -114,6 +114,7 @@ function initFeatures() {
   byId('settingEditBtn').addEventListener('click', openSettingsModal);
   byId('settingPwBtn').addEventListener('click', changeAdminPassword);
   byId('settingQrBtn').addEventListener('click', () => showTab('scan'));
+  if (typeof initPrint === 'function') initPrint();
   byId('attendanceHolidayBtn').addEventListener('click', () => {
     showTab('setting');
     const box = byId('holidayBox');
