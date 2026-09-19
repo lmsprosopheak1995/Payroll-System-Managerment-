@@ -1,0 +1,45 @@
+{
+  "name": "hp-check-me",
+  "productName": "HP Check Me",
+  "version": "1.0.0",
+  "description": "Employee Management System (Khmer) - desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.hpcheckme.app",
+    "productName": "HP Check Me",
+    "artifactName": "HPCheckMe-Setup-${version}.${ext}",
+    "files": [
+      "main.js",
+      "package.json",
+      "*.html",
+      "*.js",
+      "*.css",
+      "!node_modules/**/*",
+      "!.github/**/*",
+      "!dist/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}
