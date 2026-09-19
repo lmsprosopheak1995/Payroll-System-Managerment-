@@ -11,7 +11,9 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
   body { display:flex; align-items:flex-start; justify-content:center; padding:24px 14px; }
-  .portal { width:100%; max-width:420px; }
+  .portal { width:100%; max-width:640px; min-width:0; }
+  #loginCard { max-width:420px; margin:0 auto; }
+  @media (max-width:720px) { body { padding:12px 8px; } .portal-card { padding:16px; } .emp-info-grid { grid-template-columns:1fr 1fr; } }
   .portal-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -501,6 +503,8 @@ async function showMain() {
 
 function switchEmpTab(tab) {
   document.querySelectorAll('#empTabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.etab === tab));
+  const activeBtn = document.querySelector(`#empTabs .tab-btn[data-etab="${tab}"]`);
+  if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   document.getElementById('clockTabContent').classList.toggle('active', tab === 'clock');
   document.getElementById('attendanceTabContent').classList.toggle('active', tab === 'attendance');
   document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');

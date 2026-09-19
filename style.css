@@ -328,3 +328,77 @@ footer {
   border-radius: 8px;
 }
 .scan-log-empty { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 12px; }
+
+/* ==================================================================
+   Responsive / scrolling (phone + desktop)
+   ================================================================== */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overflow-x: hidden; overflow-wrap: anywhere; }
+img, canvas, video { max-width: 100%; }
+
+/* Tabs: swipe/scroll sideways instead of running off-screen */
+.tabs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* Wide tables: smooth touch scrolling both ways, thin visible scrollbar */
+.table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.table-wrap::-webkit-scrollbar { height: 9px; width: 9px; }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+.table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Keep the first column (date / ID) visible while scrolling sideways */
+.table-wrap tbody td:first-child,
+.table-wrap thead tr:first-child th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card-bg);
+  box-shadow: 1px 0 0 var(--border);
+}
+.table-wrap thead tr:first-child th:first-child {
+  background: color-mix(in srgb, var(--accent) 8%, var(--card-bg));
+}
+
+.attendance-controls > div, .toolbar { min-width: 0; }
+.modal { max-height: 90vh; max-height: 90dvh; }
+.scan-log { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 720px) {
+  body { padding: 10px 8px; }
+  header { align-items: stretch; }
+  header > div { width: 100%; }
+  header > div > button, header > div > a { flex: 1 1 auto; justify-content: center; }
+
+  /* 16px inputs stop iOS from zooming the page on focus */
+  input, select, textarea { font-size: 16px; }
+  button { min-height: 36px; }
+
+  .stat-card, .attendance-stats .stat-card { flex: 1 1 calc(50% - 10px); min-width: 0; }
+  .attendance-controls { flex-direction: column; align-items: stretch; }
+  .attendance-controls > div { width: 100%; }
+  .attendance-controls input, .attendance-controls select { flex: 1 1 140px; min-width: 0; }
+  .attendance-controls > button { width: 100%; }
+  .toolbar > * { flex: 1 1 140px; min-width: 0; }
+
+  .form-row { flex-direction: column; gap: 0; }
+  .modal { padding: 14px; }
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions button { flex: 1 1 120px; }
+
+  .row-actions { flex-wrap: wrap; }
+  .scan-result-card, .scan-camera-card { padding: 12px; }
+  footer { max-width: 100%; }
+  th, td { padding: 7px 6px; }
+}

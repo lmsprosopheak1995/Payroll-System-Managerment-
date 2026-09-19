@@ -1579,6 +1579,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    if (btn.scrollIntoView) btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
     const tab = btn.dataset.tab;
     document.getElementById('employeesTab').classList.toggle('active', tab === 'employees');
     document.getElementById('attendanceTab').classList.toggle('active', tab === 'attendance');
