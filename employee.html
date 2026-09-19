@@ -761,6 +761,9 @@ function renderHomeBanner() {
   const box = document.getElementById('homeBanner');
   if (!box) return;
   const list = annCache.slice(0, 5);
+  const sig = list.map(r => [r.id, r.title, r.body, (r.image || '').length].join('|')).join(';');
+  if (box.dataset.sig === sig) return; // មិនផ្លាស់ប្តូរ — កុំ render ឡើងវិញ (កុំឱ្យ slide លោតត្រឡប់ទៅដើម)
+  box.dataset.sig = sig;
   box.classList.toggle('single', list.length <= 1);
   box.innerHTML = list.length
     ? list.map(r => r.image
@@ -774,6 +777,24 @@ function renderHome() {
   document.getElementById('homeName').textContent = e.name;
   document.getElementById('homeAvatar').innerHTML = e.photo ? `<img src="${e.photo}" alt="">` : escapeHtml(Array.from(e.name || '?')[0]);
   renderHomeBanner();
+  startBannerAuto();
+}
+
+// ==== Banner ដើរស្វ័យប្រវត្តិ ====
+let bannerTimer = null, bannerPauseUntil = 0;
+function startBannerAuto() {
+  const box = document.getElementById('homeBanner');
+  if (!box || bannerTimer || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  ['touchstart', 'pointerdown', 'wheel'].forEach(ev => box.addEventListener(ev, () => { bannerPauseUntil = Date.now() + 8000; }, { passive: true }));
+  bannerTimer = setInterval(() => {
+    if (document.hidden || Date.now() < bannerPauseUntil) return;
+    if (!document.getElementById('homeTabContent').classList.contains('active')) return;
+    const items = box.children;
+    if (items.length < 2) return;
+    const step = items[1].offsetLeft - items[0].offsetLeft;
+    const atEnd = box.scrollLeft + box.clientWidth >= box.scrollWidth - 4;
+    box.scrollTo({ left: atEnd ? 0 : box.scrollLeft + step, behavior: 'smooth' });
+  }, 4000);
 }
 
 function switchEmpTab(tab) {
