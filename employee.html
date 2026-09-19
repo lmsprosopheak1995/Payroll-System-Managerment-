@@ -92,6 +92,10 @@
   .banner:nth-child(even) { background:linear-gradient(135deg,#8b1116,#c0262d); }
   .banner-track { scroll-padding-left:16px; }
   .banner-track.single .banner { width:100%; }
+  .banner-dots { display:flex; justify-content:center; gap:6px; margin-top:10px; }
+  .banner-dots:empty { display:none; }
+  .banner-dots i { width:6px; height:6px; border-radius:999px; background:color-mix(in srgb, var(--text) 25%, transparent); transition:width 0.25s, background 0.25s; }
+  .banner-dots i.on { width:18px; background:var(--b2); }
   .banner.has-img { position:relative; overflow:hidden; padding:0; background:#000; }
   .banner.has-img > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .banner.has-img .cap { position:relative; padding:36px 20px 16px; background:linear-gradient(transparent, rgba(0,0,0,0.7)); }
@@ -120,7 +124,7 @@
   <div id="portalLoading">កំពុងផ្ទុក...</div>
 
   <div class="portal-card" id="loginCard" style="display:none;">
-    <div class="login-logo"><span>N</span><img src="logo.png" alt="" onerror="this.remove()"></div>
+    <div class="login-logo"><span>N</span></div>
     <p class="error-msg" id="loginError"></p>
     <div class="form-group"><input type="text" id="loginUsername" placeholder="អត្តលេខ" autocomplete="username"></div>
     <div class="form-group"><input type="password" id="loginPassword" placeholder="លេខសម្ងាត់" autocomplete="current-password"></div>
@@ -133,6 +137,7 @@
     <div id="homeTabContent" class="tab-content active">
       <div class="home-head"><div class="h-avatar" id="homeAvatar"></div><div><div class="h-hello">សួស្តី 👋</div><div class="h-name" id="homeName"></div></div></div>
       <div class="banner-track" id="homeBanner"></div>
+      <div class="banner-dots" id="homeDots"></div>
       <div class="menu-card">
         <button class="menu-row" data-go="clock" style="--c:#f59e0b"><span class="menu-ico">🕐</span><span class="lbl">កត់ត្រាវត្តមាន</span><span class="go">›</span></button>
         <button class="menu-row" data-go="activities" style="--c:#ef4444"><span class="menu-ico">📍</span><span class="lbl">សកម្មភាព</span><span class="go">›</span></button>
@@ -770,6 +775,16 @@ function renderHomeBanner() {
       ? `<div class="banner has-img"><img src="${escapeHtml(r.image)}" alt=""><div class="cap"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div></div>`
       : `<div class="banner"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div>`).join('')
     : '<div class="banner"><h3>សូមស្វាគមន៍</h3><p>ចុច «កត់ត្រាវត្តមាន» ដើម្បីស្កេន QR ចូល/ចេញការងារ</p></div>';
+  document.getElementById('homeDots').innerHTML = list.length > 1 ? list.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('') : '';
+}
+function updateBannerDots() {
+  const box = document.getElementById('homeBanner');
+  const dots = document.querySelectorAll('#homeDots i');
+  if (!dots.length || box.children.length < 2) return;
+  const step = box.children[1].offsetLeft - box.children[0].offsetLeft;
+  const atEnd = box.scrollLeft + box.clientWidth >= box.scrollWidth - 4;
+  const idx = atEnd ? dots.length - 1 : Math.min(dots.length - 1, Math.round(box.scrollLeft / step));
+  dots.forEach((d, k) => d.classList.toggle('on', k === idx));
 }
 function renderHome() {
   const e = currentEmployee;
@@ -781,6 +796,7 @@ function renderHome() {
 }
 
 // ==== Banner ដើរស្វ័យប្រវត្តិ ====
+const BANNER_INTERVAL_MS = 4000; // ល្បឿនដើរ (មីលីវិនាទី) — កែលេខនេះ
 let bannerTimer = null, bannerPauseUntil = 0;
 function startBannerAuto() {
   const box = document.getElementById('homeBanner');
@@ -794,7 +810,7 @@ function startBannerAuto() {
     const step = items[1].offsetLeft - items[0].offsetLeft;
     const atEnd = box.scrollLeft + box.clientWidth >= box.scrollWidth - 4;
     box.scrollTo({ left: atEnd ? 0 : box.scrollLeft + step, behavior: 'smooth' });
-  }, 4000);
+  }, BANNER_INTERVAL_MS);
 }
 
 function switchEmpTab(tab) {
@@ -904,6 +920,7 @@ document.getElementById('fbESendBtn').addEventListener('click', sendFeedbackEmp)
 document.getElementById('nfEnableBtn').addEventListener('click', enableBrowserNotifications);
 document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('click', () => switchEmpTab(btn.dataset.go)));
 document.getElementById('subBack').addEventListener('click', () => switchEmpTab('home'));
+document.getElementById('homeBanner').addEventListener('scroll', updateBannerDots, { passive: true });
 document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
 document.getElementById('payrollMonthInput').addEventListener('change', renderPayrollSummary);
@@ -1370,6 +1387,14 @@ document.getElementById('attPrintBtn').addEventListener('click', printAttendance
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+// ឡូហ្គោ៖ ដាក់ URL/ឈ្មោះឯកសាររូបភាព (ឧ. 'logo.png') បើមាន — បើទទេ នឹងបង្ហាញអក្សរ «N»
+const LOGO_URL = '';
+if (LOGO_URL) {
+  const li = document.createElement('img');
+  li.alt = ''; li.src = LOGO_URL; li.onerror = () => li.remove();
+  document.querySelector('.login-logo').appendChild(li);
+}
 
 (function init() {
   const session = getSession();
