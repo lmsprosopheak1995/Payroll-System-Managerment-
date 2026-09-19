@@ -599,3 +599,12 @@ th { font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 7
   th, td { font-size: 0.82rem; padding: 9px 8px; }
   input, select, textarea { font-size: 16px; }
 }
+
+/* ==== ជួរសរុបចុងតារាង ==== */
+tfoot .total-row td {
+  font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+  border-top: 2px solid var(--accent);
+  border-bottom: none;
+}
+tfoot .total-row td:first-child { text-align: left; }
