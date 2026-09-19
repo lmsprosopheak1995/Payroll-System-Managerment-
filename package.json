@@ -12,6 +12,9 @@
     "electron": "^44.4.3",
     "electron-builder": "^26.16.1"
   },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "build": {
     "appId": "com.hpcheckme.app",
     "productName": "HP Check Me",
@@ -22,15 +25,21 @@
       "*.html",
       "*.js",
       "*.css",
-      "!node_modules/**/*",
       "!.github/**/*",
       "!dist/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Imsprosopheak1995",
+      "repo": "Payroll-System-Managerment-"
+    },
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

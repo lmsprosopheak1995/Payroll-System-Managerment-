@@ -1,6 +1,7 @@
-const { app, BrowserWindow, protocol, net, session, shell } = require('electron');
+const { app, BrowserWindow, protocol, net, session, shell, dialog } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { autoUpdater } = require('electron-updater');
 
 // ផ្ទុកទំព័រតាម app://local/ (secure origin) ដើម្បីឱ្យកាមេរ៉ាស្កេន QR ដំណើរការបាន — មិនប្រើ file://
 protocol.registerSchemesAsPrivileged([
@@ -55,7 +56,44 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media'));
     session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media');
     createWindow();
+
+    // ⚡ Auto-Update: ពិនិត្យរក version ថ្មីពី GitHub Releases ដោយស្វ័យប្រវត្តិ
+    setupAutoUpdate();
   });
 
   app.on('window-all-closed', () => app.quit());
+}
+
+function setupAutoUpdate() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'មាន Version ថ្មី',
+      message: `កំពុង Download version ${info.version} នៅផ្ទៃខាងក្រោយ...`,
+      buttons: ['យល់ព្រម'],
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox(win, {
+      type: 'question',
+      title: 'ត្រៀមធ្វើបច្ចុប្បន្នភាព',
+      message: 'Download Version ថ្មីរួចរាល់! ចង់ restart ដំឡើងឥឡូវ ឬពេលបិទកម្មវិធី?',
+      buttons: ['Restart ឥឡូវនេះ', 'ពេលក្រោយ (ពេលបិទកម្មវិធី)'],
+      defaultId: 0,
+    }).then((result) => {
+      if (result.response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err);
+  });
+
+  // ពិនិត្យរក update ពេលបើកកម្មវិធី + ពិនិត្យម្តងទៀតរៀងរាល់ 4 ម៉ោង
+  autoUpdater.checkForUpdatesAndNotify();
+  setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 4 * 60 * 60 * 1000);
 }
