@@ -137,6 +137,7 @@ function rowToEmployee(r) {
     status: r.status || 'active',
     username: r.username || '',
     photo: r.photo || '',
+    idCard: r.id_card || '',
   };
 }
 
@@ -154,6 +155,7 @@ function employeeToRow(e) {
     username: e.username || null,
   };
   if (e._photoDirty) row.photo = e.photo || null; // ផ្ញើ photo តែពេលមានការប្តូរ
+  if (e._idCardDirty) row.id_card = e.idCard || null;
   return row;
 }
 
@@ -174,12 +176,17 @@ function attRecordToRow(date, empId, rec) {
 }
 
 // ---- load from Supabase ----
+let idCardColumnAvailable = true; // false = ជួរ `id_card` មិនទាន់មាន (ដំណើរការ employees.sql)
 let photoColumnAvailable = true; // false = ជួរ `photo` មិនទាន់មានក្នុងតារាង employees (ដំណើរការ employees.sql)
 async function loadData() {
   const cols = 'id, name, position, dept, phone, email, start_date, salary, status, username, created_at';
-  let res = await supabaseClient.from('employees').select(cols + ', photo').order('created_at', { ascending: true });
-  photoColumnAvailable = !res.error;
-  if (res.error) res = await supabaseClient.from('employees').select(cols).order('created_at', { ascending: true });
+  // ព្យាយាមទាញជួរបន្ថែម (photo, id_card) — បើមិនទាន់មានក្នុងតារាង ថយទៅជម្រើសតូចជាង
+  const attempts = [[', photo, id_card', true, true], [', photo', true, false], ['', false, false]];
+  let res = null;
+  for (const [extra, hasPhoto, hasId] of attempts) {
+    res = await supabaseClient.from('employees').select(cols + extra).order('created_at', { ascending: true });
+    if (!res.error) { photoColumnAvailable = hasPhoto; idCardColumnAvailable = hasId; break; }
+  }
   const { data, error } = res;
   if (error) {
     console.error('Load employees failed', error);
@@ -1298,7 +1305,7 @@ function openAddModal() {
   document.getElementById('empPosition').value = '';
   document.getElementById('empDept').value = '';
   document.getElementById('empPhone').value = '';
-  document.getElementById('empEmail').value = '';
+  document.getElementById('empIdCard').value = '';
   document.getElementById('empStartDate').value = '';
   document.getElementById('empSalary').value = '';
   document.getElementById('empStatus').value = 'active';
@@ -1321,7 +1328,7 @@ function openEditModal(id) {
   document.getElementById('empPosition').value = e.position || '';
   document.getElementById('empDept').value = e.dept || '';
   document.getElementById('empPhone').value = e.phone || '';
-  document.getElementById('empEmail').value = e.email || '';
+  document.getElementById('empIdCard').value = e.idCard || '';
   document.getElementById('empStartDate').value = e.startDate || '';
   document.getElementById('empSalary').value = e.salary || '';
   document.getElementById('empStatus').value = e.status || 'active';
@@ -1367,12 +1374,17 @@ async function saveEmployee() {
     position,
     dept,
     phone: document.getElementById('empPhone').value.trim(),
-    email: document.getElementById('empEmail').value.trim(),
     startDate: document.getElementById('empStartDate').value,
     salary: document.getElementById('empSalary').value,
     status: document.getElementById('empStatus').value,
     username,
   };
+  const idCard = document.getElementById('empIdCard').value.trim();
+  if (idCard !== ((existingEmp && existingEmp.idCard) || '')) {
+    if (!idCardColumnAvailable) { alert('មិនទាន់អាចរក្សាទុកអត្តសញ្ញាណប័ណ្ណបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ id_card)'); return; }
+    data.idCard = idCard;
+    data._idCardDirty = true;
+  }
   if (pendingPhoto !== undefined) {
     if (!photoColumnAvailable) { alert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ photo)'); return; }
     data.photo = pendingPhoto;
@@ -1393,6 +1405,7 @@ async function saveEmployee() {
   renderAll();
   await upsertEmployee(savedEmp);
   delete savedEmp._photoDirty;
+  delete savedEmp._idCardDirty;
   if (passwordInput) {
     const { error } = await supabaseClient.rpc('set_employee_password', {
       p_employee_id: savedEmp.id,
@@ -1416,9 +1429,9 @@ function exportCSV() {
     alert('មិនមានទិន្នន័យសម្រាប់នាំចេញទេ');
     return;
   }
-  const headers = ['ឈ្មោះ', 'តួនាទី', 'ផ្នែក', 'ទូរស័ព្ទ', 'អ៊ីមែល', 'ថ្ងៃចូលធ្វើការ', 'ប្រាក់ខែ', 'ស្ថានភាព'];
+  const headers = ['ឈ្មោះ', 'តួនាទី', 'ផ្នែក', 'ទូរស័ព្ទ', 'អត្តសញ្ញាណប័ណ្ណ', 'ថ្ងៃចូលធ្វើការ', 'ប្រាក់ខែ', 'ស្ថានភាព'];
   const rows = employees.map(e => [
-    e.name, e.position, e.dept, e.phone || '', e.email || '', e.startDate || '', e.salary || '', e.status
+    e.name, e.position, e.dept, e.phone || '', e.idCard || '', e.startDate || '', e.salary || '', e.status
   ]);
   let csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

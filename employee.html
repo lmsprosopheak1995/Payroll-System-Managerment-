@@ -520,14 +520,17 @@ async function loadSettings() {
 async function loadEmployeeRecord() {
   const session = getSession();
   const cols = 'id, name, position, dept, phone, email, start_date, salary, status, username';
-  let res = await supabaseClient.from('employees').select(cols + ', photo').eq('id', session.id).maybeSingle();
-  if (res.error) res = await supabaseClient.from('employees').select(cols).eq('id', session.id).maybeSingle(); // ជួរ photo មិនទាន់មាន
+  let res = null;
+  for (const extra of [', photo, id_card', ', photo', '']) { // ជួរបន្ថែមអាចមិនទាន់មាន
+    res = await supabaseClient.from('employees').select(cols + extra).eq('id', session.id).maybeSingle();
+    if (!res.error) break;
+  }
   const { data, error } = res;
   if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '', username: '' }; return; }
   currentEmployee = {
     id: data.id, name: data.name, position: data.position || '', dept: data.dept || '',
     phone: data.phone || '', email: data.email || '', startDate: data.start_date || '',
-    salary: parseFloat(data.salary) || 0, status: data.status || 'active', username: data.username || '', photo: data.photo || '',
+    salary: parseFloat(data.salary) || 0, status: data.status || 'active', username: data.username || '', photo: data.photo || '', idCard: data.id_card || '',
   };
 }
 
@@ -541,7 +544,7 @@ function renderEmpInfo() {
     ['តួនាទី', currentEmployee.position || '-'],
     ['ផ្នែក', currentEmployee.dept || '-'],
     ['ទូរស័ព្ទ', currentEmployee.phone || '-'],
-    ['អ៊ីមែល', currentEmployee.email || '-'],
+    ['អត្តសញ្ញាណប័ណ្ណ', currentEmployee.idCard || '-'],
     ['ថ្ងៃចូលធ្វើការ', currentEmployee.startDate || '-'],
     ['វេនការងារ', (() => { const s = getEmpShift(); return `${s.name} (${fmtMinEmp(s.start)}–${fmtMinEmp(s.end)})`; })()],
     ['ប្រាក់គោល', '$' + fmtUSD(currentEmployee.salary)],
