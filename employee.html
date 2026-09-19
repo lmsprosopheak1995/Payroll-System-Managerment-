@@ -24,6 +24,8 @@
   .portal h1 { font-size: 1.05rem; text-align:center; margin: 0 0 4px; }
   .portal .sub { text-align:center; color:var(--text-muted); font-size:0.75rem; margin:0 0 18px; }
   .portal .form-group { margin-bottom: 14px; }
+  .next-step { text-align:center; margin:14px 0 4px; padding:10px; border-radius:10px; background:color-mix(in srgb, var(--accent) 10%, transparent); font-size:0.85rem; }
+  .next-step small { color:var(--text-muted); font-size:0.7rem; }
   .portal input { width:100%; padding:10px 12px; font-size:0.9rem; }
   .portal button.primary-btn { width:100%; padding:11px; font-size:0.9rem; }
   .portal .error-msg { color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none; }
@@ -109,7 +111,7 @@
       <div class="portal-card" style="margin-bottom:14px;">
         <div class="clock-box" id="clockBox"></div>
         <div style="margin-top:14px;">
-          <button class="secondary" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
+          <button class="big-btn" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
           <div id="empQrReader" style="display:none; margin-top:10px;"></div>
           <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
           <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
@@ -814,30 +816,26 @@ async function renderClockBox() {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">អ្នកមិនទាន់កត់ត្រាម៉ោងចូលថ្ងៃនេះទេ</div>
-      <button class="big-btn" id="clockInBtn">✅ កត់ត្រាម៉ោងចូល</button>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចូល</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
     `;
-    document.getElementById('clockInBtn').addEventListener('click', clockIn);
   } else if (!rec.break_out) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូលធ្វើការម៉ោង <strong>${rec.checkin}</strong></div>
-      <button class="big-btn checkout" id="clockBreakOutBtn">🍚 កត់ត្រាចេញបាយ</button>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចេញបាយ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
     `;
-    document.getElementById('clockBreakOutBtn').addEventListener('click', clockBreakOut);
   } else if (!rec.break_in) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ <strong>${rec.break_out}</strong></div>
-      <button class="big-btn" id="clockBreakInBtn">🍽 កត់ត្រាចូលវិញ (ក្រោយបាយ)</button>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចូលវិញ (ក្រោយបាយ)</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
     `;
-    document.getElementById('clockBreakInBtn').addEventListener('click', clockBreakIn);
   } else if (!rec.checkout) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ ${rec.break_out} · ចូលវិញ <strong>${rec.break_in}</strong></div>
-      <button class="big-btn checkout" id="clockOutBtn">🚪 កត់ត្រាម៉ោងចេញ</button>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចេញ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
     `;
-    document.getElementById('clockOutBtn').addEventListener('click', clockOut);
   } else {
     box.innerHTML = `
       <div class="done-msg">✓ ថ្ងៃនេះកត់ត្រារួចរាល់</div>
