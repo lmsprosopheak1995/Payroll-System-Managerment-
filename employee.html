@@ -331,7 +331,31 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn) {
 }
 
 // ---- payroll math (mirrors the admin app's calculation) ----
-function computeRow(salary, record) {
+// ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
+const HOLIDAY_MULTIPLIER = 2;
+let holidays = {}; // { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }
+let holidaysAvailable = true;
+
+function dayMultiplier(date) {
+  if (!date) return 1;
+  const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
+  return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
+}
+function dayBadge(date) {
+  const m = dayMultiplier(date);
+  if (m <= 1) return '';
+  const title = holidays[date] !== undefined ? (holidays[date] || 'ថ្ងៃបុណ្យ') : 'ថ្ងៃអាទិត្យ';
+  return ` <span class="badge pending" title="${escapeHtml(title)}">×${m}</span>`;
+}
+async function loadHolidays() {
+  const { data, error } = await supabaseClient.from('holidays').select('date, name');
+  holidays = {};
+  if (error) { console.warn('Load holidays failed (តារាង holidays មិនទាន់មាន?)', error.message); holidaysAvailable = false; return; }
+  holidaysAvailable = true;
+  (data || []).forEach(h => { holidays[h.date] = h.name || ''; });
+}
+
+function computeRow(salary, record, date) {
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const hourlyRate = settings.standardHours > 0 ? dailyRate / settings.standardHours : 0;
   const status = record?.status || '';
@@ -351,8 +375,9 @@ function computeRow(salary, record) {
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
-  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * normalHours);
-  const otPay = round4(hourlyRate * settings.otMultiplier * otHours);
+  const mult = dayMultiplier(date); // អាទិត្យ/បុណ្យ = ×2
+  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours);
+  const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
   const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
   // ប្រាក់បាយ OT៖ បន្ថែម foodOT រៀងរាល់ 2 ម៉ោង OT (OT 2ម៉ោង = 1 ដង, OT 4ម៉ោង = 2 ដង)
@@ -362,7 +387,7 @@ function computeRow(salary, record) {
   const foodOtPay = round4(foodOtPayRiel / exchangeRate);
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
-  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult };
 }
 
 function todayStr() {
@@ -464,7 +489,7 @@ async function showMain() {
   document.getElementById('loginCard').style.display = 'none';
   document.getElementById('mainCard').style.display = '';
   document.getElementById('empNameDisplay').textContent = session.name;
-  await Promise.all([loadSettings(), loadEmployeeRecord()]);
+  await Promise.all([loadSettings(), loadEmployeeRecord(), loadHolidays()]);
   renderEmpInfo();
   const thisMonth = todayStr().slice(0, 7);
   document.getElementById('attMonthInput').value = thisMonth;
@@ -706,7 +731,7 @@ async function renderAttendanceTabEmp() {
   let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, leaveDays: 0 };
 
   tbody.innerHTML = dates.map(date => {
-    const r = computeRow(salary, dayMap[date]);
+    const r = computeRow(salary, dayMap[date], date);
     totals.total += r.total;
     totals.riel += r.riel;
     if (r.status === 'present') totals.workDays++;
@@ -714,7 +739,7 @@ async function renderAttendanceTabEmp() {
     if (r.late) totals.lateDays++;
     return `<tr>
       <td>${date.slice(8)}</td>
-      <td>${weekdayLabel(date)}</td>
+      <td>${weekdayLabel(date)}${dayBadge(date)}</td>
       <td>${r.checkin || '-'}</td>
       <td>${r.breakOut || '-'}</td>
       <td>${r.breakIn || '-'}</td>
@@ -741,14 +766,33 @@ async function renderAttendanceTabEmp() {
   `;
 }
 
+async function loadMyPayrollItems() {
+  const session = getSession();
+  const { data, error } = await supabaseClient.from('payroll_items').select('*').eq('employee_id', session.id);
+  if (error) { console.warn('Load payroll items failed', error.message); return []; }
+  return (data || []).map(r => ({
+    id: r.id, type: r.type, name: r.name, recurrence: r.recurrence,
+    month: r.month || '', currency: r.currency, amount: parseFloat(r.amount) || 0,
+  }));
+}
+
+function itemToUSD(item) {
+  return item.currency === 'USD' ? item.amount : (settings.exchangeRate > 0 ? item.amount / settings.exchangeRate : 0);
+}
+
+function fmtItemAmountEmp(item) {
+  return item.currency === 'USD' ? `$${fmtUSD(item.amount)}` : `${fmtRiel(item.amount)} ៛`;
+}
+
 async function summarizeMonth(month) {
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
-  let t = { workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
+  let t = { doubleDays: 0, workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
   dates.forEach(date => {
-    const r = computeRow(salary, dayMap[date]);
+    const r = computeRow(salary, dayMap[date], date);
     if (r.status === 'present') t.workDays++;
+    if (r.status === 'present' && r.mult > 1) t.doubleDays++;
     if (r.status === 'leave') t.leaveDays++;
     if (r.status === 'absent') t.absentDays++;
     if (r.late) t.lateDays++;
@@ -757,6 +801,13 @@ async function summarizeMonth(month) {
     t.foodPay += r.foodPay; t.foodOtPay += r.foodOtPay;
     t.total += r.total; t.riel += r.riel;
   });
+  const items = (await loadMyPayrollItems()).filter(p => p.recurrence === 'fixed' || p.month === month);
+  t.benefitItems = items.filter(p => p.type === 'benefit');
+  t.deductionItems = items.filter(p => p.type === 'deduction');
+  t.benefitsUSD = t.benefitItems.reduce((a, p) => a + itemToUSD(p), 0);
+  t.deductionsUSD = t.deductionItems.reduce((a, p) => a + itemToUSD(p), 0);
+  t.net = t.total + t.benefitsUSD - t.deductionsUSD;
+  t.netRiel = t.net * (settings.exchangeRate || 0);
   return t;
 }
 
@@ -899,7 +950,13 @@ async function renderPayrollSummary() {
     <div class="payroll-line"><span>ម៉ោងធម្មតា</span><span>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</span></div>
     <div class="payroll-line"><span>ម៉ោងថែម</span><span>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</span></div>
     <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * settings.exchangeRate)} ៛</span></div>
-    <div class="payroll-line total"><span>សរុប</span><span>$${fmtUSD(t.total)} (${fmtRiel(t.riel)} ៛)</span></div>
+    ${t.doubleDays ? `<div class="payroll-line"><span>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</span><span>${t.doubleDays} ថ្ងៃ</span></div>` : ''}
+    <div class="payroll-line total" style="padding-bottom:8px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(t.total)} (${fmtRiel(t.riel)} ៛)</span></div>
+    <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--success);">🟢 អត្ថប្រយោជន៍</div>
+    ${t.benefitItems.length ? t.benefitItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--success);">+ ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
+    <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--danger);">🔴 ប្រាក់កាត់</div>
+    ${t.deductionItems.length ? t.deductionItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--danger);">− ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
+    <div class="payroll-line total"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(t.net)} (${fmtRiel(t.netRiel)} ៛)</span></div>
   `;
 }
 
@@ -924,7 +981,15 @@ function buildPayslipHtml(t, month) {
       <tr><td>ម៉ោងថែម / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</td></tr>
       <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td style="text-align:right;">${fmtRiel(t.foodPay * settings.exchangeRate)} ៛</td></tr>
       <tr><td>ប្រាក់បាយថែមម៉ោង</td><td style="text-align:right;">${fmtRiel(t.foodOtPay * settings.exchangeRate)} ៛</td></tr>
-      <tr class="ps-total-row"><td>សរុប</td><td style="text-align:right;">$${fmtUSD(t.total)} &nbsp;/&nbsp; ${fmtRiel(t.riel)} ៛</td></tr>
+      ${t.doubleDays ? `<tr><td>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</td><td style="text-align:right;">${t.doubleDays} ថ្ងៃ</td></tr>` : ''}
+      <tr class="ps-total-row"><td>សរុបតាមវត្តមាន</td><td style="text-align:right;">$${fmtUSD(t.total)} &nbsp;/&nbsp; ${fmtRiel(t.riel)} ៛</td></tr>
+    </table>
+    <table>
+      <tr><th>អត្ថប្រយោជន៍ / ប្រាក់កាត់</th><th style="text-align:right;">ចំនួន</th></tr>
+      ${t.benefitItems.map(p => `<tr><td>+ ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
+      ${t.deductionItems.map(p => `<tr><td>− ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
+      ${(t.benefitItems.length + t.deductionItems.length) === 0 ? '<tr><td colspan="2" style="text-align:center;">មិនមាន</td></tr>' : ''}
+      <tr class="ps-total-row"><td>ប្រាក់ខែសុទ្ធ</td><td style="text-align:right;">$${fmtUSD(t.net)} &nbsp;/&nbsp; ${fmtRiel(t.netRiel)} ៛</td></tr>
     </table>
     <div style="margin-top:18px; font-size:11px; color:#6b7280;">បង្កើតនៅថ្ងៃទី ${todayStr()}</div>
   `;

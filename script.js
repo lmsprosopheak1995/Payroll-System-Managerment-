@@ -40,7 +40,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems()]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays()]);
     renderAll();
     return;
   }
@@ -354,7 +354,67 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn) {
   return { normalMinutes, otMinutes, rawIn };
 }
 
-function computeRow(emp, record) {
+// ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
+const HOLIDAY_MULTIPLIER = 2;
+let holidays = {}; // { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }
+let holidaysAvailable = true;
+
+function dayMultiplier(date) {
+  if (!date) return 1;
+  const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
+  return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
+}
+function dayBadge(date) {
+  const m = dayMultiplier(date);
+  if (m <= 1) return '';
+  const title = holidays[date] !== undefined ? (holidays[date] || 'ថ្ងៃបុណ្យ') : 'ថ្ងៃអាទិត្យ';
+  return ` <span class="badge pending" title="${escapeHtml(title)}">×${m}</span>`;
+}
+async function loadHolidays() {
+  const { data, error } = await supabaseClient.from('holidays').select('date, name');
+  holidays = {};
+  if (error) { console.warn('Load holidays failed (តារាង holidays មិនទាន់មាន?)', error.message); holidaysAvailable = false; return; }
+  holidaysAvailable = true;
+  (data || []).forEach(h => { holidays[h.date] = h.name || ''; });
+}
+
+// ---- គ្រប់គ្រងថ្ងៃបុណ្យ (Admin) ----
+function renderHolidayBox() {
+  const list = document.getElementById('holidayList');
+  if (!list) return;
+  const warn = document.getElementById('holidayWarn');
+  if (!holidaysAvailable) {
+    warn.style.display = 'block';
+    warn.textContent = 'មិនទាន់មានតារាង "holidays" ក្នុង Supabase ទេ — សូមដំណើរការ SQL ក្នុងឯកសារ holidays.sql ជាមុនសិន។ (ថ្ងៃអាទិត្យ ×២ នៅតែដំណើរការធម្មតា)';
+  } else {
+    warn.style.display = 'none';
+  }
+  const dates = Object.keys(holidays).sort();
+  list.innerHTML = dates.length === 0
+    ? '<span class="scan-hint">មិនទាន់មានថ្ងៃបុណ្យទេ</span>'
+    : dates.map(d => `<span class="badge active" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
+}
+
+async function addHoliday() {
+  const date = document.getElementById('holidayDate').value;
+  const name = document.getElementById('holidayName').value.trim();
+  if (!date) { alert('សូមជ្រើសរើសថ្ងៃបុណ្យ'); return; }
+  const { error } = await supabaseClient.from('holidays').upsert({ date, name }, { onConflict: 'date' });
+  if (error) { alert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
+  holidays[date] = name; holidaysAvailable = true;
+  document.getElementById('holidayName').value = '';
+  renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
+}
+
+async function removeHoliday(date) {
+  if (!confirm(`លុបថ្ងៃបុណ្យ ${date} ?`)) return;
+  const { error } = await supabaseClient.from('holidays').delete().eq('date', date);
+  if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
+  delete holidays[date];
+  renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
+}
+
+function computeRow(emp, record, date) {
   const salary = parseFloat(emp.salary) || 0;
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const hourlyRate = settings.standardHours > 0 ? dailyRate / settings.standardHours : 0;
@@ -376,8 +436,9 @@ function computeRow(emp, record) {
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
-  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * normalHours);
-  const otPay = round4(hourlyRate * settings.otMultiplier * otHours);
+  const mult = dayMultiplier(date); // អាទិត្យ/បុណ្យ = ×2
+  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours);
+  const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
   // Food allowances are set and displayed in Riel; convert to USD only for the USD total.
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
   const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
@@ -390,7 +451,7 @@ function computeRow(emp, record) {
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
 
-  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult };
 }
 
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
@@ -437,7 +498,7 @@ function renderAttendanceTab() {
 
   tbody.innerHTML = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
-    const r = computeRow(emp, record);
+    const r = computeRow(emp, record, date);
     totals.total += r.total;
     totals.riel += r.riel;
     if (r.status === 'present') totals.workDays++;
@@ -447,7 +508,7 @@ function renderAttendanceTab() {
     ).join('');
     return `<tr>
       <td>${date}</td>
-      <td>${weekdayLabel(date)}</td>
+      <td>${weekdayLabel(date)}${dayBadge(date)}</td>
       <td><input type="time" value="${r.checkin}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkin',this.value)" style="width:115px;"></td>
       <td><input type="time" value="${r.breakOut}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakOut',this.value)" style="width:115px;"></td>
       <td><input type="time" value="${r.breakIn}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakIn',this.value)" style="width:115px;"></td>
@@ -536,7 +597,7 @@ function exportAttendanceCSV() {
   const headers = ['ថ្ងៃទី', 'ថ្ងៃ', 'ចូល', 'ចេញអាហារ', 'ចូលអាហារវិញ', 'ចេញ', 'យឺត', 'ស្ថានភាព', 'ធម្មតា(ម៉ោង)', 'ប្រាក់ខែ($)', 'ថែមម៉ោង(ម៉ោង)', 'ប្រាក់ថែមម៉ោង($)', 'បាយថ្ងៃត្រង់(៛)', 'បាយថែមម៉ោង(៛)', 'សរុប($)', 'សរុប(៛)'];
   const rows = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
-    const r = computeRow(emp, record);
+    const r = computeRow(emp, record, date);
     return [
       date, weekdayLabel(date), r.checkin, r.breakOut, r.breakIn, r.checkout, r.late ? 'យឺត' : '-',
       STATUS_LABELS[r.status] || '-', r.normalHours.toFixed(2), r.normalPay.toFixed(4),
@@ -657,11 +718,17 @@ function currentPayrollEmployeeId() {
   return sel ? sel.value : '';
 }
 
+function employeeMatchesSearch(e, q) {
+  q = (q || '').toLowerCase().trim();
+  return !q || (e.name || '').toLowerCase().includes(q) || (e.username || '').toLowerCase().includes(q);
+}
+
 function renderPayrollEmployeeSelect() {
   const sel = document.getElementById('payrollEmployeeSelect');
-  const activeEmployees = employees.filter(e => e.status === 'active');
+  const q = document.getElementById('payrollSearch') ? document.getElementById('payrollSearch').value : '';
+  const activeEmployees = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
   const currentVal = sel.value;
-  sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  sel.innerHTML = activeEmployees.map(e => `<option value="${e.id}">${e.username ? escapeHtml(e.username) + ' — ' : ''}${escapeHtml(e.name)}</option>`).join('');
   if (activeEmployees.some(e => e.id === currentVal)) {
     sel.value = currentVal;
   } else if (activeEmployees.length > 0) {
@@ -724,7 +791,14 @@ function renderPayrollTab() {
   renderAttendanceTab();
 }
 
-function openAddPayrollItemModal(type) {
+function openAddPayrollItemModal(type, forEmpId, forMonth) {
+  if (forEmpId) {
+    const search = document.getElementById('payrollSearch');
+    if (search) search.value = '';
+    renderPayrollEmployeeSelect();
+    document.getElementById('payrollEmployeeSelect').value = forEmpId;
+  }
+  if (forMonth) document.getElementById('payrollMonth').value = forMonth;
   const empId = currentPayrollEmployeeId();
   if (!empId) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
   document.getElementById('piId').value = '';
@@ -798,6 +872,7 @@ async function savePayrollItem() {
   }
   closePayrollItemModal();
   renderPayrollTab();
+  renderDeductTab();
   await upsertPayrollItemRow(item);
 }
 
@@ -807,6 +882,7 @@ function deletePayrollItem(id) {
   if (!confirm(`តើអ្នកប្រាកដជាចង់លុប "${p.name}" មែនទេ?`)) return;
   payrollItems = payrollItems.filter(x => x.id !== id);
   renderPayrollTab();
+  renderDeductTab();
   deletePayrollItemRow(id);
 }
 
@@ -1015,6 +1091,8 @@ function renderAll() {
   renderScanLog();
   renderRequestsTab();
   renderWorkplaceQR();
+  renderDeductTab();
+  renderHolidayBox();
 }
 
 // ---- Workplace QR (posted at the entrance, self-scanned by employees) ----
@@ -1299,6 +1377,170 @@ function stopScanner() {
   }
 }
 
+// ==== យឺត / ច្បាប់ → កាត់លុយ ====
+const DEDUCT_RULES_KEY = 'deduct_rules_v1';
+const DEDUCT_DEFAULTS = { latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false };
+
+function loadDeductRules() {
+  try {
+    const raw = localStorage.getItem(DEDUCT_RULES_KEY);
+    if (raw) return { ...DEDUCT_DEFAULTS, ...JSON.parse(raw) };
+  } catch (e) { /* ignore */ }
+  return { ...DEDUCT_DEFAULTS, leaveTypes: [...DEDUCT_DEFAULTS.leaveTypes] };
+}
+function saveDeductRules() {
+  try { localStorage.setItem(DEDUCT_RULES_KEY, JSON.stringify(deductRules)); } catch (e) { /* ignore */ }
+}
+let deductRules = loadDeductRules();
+
+function readDeductControls() {
+  deductRules.latePerDay = parseFloat(document.getElementById('dedLatePerDay').value) || 0;
+  deductRules.latePerMin = parseFloat(document.getElementById('dedLatePerMin').value) || 0;
+  deductRules.leaveFood = document.getElementById('dedLeaveFood').checked;
+  deductRules.leaveTypes = [...document.querySelectorAll('.ded-leave-type')].filter(c => c.checked).map(c => c.value);
+  saveDeductRules();
+}
+function initDeductControls() {
+  document.getElementById('dedLatePerDay').value = deductRules.latePerDay;
+  document.getElementById('dedLatePerMin').value = deductRules.latePerMin;
+  document.getElementById('dedLeaveFood').checked = !!deductRules.leaveFood;
+  document.querySelectorAll('.ded-leave-type').forEach(c => { c.checked = deductRules.leaveTypes.includes(c.value); });
+  document.getElementById('dedMonth').value = todayStr().slice(0, 7);
+}
+
+function dedItemId(empId, month) { return `auto_ded_${empId}_${month}`; }
+
+// គណនាថ្ងៃយឺត/ថ្ងៃច្បាប់ និងចំនួនប្រាក់ត្រូវកាត់សម្រាប់បុគ្គលិកម្នាក់ក្នុងមួយខែ
+function calcDeductionRow(emp, month) {
+  const salary = parseFloat(emp.salary) || 0;
+  const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
+  const exRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
+  const startMin = timeToMinutes(settings.standardStart);
+  const approved = leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved');
+
+  let lateDays = 0, lateMinutes = 0, leaveDays = 0, deductibleLeaveDays = 0;
+  const lateDates = [], leaveDates = [];
+
+  daysInMonth(month).forEach(date => {
+    const rec = attendance[date] && attendance[date][emp.id];
+    if (!rec) return;
+    if (rec.status === 'present' && rec.checkin && startMin !== null) {
+      const m = timeToMinutes(rec.checkin) - startMin;
+      if (m > 0) { lateDays++; lateMinutes += m; lateDates.push(`${date.slice(8)} (+${m} នាទី)`); }
+    } else if (rec.status === 'leave') {
+      const req = approved.find(r => r.start_date <= date && date <= r.end_date);
+      const type = req && LEAVE_TYPE_LABELS[req.leave_type] ? req.leave_type : 'other';
+      leaveDays++;
+      if (deductRules.leaveTypes.includes(type)) deductibleLeaveDays++;
+      leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
+    }
+  });
+
+  const round4 = n => Math.round(n * 10000) / 10000;
+  const perLeaveDay = dailyRate + (deductRules.leaveFood ? (settings.foodDaily || 0) / exRate : 0);
+  const lateDeduct = round4(lateDays * deductRules.latePerDay + lateMinutes * deductRules.latePerMin);
+  const leaveDeduct = round4(deductibleLeaveDays * perLeaveDay);
+  return { lateDays, lateMinutes, leaveDays, deductibleLeaveDays, lateDates, leaveDates, lateDeduct, leaveDeduct, total: round4(lateDeduct + leaveDeduct) };
+}
+
+function renderDeductTab() {
+  const body = document.getElementById('dedBody');
+  if (!body) return;
+  const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  const search = document.getElementById('dedSearch').value.toLowerCase().trim();
+  const filter = document.getElementById('dedFilter').value;
+
+  let rows = employees.filter(e => e.status === 'active')
+    .filter(e => employeeMatchesSearch(e, search))
+    .map(e => ({ emp: e, r: calcDeductionRow(e, month) }))
+    .filter(({ r }) => {
+      if (search) return true; // ស្វែងរកជាក់លាក់ → បង្ហាញតែងតែ (អាចបន្ថែមអត្ថប្រយោជន៍ដល់អ្នកដែលមិនយឺត/មិនសុំច្បាប់)
+      if (filter === 'late') return r.lateDays > 0;
+      if (filter === 'leave') return r.leaveDays > 0;
+      if (filter === 'any') return r.lateDays > 0 || r.leaveDays > 0;
+      return true;
+    });
+
+  const sum = rows.reduce((a, { r }) => ({
+    late: a.late + r.lateDays, leave: a.leave + r.leaveDays, total: a.total + r.total,
+  }), { late: 0, leave: 0, total: 0 });
+
+  document.getElementById('dedStats').innerHTML = `
+    <div class="stat-card"><div class="num">${rows.length}</div><div class="label">បុគ្គលិកក្នុងបញ្ជី</div></div>
+    <div class="stat-card"><div class="num">${sum.late}</div><div class="label">ថ្ងៃមកយឺតសរុប</div></div>
+    <div class="stat-card"><div class="num">${sum.leave}</div><div class="label">ថ្ងៃសុំច្បាប់សរុប</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(sum.total)}</div><div class="label">ប្រាក់ត្រូវកាត់សរុប ($)</div></div>
+    <div class="stat-card"><div class="num">${fmtRiel(sum.total * (settings.exchangeRate || 0))} ៛</div><div class="label">ប្រាក់ត្រូវកាត់សរុប (រៀល)</div></div>`;
+
+  const empty = document.getElementById('dedEmpty');
+  if (rows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  body.innerHTML = rows.map(({ emp, r }) => {
+    const existing = payrollItems.find(p => p.id === dedItemId(emp.id, month));
+    let action;
+    if (r.total <= 0) action = existing ? `<button class="danger" onclick="removeDeductionItem('${emp.id}')">🗑 ដកចេញ</button>` : '-';
+    else if (existing && Math.abs(existing.amount - r.total) < 0.00005) action = '<span class="badge active">✓ បានបន្ថែមហើយ</span>';
+    else action = `<button onclick="applyDeductionItem('${emp.id}')">${existing ? '🔄 អាប់ដេត' : '➕ បន្ថែមប្រាក់កាត់'}</button>`;
+    const detail = [r.lateDates.length ? 'យឺត៖ ' + r.lateDates.join(', ') : '', r.leaveDates.length ? 'ច្បាប់៖ ' + r.leaveDates.join(', ') : ''].filter(Boolean).join(' | ');
+    return `<tr>
+      <td>${escapeHtml(emp.username || '-')}</td>
+      <td>${escapeHtml(emp.name)}</td>
+      <td>${r.lateDays ? `<span class="badge inactive">${r.lateDays}</span>` : '-'}</td>
+      <td>${r.lateMinutes || '-'}</td>
+      <td>${r.leaveDays ? `<span class="badge pending">${r.leaveDays}</span>` : '-'}</td>
+      <td>$${fmtUSD(r.lateDeduct)}</td>
+      <td>$${fmtUSD(r.leaveDeduct)}</td>
+      <td><strong>$${fmtUSD(r.total)}</strong></td>
+      <td style="max-width:280px;white-space:normal;font-size:0.68rem;color:var(--text-muted);">${escapeHtml(detail) || '-'}</td>
+      <td><div class="row-actions" style="flex-wrap:wrap;justify-content:center;">${action}
+        <button class="secondary" onclick="openAddPayrollItemModal('benefit','${emp.id}','${month}')">🟢 អត្ថប្រយោជន៍</button>
+        <button class="secondary" onclick="openAddPayrollItemModal('deduction','${emp.id}','${month}')">🔴 កាត់ផ្សេង</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function applyDeductionItem(empId, silent) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  const r = calcDeductionRow(emp, month);
+  if (r.total <= 0) return;
+  const item = {
+    id: dedItemId(empId, month),
+    employeeId: empId,
+    type: 'deduction',
+    name: `កាត់យឺត/ច្បាប់ ${month}`,
+    recurrence: 'variable',
+    month,
+    currency: 'USD',
+    amount: r.total,
+  };
+  const idx = payrollItems.findIndex(x => x.id === item.id);
+  if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
+  await upsertPayrollItemRow(item);
+  if (!silent) { renderDeductTab(); renderPayrollTab(); }
+}
+
+async function removeDeductionItem(empId) {
+  const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  const id = dedItemId(empId, month);
+  payrollItems = payrollItems.filter(x => x.id !== id);
+  await deletePayrollItemRow(id);
+  renderDeductTab();
+  renderPayrollTab();
+}
+
+async function applyAllDeductions() {
+  const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
+  if (targets.length === 0) { alert('មិនមានប្រាក់ត្រូវកាត់ទេ (សូមពិនិត្យលក្ខខណ្ឌកាត់លុយ)'); return; }
+  if (!confirm(`បន្ថែមប្រាក់កាត់សម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`)) return;
+  for (const e of targets) await applyDeductionItem(e.id, true);
+  renderDeductTab();
+  renderPayrollTab();
+}
+
 // ---- Employee QR code (for scanning) ----
 document.getElementById('addBtn').addEventListener('click', openAddModal);
 document.getElementById('empUsernameRegenBtn').addEventListener('click', () => {
@@ -1343,6 +1585,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('scanTab').classList.toggle('active', tab === 'scan');
     document.getElementById('requestsTab').classList.toggle('active', tab === 'requests');
     document.getElementById('payrollTab').classList.toggle('active', tab === 'payroll');
+    document.getElementById('deductTab').classList.toggle('active', tab === 'deduct');
+    if (tab === 'deduct') renderDeductTab();
     if (tab === 'payroll') renderPayrollTab();
     if (tab === 'attendance') renderAttendanceTab();
     if (tab === 'requests') renderRequestsTab();
@@ -1355,6 +1599,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
+initDeductControls();
+['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
+document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
+['dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
+document.querySelectorAll('.ded-leave-type').forEach(c => c.addEventListener('change', () => { readDeductControls(); renderDeductTab(); }));
+document.getElementById('dedApplyAllBtn').addEventListener('click', applyAllDeductions);
+document.getElementById('payrollSearch').addEventListener('input', renderPayrollTab);
+document.getElementById('holidayAddBtn').addEventListener('click', addHoliday);
 
 document.getElementById('attendanceMonth').value = todayStr().slice(0, 7);
 document.getElementById('payrollMonth').value = todayStr().slice(0, 7);

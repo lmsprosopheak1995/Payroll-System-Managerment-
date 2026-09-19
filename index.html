@@ -57,6 +57,7 @@
     <button class="tab-btn" data-tab="scan">📷 ស្កេនចូល-ចេញ</button>
     <button class="tab-btn" data-tab="requests">📝 សំណើច្បាប់/ថែមម៉ោង <span id="pendingReqBadge"></span></button>
     <button class="tab-btn" data-tab="payroll">💰 អត្ថប្រយោជន៍ & ប្រាក់កាត់</button>
+    <button class="tab-btn" data-tab="deduct">⏰ យឺត/ច្បាប់ → កាត់លុយ / អត្ថប្រយោជន៍</button>
   </div>
 
   <div id="employeesTab" class="tab-content active">
@@ -107,6 +108,16 @@
         <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
       </div>
     </div>
+    <details class="scan-result-card" id="holidayBox" style="margin-bottom:14px;">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
+        <input type="date" id="holidayDate">
+        <input type="text" id="holidayName" placeholder="ឈ្មោះថ្ងៃបុណ្យ" style="min-width:200px;">
+        <button id="holidayAddBtn">➕ បន្ថែមថ្ងៃបុណ្យ</button>
+      </div>
+      <p id="holidayWarn" class="scan-hint" style="color:var(--danger);display:none;"></p>
+      <div id="holidayList" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+    </details>
     <div class="attendance-stats" id="attendanceStats"></div>
     <br>
     <div class="table-wrap">
@@ -203,9 +214,68 @@
     </div>
   </div>
 
+  <div id="deductTab" class="tab-content">
+    <div class="attendance-controls">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <input type="month" id="dedMonth">
+        <input type="text" id="dedSearch" placeholder="🔍 ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
+        <select id="dedFilter">
+          <option value="any">មានយឺត ឬ ច្បាប់</option>
+          <option value="late">មកយឺតតែប៉ុណ្ណោះ</option>
+          <option value="leave">សុំច្បាប់តែប៉ុណ្ណោះ</option>
+          <option value="all">បុគ្គលិកទាំងអស់</option>
+        </select>
+      </div>
+      <button id="dedApplyAllBtn">➕ បន្ថែមទាំងអស់ទៅ "ប្រាក់កាត់"</button>
+    </div>
+
+    <div class="scan-result-card" style="margin-bottom:16px;">
+      <h3 style="font-size:0.85rem;margin:0 0 10px;">⚙️ លក្ខខណ្ឌកាត់លុយ</h3>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0;">
+          <label>កាត់ក្នុងមួយថ្ងៃដែលមកយឺត ($)</label>
+          <input type="number" id="dedLatePerDay" min="0" step="0.01" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>កាត់ក្នុងមួយនាទីដែលយឺត ($)</label>
+          <input type="number" id="dedLatePerMin" min="0" step="0.001" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>ប្រភេទច្បាប់ដែលត្រូវកាត់ប្រាក់ខែ (១ថ្ងៃ = ប្រាក់ខែ ÷ ថ្ងៃធ្វើការ)</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; font-size:0.75rem;">
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="annual"> ប្រចាំឆ្នាំ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="sick"> ឈឺ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="unpaid"> គ្មានប្រាក់ខែ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="other"> ផ្សេងៗ / កត់ដោយដៃ</label>
+          </div>
+        </div>
+        <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;">
+          <input type="checkbox" id="dedLeaveFood"> កាត់ប្រាក់បាយថ្ងៃច្បាប់ផងដែរ
+        </label>
+      </div>
+      <p class="scan-hint">*មកយឺតត្រូវបានកាត់ម៉ោងធ្វើការចេញពីប្រាក់ខែក្នុងតារាងវត្តមានរួចហើយ (ព្រោះគិតប្រាក់តាមម៉ោង)។ ចំនួន "កាត់ពេលយឺត" ខាងក្រោមគឺជាការពិន័យបន្ថែម — ទុក 0 បើមិនចង់ពិន័យបន្ថែម។ ថ្ងៃច្បាប់ក្នុងតារាងវត្តមានត្រូវបានបង់ប្រាក់ពេញថ្ងៃ ដូច្នេះការកាត់ច្បាប់នៅទីនេះនឹងដកវាចេញវិញ។</p>
+    </div>
+
+    <div class="attendance-stats" id="dedStats"></div>
+    <br>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ថ្ងៃមកយឺត</th><th>នាទីយឺតសរុប</th><th>ថ្ងៃសុំច្បាប់</th>
+            <th>កាត់ពេលយឺត ($)</th><th>កាត់ច្បាប់ ($)</th><th>សរុបកាត់ ($)</th><th>ថ្ងៃលម្អិត</th><th>សកម្មភាព</th>
+          </tr>
+        </thead>
+        <tbody id="dedBody"></tbody>
+      </table>
+      <div class="empty-state" id="dedEmpty" style="display:none;">មិនមានបុគ្គលិកមកយឺត ឬសុំច្បាប់ក្នុងខែនេះទេ</div>
+    </div>
+  </div>
+
   <div id="payrollTab" class="tab-content">
     <div class="attendance-controls">
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <input type="text" id="payrollSearch" placeholder="🔍 អត្តលេខ ឬ ឈ្មោះ..." style="min-width:150px;">
         <select id="payrollEmployeeSelect" style="min-width:170px;"></select>
         <input type="month" id="payrollMonth">
       </div>
