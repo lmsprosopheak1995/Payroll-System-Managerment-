@@ -507,7 +507,6 @@ function renderAttendanceTab() {
     tbody.innerHTML = '';
     emptyState.style.display = 'block';
     document.getElementById('attendanceStats').innerHTML = '';
-    document.getElementById('attendanceFoot').innerHTML = '';
     return;
   }
   emptyState.style.display = 'none';
@@ -517,7 +516,7 @@ function renderAttendanceTab() {
   const month = currentAttendanceMonth();
   const dates = daysInMonth(month);
 
-  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, normalHours: 0, normalPay: 0, otHours: 0, otPay: 0, food: 0, foodOt: 0, doubleDays: 0 };
+  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
@@ -526,10 +525,7 @@ function renderAttendanceTab() {
     totals.riel += r.riel;
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
-    totals.normalHours += r.normalHours; totals.normalPay += r.normalPay;
-    totals.otHours += r.otHours; totals.otPay += r.otPay;
-    totals.food += r.foodPayRiel; totals.foodOt += r.foodOtPayRiel;
-    if (r.status === 'present' && r.mult > 1) totals.doubleDays++;
+    totals.otHours += r.otHours;
     const statusOptions = ['', 'present', 'absent', 'leave'].map(s =>
       `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`
     ).join('');
@@ -553,21 +549,6 @@ function renderAttendanceTab() {
     </tr>`;
   }).join('');
 
-  // ជួរសរុបចុងតារាង
-  document.getElementById('attendanceFoot').innerHTML = `<tr class="total-row">
-      <td colspan="6">សរុបប្រចាំខែ (${escapeHtml(emp.name)})</td>
-      <td>${totals.lateDays ? totals.lateDays + ' ថ្ងៃ' : '-'}</td>
-      <td>${totals.workDays} ថ្ងៃ${totals.doubleDays ? `<br><small>(×២ : ${totals.doubleDays})</small>` : ''}</td>
-      <td>${fmtHours(totals.normalHours)}</td>
-      <td>$${fmtUSD(totals.normalPay)}</td>
-      <td>${fmtHours(totals.otHours)}</td>
-      <td>$${fmtUSD(totals.otPay)}</td>
-      <td>${fmtRiel(totals.food)} ៛</td>
-      <td>${fmtRiel(totals.foodOt)} ៛</td>
-      <td>$${fmtUSD(totals.total)}</td>
-      <td>${fmtRiel(totals.riel)} ៛</td>
-    </tr>`;
-
   const adj = getPayrollAdjustmentUSD(emp.id, month);
   const netUSD = totals.total + adj.net;
   const netRiel = netUSD * (settings.exchangeRate || 0);
@@ -575,9 +556,7 @@ function renderAttendanceTab() {
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
-    <div class="stat-card"><div class="num">${fmtHours(totals.normalHours)}</div><div class="label">ម៉ោងធម្មតាសរុប</div></div>
     <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.otPay)}</div><div class="label">ប្រាក់ថែមម៉ោង ($)</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ចំណាយសរុប ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ចំណាយសរុប (រៀល)</div></div>
     <div class="stat-card"><div class="num">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
