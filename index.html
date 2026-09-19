@@ -134,6 +134,7 @@
       </div>
       <div style="display:flex; gap:8px;">
         <button class="secondary" id="attendanceSettingsBtn">⚙ ការកំណត់</button>
+        <button class="secondary" id="attendanceHolidayBtn">🎌 កំណត់ថ្ងៃបុណ្យ</button>
         <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
       </div>
     </div>
@@ -165,7 +166,6 @@
           </tr>
         </thead>
         <tbody id="attendanceBody"></tbody>
-        <tfoot id="attendanceFoot"></tfoot>
       </table>
       <div class="empty-state" id="attendanceEmpty" style="display:none;">
         មិនមានបុគ្គលិកសកម្មទេ សូមបន្ថែមបុគ្គលិកជាមុនសិន។
@@ -509,7 +509,7 @@
       <div id="settingSummary" class="setting-grid"></div>
       <div style="margin-top:12px;"><button id="settingEditBtn">✏️ កែប្រែការកំណត់</button></div>
     </div>
-    <details class="scan-result-card" id="holidayBox" style="margin-bottom:14px;">
+    <details class="scan-result-card" id="holidayBox" open style="margin-bottom:14px;">
       <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
         <input type="date" id="holidayDate">

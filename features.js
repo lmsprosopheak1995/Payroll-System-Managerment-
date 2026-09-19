@@ -114,6 +114,12 @@ function initFeatures() {
   byId('settingEditBtn').addEventListener('click', openSettingsModal);
   byId('settingPwBtn').addEventListener('click', changeAdminPassword);
   byId('settingQrBtn').addEventListener('click', () => showTab('scan'));
+  byId('attendanceHolidayBtn').addEventListener('click', () => {
+    showTab('setting');
+    const box = byId('holidayBox');
+    box.open = true;
+    setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  });
 }
 
 function renderFeatures() {
