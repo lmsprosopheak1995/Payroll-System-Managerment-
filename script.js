@@ -1241,7 +1241,7 @@ function renderAll() {
 }
 
 // ---- Workplace QR (បង្ហាញលើអេក្រង់ច្រកចូល — ប្តូររាល់ 30 វិនាទី) ----
-let wpQrTimer = null, wpQrWin = null, wpRegenArmed = 0;
+let wpQrTimer = null, wpQrWin = null;
 
 async function renderWorkplaceQR() {
   const wrap = document.getElementById('workplaceQrCanvasWrap');
@@ -1277,27 +1277,6 @@ function wpQrTick() {
   const cd = document.getElementById('wpQrCountdown');
   if (cd) cd.textContent = `QR នឹងប្តូរក្នុង ${left} វិនាទី`;
   if (Math.floor(Date.now() / WP_WINDOW_MS) !== wpQrWin) renderWorkplaceQR();
-}
-
-async function regenerateWorkplaceQR() {
-  const btn = document.getElementById('workplaceQrRegenBtn');
-  const st = document.getElementById('wpQrStatus');
-  if (Date.now() > wpRegenArmed) { // ចុចលើកទី 1 — សុំបញ្ជាក់ក្នុងទំព័រ (មិនប្រើ confirm() ដែលអាចត្រូវ browser ទប់ស្កាត់)
-    wpRegenArmed = Date.now() + 4000;
-    btn.textContent = '⚠ ចុចម្តងទៀតដើម្បីបញ្ជាក់';
-    st.textContent = '';
-    setTimeout(() => { if (Date.now() >= wpRegenArmed) btn.textContent = '🔄 កូដថ្មី'; }, 4100);
-    return;
-  }
-  wpRegenArmed = 0;
-  btn.textContent = '🔄 កូដថ្មី';
-  const old = settings.workplaceCode;
-  settings.workplaceCode = generateWorkplaceCode();
-  const ok = await upsertSettings();
-  if (!ok) { settings.workplaceCode = old; st.style.color = 'var(--danger)'; st.textContent = '✕ រក្សាទុកកូដថ្មីមិនបានទេ'; return; }
-  st.style.color = 'var(--success)';
-  st.textContent = '✓ បានបង្កើតកូដថ្មី — QR ចាស់ទាំងអស់លែងប្រើបាន';
-  renderWorkplaceQR();
 }
 
 // ---- ទីតាំងកន្លែងធ្វើការ (Geofence) ----
@@ -1866,7 +1845,6 @@ document.getElementById('settingsOverlay').addEventListener('click', (e) => {
 });
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
-document.getElementById('workplaceQrRegenBtn').addEventListener('click', regenerateWorkplaceQR);
 document.getElementById('wpGeoSetBtn').addEventListener('click', () => saveWpGeo(true));
 document.getElementById('wpRadiusInput').addEventListener('change', () => saveWpGeo(false));
 function closeSidebar() {
