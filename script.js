@@ -103,14 +103,24 @@ const DEFAULT_SETTINGS = {
   workDaysPerMonth: 26,
   exchangeRate: 4100,
   workplaceCode: null,
+  workplaceLat: null,
+  workplaceLng: null,
+  workplaceRadius: 100,
 };
 
 // ---- Workplace QR code (random code posted at the office entrance) ----
 function generateWorkplaceCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const r = new Uint32Array(16); crypto.getRandomValues(r);
   let s = 'WP-';
-  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 16; i++) s += chars[r[i] % chars.length];
   return s;
+}
+// ---- QR ប្តូរជានិច្ច (rotating): កូដផ្លាស់ប្តូររាល់ 30 វិនាទី ដូច្នេះរូបថត/screenshot ប្រើមិនបានយូរ ----
+const WP_WINDOW_MS = 30000;
+async function wpToken(secret, win) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret + ':' + win));
+  return 'WP1.' + win + '.' + Array.from(new Uint8Array(buf)).slice(0, 5).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ---- Avatar (រូប profile ឬអក្សរដំបូងនៃឈ្មោះ) ----
@@ -233,6 +243,9 @@ async function loadSettings() {
     workDaysPerMonth: data.work_days_per_month ?? DEFAULT_SETTINGS.workDaysPerMonth,
     exchangeRate: data.exchange_rate ?? DEFAULT_SETTINGS.exchangeRate,
     workplaceCode: data.workplace_code ?? null,
+    workplaceLat: data.workplace_lat ?? null,
+    workplaceLng: data.workplace_lng ?? null,
+    workplaceRadius: data.workplace_radius ?? 100,
   };
   // បង្កើតកូដម្តងដំបូង ប្រសិនបើមិនទាន់មាន (ស្រប migration ចាស់ដែលមិនទាន់មាន column នេះ)
   if (!settings.workplaceCode) {
@@ -268,6 +281,7 @@ async function upsertAttendanceRecord(date, empId, rec) {
   }
 }
 
+let settingsGeoMissing = false; // true បើ column ទីតាំងមិនទាន់មានក្នុង Supabase
 async function upsertSettings() {
   const row = {
     id: 1,
@@ -279,12 +293,24 @@ async function upsertSettings() {
     work_days_per_month: settings.workDaysPerMonth,
     exchange_rate: settings.exchangeRate,
     workplace_code: settings.workplaceCode,
+    workplace_lat: settings.workplaceLat,
+    workplace_lng: settings.workplaceLng,
+    workplace_radius: settings.workplaceRadius,
   };
-  const { error } = await supabaseClient.from('app_settings').upsert(row, { onConflict: 'id' });
+  let { error } = await supabaseClient.from('app_settings').upsert(row, { onConflict: 'id' });
+  settingsGeoMissing = false;
+  if (error && /workplace_(lat|lng|radius)/.test(error.message)) {
+    // column ទីតាំងមិនទាន់មាន — រក្សាទុកការកំណត់ផ្សេងៗសិន កុំឱ្យខូច
+    const { workplace_lat, workplace_lng, workplace_radius, ...base } = row;
+    ({ error } = await supabaseClient.from('app_settings').upsert(base, { onConflict: 'id' }));
+    settingsGeoMissing = true;
+  }
   if (error) {
     console.error('Save settings failed', error);
     alert('រក្សាទុកការកំណត់លើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    return false;
   }
+  return true;
 }
 
 function todayStr() {
@@ -1214,10 +1240,13 @@ function renderAll() {
   if (typeof renderFeatures === 'function') renderFeatures();
 }
 
-// ---- Workplace QR (posted at the entrance, self-scanned by employees) ----
-function renderWorkplaceQR() {
+// ---- Workplace QR (បង្ហាញលើអេក្រង់ច្រកចូល — ប្តូររាល់ 30 វិនាទី) ----
+let wpQrTimer = null, wpQrWin = null, wpRegenArmed = 0;
+
+async function renderWorkplaceQR() {
   const wrap = document.getElementById('workplaceQrCanvasWrap');
   if (!wrap) return;
+  renderWpGeoInfo();
   if (!settings.workplaceCode) { wrap.innerHTML = ''; return; }
   if (typeof qrcode === 'undefined') {
     console.error('QR library (qrcode-generator) failed to load — check that the CDN script tag loaded, or network/ad-blocker issues.');
@@ -1225,33 +1254,84 @@ function renderWorkplaceQR() {
     return;
   }
   try {
+    const win = Math.floor(Date.now() / WP_WINDOW_MS);
     const qr = qrcode(0, 'M');
-    qr.addData(settings.workplaceCode);
+    qr.addData(await wpToken(settings.workplaceCode, win));
     qr.make();
     const dataUrl = qr.createDataURL(6, 8);
-    wrap.innerHTML = `<img id="workplaceQrImg" src="${dataUrl}" alt="Workplace QR" style="max-width:220px;width:100%;border-radius:8px;">`;
+    const img = document.getElementById('workplaceQrImg');
+    if (img) img.src = dataUrl;
+    else wrap.innerHTML = `<img id="workplaceQrImg" src="${dataUrl}" alt="Workplace QR" style="max-width:220px;width:100%;border-radius:8px;">`;
+    wpQrWin = win;
   } catch (e) {
-    console.error('QR generation failed for workplaceCode =', settings.workplaceCode, e);
-    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (សូមពិនិត្យ browser console)</p>';
+    console.error('QR generation failed', e);
+    wrap.innerHTML = '<p style="font-size:0.75rem;color:var(--danger);">មិនអាចបង្កើតកូដ QR បានទេ (ត្រូវបើកតាម https:// ឬ localhost)</p>';
   }
+  if (!wpQrTimer) wpQrTimer = setInterval(wpQrTick, 1000);
+}
+
+function wpQrTick() {
+  const wrap = document.getElementById('workplaceQrCanvasWrap');
+  if (!wrap || !wrap.offsetParent || wpQrWin === null) return; // ផ្ទាំងលាក់ — មិនចាំបាច់ធ្វើអ្វី
+  const left = Math.max(0, Math.ceil(((wpQrWin + 1) * WP_WINDOW_MS - Date.now()) / 1000));
+  const cd = document.getElementById('wpQrCountdown');
+  if (cd) cd.textContent = `QR នឹងប្តូរក្នុង ${left} វិនាទី`;
+  if (Math.floor(Date.now() / WP_WINDOW_MS) !== wpQrWin) renderWorkplaceQR();
 }
 
 async function regenerateWorkplaceQR() {
-  if (!confirm('បង្កើតកូដ QR កន្លែងធ្វើការថ្មី? QR ចាស់ដែលបានបិទ/បោះពុម្ពនឹងលែងប្រើការបាន')) return;
+  const btn = document.getElementById('workplaceQrRegenBtn');
+  const st = document.getElementById('wpQrStatus');
+  if (Date.now() > wpRegenArmed) { // ចុចលើកទី 1 — សុំបញ្ជាក់ក្នុងទំព័រ (មិនប្រើ confirm() ដែលអាចត្រូវ browser ទប់ស្កាត់)
+    wpRegenArmed = Date.now() + 4000;
+    btn.textContent = '⚠ ចុចម្តងទៀតដើម្បីបញ្ជាក់';
+    st.textContent = '';
+    setTimeout(() => { if (Date.now() >= wpRegenArmed) btn.textContent = '🔄 កូដថ្មី'; }, 4100);
+    return;
+  }
+  wpRegenArmed = 0;
+  btn.textContent = '🔄 កូដថ្មី';
+  const old = settings.workplaceCode;
   settings.workplaceCode = generateWorkplaceCode();
-  await upsertSettings();
+  const ok = await upsertSettings();
+  if (!ok) { settings.workplaceCode = old; st.style.color = 'var(--danger)'; st.textContent = '✕ រក្សាទុកកូដថ្មីមិនបានទេ'; return; }
+  st.style.color = 'var(--success)';
+  st.textContent = '✓ បានបង្កើតកូដថ្មី — QR ចាស់ទាំងអស់លែងប្រើបាន';
   renderWorkplaceQR();
 }
 
-function downloadWorkplaceQR() {
-  const img = document.getElementById('workplaceQrImg');
-  if (!img) return;
-  const a = document.createElement('a');
-  a.href = img.src;
-  a.download = 'workplace_qr.gif';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+// ---- ទីតាំងកន្លែងធ្វើការ (Geofence) ----
+function renderWpGeoInfo() {
+  const el = document.getElementById('wpGeoInfo');
+  if (!el) return;
+  el.textContent = settings.workplaceLat != null
+    ? `ទីតាំងបានកំណត់៖ ${Number(settings.workplaceLat).toFixed(5)}, ${Number(settings.workplaceLng).toFixed(5)}`
+    : 'មិនទាន់កំណត់ទីតាំង — បុគ្គលិកអាចស្កេនពីទីណាក៏បាន';
+  const inp = document.getElementById('wpRadiusInput');
+  if (inp && document.activeElement !== inp) inp.value = settings.workplaceRadius || 100;
+}
+
+async function saveWpGeo(useCurrent) {
+  const msg = document.getElementById('wpGeoMsg');
+  const say = (t, ok) => { msg.style.color = ok ? 'var(--success)' : 'var(--danger)'; msg.textContent = t; };
+  settings.workplaceRadius = Math.max(20, parseInt(document.getElementById('wpRadiusInput').value, 10) || 100);
+  const done = async () => {
+    const ok = await upsertSettings();
+    renderWpGeoInfo();
+    if (settingsGeoMissing) say('✕ ត្រូវរត់ SQL បន្ថែម column ទីតាំងក្នុង Supabase ជាមុនសិន', false);
+    else if (ok) say('✓ បានរក្សាទុក', true);
+  };
+  if (!useCurrent) {
+    if (settings.workplaceLat == null) { say('សូមចុច «កំណត់ទីតាំងនេះ» ជាមុនសិន', false); return; }
+    return done();
+  }
+  if (!navigator.geolocation) { say('✕ ឧបករណ៍នេះមិនគាំទ្រទីតាំង', false); return; }
+  say('⏳ កំពុងយកទីតាំង...', true);
+  navigator.geolocation.getCurrentPosition(pos => {
+    settings.workplaceLat = pos.coords.latitude;
+    settings.workplaceLng = pos.coords.longitude;
+    done().then(() => { if (!settingsGeoMissing && pos.coords.accuracy > 100) say(`⚠ បានរក្សាទុក ប៉ុន្តែភាពត្រឹមត្រូវទាប(±${Math.round(pos.coords.accuracy)} ម៉ែត្រ) — គួរកំណត់ពីទូរស័ព្ទនៅច្រកចូល`, false); });
+  }, () => say('✕ មិនអាចយកទីតាំងបានទេ សូមអនុញ្ញាតទីតាំង (Location) ក្នុង browser', false), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
 
 let pendingPhoto; // undefined = មិនប្តូរ, '' = លុប, 'data:...' = រូបថ្មី
@@ -1787,7 +1867,8 @@ document.getElementById('settingsOverlay').addEventListener('click', (e) => {
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
 document.getElementById('workplaceQrRegenBtn').addEventListener('click', regenerateWorkplaceQR);
-document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
+document.getElementById('wpGeoSetBtn').addEventListener('click', () => saveWpGeo(true));
+document.getElementById('wpRadiusInput').addEventListener('change', () => saveWpGeo(false));
 function closeSidebar() {
   const sb = document.getElementById('sidebar');
   if (sb) sb.classList.remove('open');

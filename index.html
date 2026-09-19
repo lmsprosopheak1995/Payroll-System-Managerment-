@@ -196,15 +196,27 @@
       </div>
     </div>
 
-    <div class="portal-card" style="max-width:340px; text-align:center; margin-top:20px; padding:20px;">
+    <div class="portal-card" style="max-width:380px; text-align:center; margin-top:20px; padding:20px;">
       <h3 style="margin:0 0 4px;font-size:0.9rem;">🏢 QR ប្រចាំកន្លែងធ្វើការ</h3>
       <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 12px;">
-        បោះពុម្ព ឬបិទកូដនេះនៅច្រកចូលកន្លែងធ្វើការ។ បុគ្គលិកបើក "ស្កេនកូដ QR ផ្ទាល់ខ្លួន" ក្នុងទំព័របុគ្គលិករបស់គេ រួចស្កេនកូដនេះដើម្បីកត់ត្រាម៉ោងចូល/ចេញដោយខ្លួនឯង។
+        បើកទំព័រនេះលើអេក្រង់ (tablet / TV) នៅច្រកចូល។ QR ប្តូរស្វ័យប្រវត្តិរាល់ 30 វិនាទី ដូច្នេះការថតរូប ឬ screenshot ទុកស្កេនពេលក្រោយ ប្រើមិនបានទេ។ បុគ្គលិកស្កេនដោយផ្ទាល់ពីអេក្រង់នេះ។
       </p>
       <div id="workplaceQrCanvasWrap" style="display:flex; justify-content:center; margin:10px 0;"></div>
+      <p id="wpQrCountdown" style="font-size:0.75rem;font-weight:600;margin:0 0 10px;"></p>
       <div class="modal-actions" style="justify-content:center;">
-        <button class="secondary" id="workplaceQrRegenBtn" title="ប្រសិនបើកូដចាស់ធ្លាប់ធ្លាយ សូមបង្កើតកូដថ្មី">🔄 កូដថ្មី</button>
-        <button id="workplaceQrDownloadBtn">⬇ ទាញយករូបភាព</button>
+        <button class="secondary" id="workplaceQrRegenBtn" title="ប្រសិនបើសង្ស័យថាមានធ្លាយ សូមបង្កើតកូដថ្មី">🔄 កូដថ្មី</button>
+      </div>
+      <p id="wpQrStatus" style="font-size:0.72rem;margin:8px 0 0;"></p>
+
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);text-align:left;">
+        <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px;">📍 ទីតាំងកន្លែងធ្វើការ</div>
+        <div id="wpGeoInfo" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <button class="secondary" id="wpGeoSetBtn">📍 កំណត់ទីតាំងនេះ</button>
+          <div class="form-group" style="margin:0;"><label style="font-size:0.7rem;">កាំអនុញ្ញាត (ម៉ែត្រ)</label><input type="number" id="wpRadiusInput" min="20" step="10" style="width:110px;"></div>
+        </div>
+        <p id="wpGeoMsg" style="font-size:0.72rem;margin:8px 0 0;"></p>
+        <p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0;">ចុច «កំណត់ទីតាំងនេះ» ពេលអ្នកកំពុងនៅច្រកចូល (ល្អបំផុតប្រើទូរស័ព្ទ ព្រោះ GPS ត្រឹមត្រូវជាង)។ បុគ្គលិកត្រូវនៅក្នុងកាំនេះទើបអាចកត់ត្រាបាន។</p>
       </div>
     </div>
   </div>
