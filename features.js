@@ -107,6 +107,7 @@ function initFeatures() {
   byId('kpiCopyBtn').addEventListener('click', copyKpiFromPrevMonth);
   byId('annTargetType').addEventListener('change', onAnnTargetChange);
   byId('annSendBtn').addEventListener('click', sendAnnouncement);
+  byId('annImage').addEventListener('change', e => handleAnnImage(e.target.files[0]));
   byId('fbFilter').addEventListener('change', renderFeedback);
   byId('shiftSaveBtn').addEventListener('click', saveShift);
   byId('shiftCancelBtn').addEventListener('click', resetShiftForm);
@@ -493,10 +494,34 @@ function renderAnnouncements() {
   byId('annEmpty').style.display = announcementRows.length ? 'none' : 'block';
   body.innerHTML = announcementRows.map(r => `<tr>
     <td>${shortDate(r.created_at)}</td>
-    <td style="white-space:normal;"><strong>${escapeHtml(r.title)}</strong></td>
+    <td style="white-space:normal;">${r.image ? `<img src="${escapeHtml(r.image)}" style="height:38px;border-radius:6px;display:block;margin-bottom:4px;">` : ''}<strong>${escapeHtml(r.title)}</strong></td>
     <td style="white-space:normal;max-width:320px;">${escapeHtml(r.body || '')}</td>
     <td>${escapeHtml(annTargetLabel(r))}</td>
     <td><button class="danger" onclick="deleteAnnouncement('${escapeHtml(r.id)}')">🗑</button></td></tr>`).join('');
+}
+
+let annPendingImage = null;
+function handleAnnImage(file) {
+  annPendingImage = null;
+  byId('annImagePreview').innerHTML = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('សូមជ្រើសរើសឯកសាររូបភាព'); byId('annImage').value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const W = 800, H = 500; // 16:10, កាត់ពីកណ្តាល
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const scale = Math.max(W / img.width, H / img.height);
+      const w = W / scale, h = H / scale;
+      c.getContext('2d').drawImage(img, (img.width - w) / 2, (img.height - h) / 2, w, h, 0, 0, W, H);
+      annPendingImage = c.toDataURL('image/jpeg', 0.75);
+      byId('annImagePreview').innerHTML = `<img src="${annPendingImage}" style="max-width:220px;border-radius:8px;display:block;">`;
+    };
+    img.onerror = () => alert('មិនអាចអានរូបភាពនេះបានទេ');
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function sendAnnouncement() {
@@ -509,9 +534,11 @@ async function sendAnnouncement() {
   if (type === 'employee') value = byId('annEmployeeSelect').value;
   if (type !== 'all' && !value) { alert('សូមជ្រើសរើសអ្នកទទួល'); return; }
   const row = { id: uid(), title, body: text, target_type: type, target_value: value, created_at: new Date().toISOString() };
+  if (annPendingImage) row.image = annPendingImage;
   if (!(await dbUpsert('announcements', row))) return;
   announcementRows.unshift(row);
   byId('annTitle').value = ''; byId('annText').value = '';
+  annPendingImage = null; byId('annImage').value = ''; byId('annImagePreview').innerHTML = '';
   renderAnnouncements();
   alert('✓ បានផ្ញើប្រកាសជូនបុគ្គលិករួចរាល់');
 }
