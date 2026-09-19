@@ -2,7 +2,7 @@
 <html lang="km">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ទំព័របុគ្គលិក — ស្កេនវត្តមាន</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,6 +69,45 @@
   #empQrReader { width:100%; border-radius:10px; overflow:hidden; background:var(--bg); min-height:180px; }
   .scan-hint { font-size:0.68rem; color:var(--text-muted); margin:8px 0 0; text-align:center; }
   #leaveAttachmentPreview img { max-width:140px; max-height:140px; border-radius:8px; border:1px solid var(--border); display:block; }
+
+  /* ===== Mobile-app look (purple brand, login + home menu + bottom nav) ===== */
+  :root { --b1:#3b3491; --b2:#6b48ab; --brand:linear-gradient(90deg,var(--b1),var(--b2)); }
+  body { padding:0; display:block; }
+  .portal { max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:calc(84px + env(safe-area-inset-bottom,0px)); }
+  #loginCard { max-width:none; background:none; border:0; box-shadow:none; padding:72px 28px 0; }
+  .login-logo { position:relative; width:130px; height:130px; margin:0 auto 64px; border-radius:50%; background:var(--brand); display:grid; place-items:center; overflow:hidden; color:#fff; font-size:3.4rem; font-weight:700; }
+  .login-logo img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #loginCard .form-group { margin-bottom:22px; }
+  #loginCard input { border:0; border-bottom:1.5px solid var(--text); border-radius:0; background:transparent; padding:12px 0; font-size:1rem; }
+  #loginCard input:focus { outline:0; border-bottom-color:var(--b2); }
+  #loginCard .primary-btn { margin-top:14px; border-radius:999px; background:var(--brand); color:#fff; padding:14px; font-size:1rem; }
+  .home-head { display:flex; align-items:center; gap:12px; padding:18px 16px 12px; }
+  .h-avatar { width:44px; height:44px; flex:none; border-radius:50%; background:var(--brand); color:#fff; display:grid; place-items:center; font-weight:700; overflow:hidden; }
+  .h-avatar img { width:100%; height:100%; object-fit:cover; }
+  .h-hello { font-size:0.75rem; color:var(--text-muted); }
+  .h-name { font-weight:700; font-size:1rem; }
+  .banner-track { display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; padding:0 16px 4px; scrollbar-width:none; }
+  .banner-track::-webkit-scrollbar { display:none; }
+  .banner { flex:none; width:84%; aspect-ratio:16/10; scroll-snap-align:start; border-radius:14px; padding:20px; color:#fff; display:flex; flex-direction:column; justify-content:flex-end; background:var(--brand); }
+  .banner:nth-child(even) { background:linear-gradient(135deg,#8b1116,#c0262d); }
+  .banner h3 { margin:0 0 6px; font-size:1.05rem; }
+  .banner p { margin:0; font-size:0.8rem; opacity:0.92; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .menu-card { margin:16px; padding:4px 16px; background:var(--card-bg); border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,0.08); }
+  button.menu-row { display:flex; align-items:center; gap:14px; width:100%; padding:14px 0; border-radius:0; background:none; border-bottom:1px solid var(--border); color:var(--text); font-size:1rem; font-weight:500; text-align:left; }
+  button.menu-row:last-child { border-bottom:0; }
+  .menu-ico { width:36px; height:36px; flex:none; border-radius:10px; display:grid; place-items:center; font-size:1.25rem; background:color-mix(in srgb, var(--c) 16%, transparent); }
+  .menu-row .lbl { flex:1; }
+  .menu-row .go { width:64px; height:30px; border-radius:999px; display:grid; place-items:center; background:color-mix(in srgb, var(--text) 7%, transparent); color:var(--b2); font-size:1.2rem; font-weight:700; }
+  .sub-head { position:sticky; top:0; z-index:5; display:none; align-items:center; gap:4px; padding:10px 8px; background:var(--bg); font-weight:700; }
+  .sub-head.on { display:flex; }
+  .sub-head button.back { background:none; color:var(--text); font-size:1.7rem; line-height:1; padding:0 10px; }
+  #mainCard .tab-content:not(#homeTabContent) { padding:0 12px; }
+  .bnav { position:fixed; left:50%; bottom:0; transform:translateX(-50%); z-index:10; display:flex; width:100%; max-width:480px; padding:8px 4px calc(8px + env(safe-area-inset-bottom,0px)); background:var(--card-bg); box-shadow:0 -2px 12px rgba(0,0,0,0.08); }
+  button.bnav-item { flex:1; position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 0; background:none; color:var(--text-muted); font-size:0.68rem; font-weight:500; }
+  button.bnav-item .ic { font-size:1.4rem; filter:grayscale(1); opacity:0.7; }
+  button.bnav-item.active { color:var(--b2); font-weight:700; }
+  button.bnav-item.active .ic { filter:none; opacity:1; }
+  .bnav-item .badge.inactive { position:absolute; top:0; left:calc(50% + 6px); min-width:16px; padding:0 4px; background:#e11d48; color:#fff; font-size:0.6rem; border-radius:999px; }
 </style>
 </head>
 <body>
@@ -76,41 +115,41 @@
   <div id="portalLoading">កំពុងផ្ទុក...</div>
 
   <div class="portal-card" id="loginCard" style="display:none;">
-    <h1>👤 ទំព័របុគ្គលិក</h1>
-    <p class="sub">ចូលគណនីដើម្បីស្កេនវត្តមាន និងមើលវត្តមានផ្ទាល់ខ្លួន</p>
+    <div class="login-logo"><span>N</span><img src="logo.png" alt="" onerror="this.remove()"></div>
     <p class="error-msg" id="loginError"></p>
-    <div class="form-group">
-      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">អត្តលេខ (Employee ID)</label>
-      <input type="text" id="loginUsername" placeholder="ឧ. B-2808" autocomplete="username">
-    </div>
-    <div class="form-group">
-      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់</label>
-      <input type="password" id="loginPassword" autocomplete="current-password">
-    </div>
-    <button class="primary-btn" id="loginBtn">ចូលគណនី</button>
+    <div class="form-group"><input type="text" id="loginUsername" placeholder="អត្តលេខ" autocomplete="username"></div>
+    <div class="form-group"><input type="password" id="loginPassword" placeholder="លេខសម្ងាត់" autocomplete="current-password"></div>
+    <button class="primary-btn" id="loginBtn">ចូលប្រើ</button>
   </div>
 
   <div id="mainCard" style="display:none;">
-    <div class="portal-card" style="margin-bottom:14px;">
-      <div class="who-row">
-        <div class="name" id="empNameDisplay"></div>
-        <button class="logout" id="logoutBtn">ចាកចេញ</button>
+    <div class="sub-head" id="subHead"><button class="back" id="subBack" aria-label="ត្រឡប់ក្រោយ">‹</button><span id="subTitle"></span></div>
+
+    <div id="homeTabContent" class="tab-content active">
+      <div class="home-head"><div class="h-avatar" id="homeAvatar"></div><div><div class="h-hello">សួស្តី 👋</div><div class="h-name" id="homeName"></div></div></div>
+      <div class="banner-track" id="homeBanner"></div>
+      <div class="menu-card">
+        <button class="menu-row" data-go="clock" style="--c:#f59e0b"><span class="menu-ico">🕐</span><span class="lbl">កត់ត្រាវត្តមាន</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="activities" style="--c:#ef4444"><span class="menu-ico">📍</span><span class="lbl">សកម្មភាព</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="leave" style="--c:#3b82f6"><span class="menu-ico">📝</span><span class="lbl">សុំច្បាប់</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="ot" style="--c:#10b981"><span class="menu-ico">⏱</span><span class="lbl">ធ្វើការថែមម៉ោង</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="attendance" style="--c:#8b5cf6"><span class="menu-ico">📅</span><span class="lbl">ប្រតិទិនវត្តមាន</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="payroll" style="--c:#0ea5e9"><span class="menu-ico">💰</span><span class="lbl">ប្រាក់ខែ</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="feedback" style="--c:#ec4899"><span class="menu-ico">💬</span><span class="lbl">មតិកែលម្អ</span><span class="go">›</span></button>
       </div>
-      <div class="emp-info-grid" id="empInfoGrid"></div>
     </div>
 
-    <div class="tabs" id="empTabs">
-      <button class="tab-btn active" data-etab="clock">🕐 ម៉ោងធ្វើការ</button>
-      <button class="tab-btn" data-etab="attendance">📅 វត្តមាន</button>
-      <button class="tab-btn" data-etab="leave">📝 សុំច្បាប់</button>
-      <button class="tab-btn" data-etab="ot">⏱ សុំថែមម៉ោង</button>
-      <button class="tab-btn" data-etab="payroll">💰 ប្រាក់ខែ</button>
-      <button class="tab-btn" data-etab="activities">📍 សកម្មភាព</button>
-      <button class="tab-btn" data-etab="feedback">💬 មតិកែលម្អ</button>
-      <button class="tab-btn" data-etab="notify">🔔 ដំណឹង <span id="nfBadge"></span></button>
+    <div id="profileTabContent" class="tab-content">
+      <div class="portal-card" style="margin-bottom:14px;">
+        <div class="who-row">
+          <div class="name" id="empNameDisplay"></div>
+          <button class="logout" id="logoutBtn">ចាកចេញ</button>
+        </div>
+        <div class="emp-info-grid" id="empInfoGrid"></div>
+      </div>
     </div>
 
-    <div id="clockTabContent" class="tab-content active">
+    <div id="clockTabContent" class="tab-content">
       <div class="portal-card" style="margin-bottom:14px;">
         <div class="clock-box" id="clockBox"></div>
         <div style="margin-top:14px;">
@@ -281,6 +320,13 @@
         <button class="secondary" id="payrollPrintBtn" style="margin-top:8px;width:100%;">🖨 ព្រីន Payslip</button>
       </div>
     </div>
+    <nav class="bnav">
+      <button class="bnav-item active" data-go="home"><span class="ic">🏠</span>ទំព័រដើម</button>
+      <button class="bnav-item" data-go="payroll"><span class="ic">💰</span>ប្រាក់ខែ</button>
+      <button class="bnav-item" data-go="attendance"><span class="ic">📅</span>វត្តមាន</button>
+      <button class="bnav-item" data-go="notify"><span class="ic">🔔</span>ដំណឹង<span id="nfBadge"></span></button>
+      <button class="bnav-item" data-go="profile"><span class="ic">👤</span>ប្រវត្តិរូប</button>
+    </nav>
   </div>
 </div>
 
@@ -568,7 +614,8 @@ async function showMain() {
   document.getElementById('payrollMonthInput').value = thisMonth;
   await renderClockBox();
   await renderHistory();
-  switchEmpTab('clock');
+  renderHome();
+  switchEmpTab('home');
 }
 
 // ==== វេនការងាររបស់បុគ្គលិក ====
@@ -674,6 +721,7 @@ async function refreshAnnouncements(allowPopup) {
     notifiedUpTo = Math.max(notifiedUpTo, latest);
   }
   updateNfBadge();
+  renderHomeBanner();
   if (document.getElementById('notifyTabContent').classList.contains('active')) renderNotifyEmp();
 }
 function updateNfBadge() {
@@ -701,10 +749,33 @@ async function enableBrowserNotifications() {
   alert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
 }
 
+const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', activities:'សកម្មភាព', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
+
+// ==== ទំព័រដើម (Home): banner + ឈ្មោះ ====
+function renderHomeBanner() {
+  const box = document.getElementById('homeBanner');
+  if (!box) return;
+  const list = annCache.slice(0, 5);
+  box.innerHTML = list.length
+    ? list.map(r => `<div class="banner"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div>`).join('')
+    : '<div class="banner"><h3>សូមស្វាគមន៍</h3><p>ចុច «កត់ត្រាវត្តមាន» ដើម្បីស្កេន QR ចូល/ចេញការងារ</p></div>';
+}
+function renderHome() {
+  const e = currentEmployee;
+  if (!e) return;
+  document.getElementById('homeName').textContent = e.name;
+  document.getElementById('homeAvatar').innerHTML = e.photo ? `<img src="${e.photo}" alt="">` : escapeHtml(Array.from(e.name || '?')[0]);
+  renderHomeBanner();
+}
+
 function switchEmpTab(tab) {
-  document.querySelectorAll('#empTabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.etab === tab));
-  const activeBtn = document.querySelector(`#empTabs .tab-btn[data-etab="${tab}"]`);
-  if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  document.querySelectorAll('.bnav-item').forEach(b => b.classList.toggle('active', b.dataset.go === tab));
+  document.getElementById('homeTabContent').classList.toggle('active', tab === 'home');
+  document.getElementById('profileTabContent').classList.toggle('active', tab === 'profile');
+  const st = TAB_TITLES[tab];
+  document.getElementById('subHead').classList.toggle('on', !!st);
+  if (st) document.getElementById('subTitle').textContent = st;
+  window.scrollTo(0, 0);
   document.getElementById('clockTabContent').classList.toggle('active', tab === 'clock');
   document.getElementById('attendanceTabContent').classList.toggle('active', tab === 'attendance');
   document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');
@@ -802,9 +873,8 @@ async function handleEmpScan(decodedText) {
 document.getElementById('actEAddBtn').addEventListener('click', addActivityEmp);
 document.getElementById('fbESendBtn').addEventListener('click', sendFeedbackEmp);
 document.getElementById('nfEnableBtn').addEventListener('click', enableBrowserNotifications);
-document.querySelectorAll('#empTabs .tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchEmpTab(btn.dataset.etab));
-});
+document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('click', () => switchEmpTab(btn.dataset.go)));
+document.getElementById('subBack').addEventListener('click', () => switchEmpTab('home'));
 document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
 document.getElementById('payrollMonthInput').addEventListener('change', renderPayrollSummary);
