@@ -600,11 +600,30 @@ th { font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 7
   input, select, textarea { font-size: 16px; }
 }
 
-/* ==== ជួរសរុបចុងតារាង ==== */
-tfoot .total-row td {
-  font-weight: 700;
-  background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
-  border-top: 2px solid var(--accent);
-  border-bottom: none;
+/* ==== ប្រអប់សង្ខេប (stat cards)៖ លេខតូចជាងមុន មិនបែកបន្ទាត់ តម្រឹមស្មើគ្នា ==== */
+.stats, .attendance-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
 }
-tfoot .total-row td:first-child { text-align: left; }
+.stat-card, .attendance-stats .stat-card {
+  min-width: 0;
+  padding: 9px 10px;
+}
+.stat-card .num,
+.attendance-stats .stat-card .num {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card .label,
+.attendance-stats .stat-card .label {
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+@media (max-width: 720px) {
+  .stats, .attendance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stat-card .num, .attendance-stats .stat-card .num { font-size: 0.95rem; }
+}
