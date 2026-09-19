@@ -240,7 +240,7 @@
         <input type="text" id="dedSearch" placeholder="🔍 ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
         <select id="dedFilter">
           <option value="any">មានយឺត ឬ ច្បាប់</option>
-          <option value="late">មកយឺតតែប៉ុណ្ណោះ</option>
+          <option value="late">យឺត/ចេញមុនតែប៉ុណ្ណោះ</option>
           <option value="leave">សុំច្បាប់តែប៉ុណ្ណោះ</option>
           <option value="all">បុគ្គលិកទាំងអស់</option>
         </select>
@@ -252,11 +252,15 @@
       <h3 style="font-size:0.85rem;margin:0 0 10px;">⚙️ លក្ខខណ្ឌកាត់លុយ</h3>
       <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="form-group" style="margin:0;">
-          <label>កាត់ក្នុងមួយថ្ងៃដែលមកយឺត ($)</label>
+          <label>ទុកឥតកាត់ (នាទី/ខែ) — យឺត + ចេញមុន</label>
+          <input type="number" id="dedGrace" min="0" step="1" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>កាត់ក្នុងមួយថ្ងៃដែលយឺត/ចេញមុន ($)</label>
           <input type="number" id="dedLatePerDay" min="0" step="0.01" style="width:150px;">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>កាត់ក្នុងមួយនាទីដែលយឺត ($)</label>
+          <label>កាត់ក្នុងមួយនាទីដែលលើសកំណត់ ($)</label>
           <input type="number" id="dedLatePerMin" min="0" step="0.001" style="width:150px;">
         </div>
         <div class="form-group" style="margin:0;">
@@ -272,7 +276,7 @@
           <input type="checkbox" id="dedLeaveFood"> កាត់ប្រាក់បាយថ្ងៃច្បាប់ផងដែរ
         </label>
       </div>
-      <p class="scan-hint">*មកយឺតត្រូវបានកាត់ម៉ោងធ្វើការចេញពីប្រាក់ខែក្នុងតារាងវត្តមានរួចហើយ (ព្រោះគិតប្រាក់តាមម៉ោង)។ ចំនួន "កាត់ពេលយឺត" ខាងក្រោមគឺជាការពិន័យបន្ថែម — ទុក 0 បើមិនចង់ពិន័យបន្ថែម។ ថ្ងៃច្បាប់ក្នុងតារាងវត្តមានត្រូវបានបង់ប្រាក់ពេញថ្ងៃ ដូច្នេះការកាត់ច្បាប់នៅទីនេះនឹងដកវាចេញវិញ។</p>
+      <p class="scan-hint">*ចូលយឺត និងចេញមុនម៉ោង ត្រូវបូកបញ្ចូលគ្នាក្នុងមួយខែ។ បើសរុបមិនលើសនាទី "ទុកឥតកាត់" (លំនាំដើម 16 នាទី) នោះមិនកាត់ទេ។ បើលើស ទើបកាត់៖ (ចំនួនថ្ងៃដែលយឺត/ចេញមុន × ថ្លៃក្នុងមួយថ្ងៃ) + (នាទីដែលលើស × ថ្លៃក្នុងមួយនាទី)។ ម៉ោងធ្វើការដែលខ្វះ ត្រូវបានដកចេញពីប្រាក់ខែក្នុងតារាងវត្តមានរួចហើយ ដូច្នេះចំនួននេះជាការពិន័យបន្ថែម — ទុក 0 បើមិនចង់ពិន័យបន្ថែម។ ថ្ងៃច្បាប់ក្នុងតារាងវត្តមានត្រូវបានបង់ប្រាក់ពេញថ្ងៃ ដូច្នេះការកាត់ច្បាប់នៅទីនេះនឹងដកវាចេញវិញ។</p>
     </div>
 
     <div class="attendance-stats" id="dedStats"></div>
@@ -281,8 +285,8 @@
       <table>
         <thead>
           <tr>
-            <th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ថ្ងៃមកយឺត</th><th>នាទីយឺតសរុប</th><th>ថ្ងៃសុំច្បាប់</th>
-            <th>កាត់ពេលយឺត ($)</th><th>កាត់ច្បាប់ ($)</th><th>សរុបកាត់ ($)</th><th>ថ្ងៃលម្អិត</th><th>សកម្មភាព</th>
+            <th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ថ្ងៃយឺត/ចេញមុន</th><th>នាទីយឺត + ចេញមុន</th><th>ថ្ងៃសុំច្បាប់</th>
+            <th>កាត់យឺត/ចេញមុន ($)</th><th>កាត់ច្បាប់ ($)</th><th>សរុបកាត់ ($)</th><th>ថ្ងៃលម្អិត</th><th>សកម្មភាព</th>
           </tr>
         </thead>
         <tbody id="dedBody"></tbody>

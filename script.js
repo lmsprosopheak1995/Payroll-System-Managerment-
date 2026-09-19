@@ -1471,7 +1471,7 @@ function stopScanner() {
 
 // ==== យឺត / ច្បាប់ → កាត់លុយ ====
 const DEDUCT_RULES_KEY = 'deduct_rules_v1';
-const DEDUCT_DEFAULTS = { latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false };
+const DEDUCT_DEFAULTS = { graceMinutes: 16, latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false };
 
 function loadDeductRules() {
   try {
@@ -1486,6 +1486,8 @@ function saveDeductRules() {
 let deductRules = loadDeductRules();
 
 function readDeductControls() {
+  const g = parseFloat(document.getElementById('dedGrace').value);
+  deductRules.graceMinutes = isNaN(g) ? 0 : Math.max(0, g);
   deductRules.latePerDay = parseFloat(document.getElementById('dedLatePerDay').value) || 0;
   deductRules.latePerMin = parseFloat(document.getElementById('dedLatePerMin').value) || 0;
   deductRules.leaveFood = document.getElementById('dedLeaveFood').checked;
@@ -1493,6 +1495,7 @@ function readDeductControls() {
   saveDeductRules();
 }
 function initDeductControls() {
+  document.getElementById('dedGrace').value = deductRules.graceMinutes;
   document.getElementById('dedLatePerDay').value = deductRules.latePerDay;
   document.getElementById('dedLatePerMin').value = deductRules.latePerMin;
   document.getElementById('dedLeaveFood').checked = !!deductRules.leaveFood;
@@ -1510,15 +1513,27 @@ function calcDeductionRow(emp, month) {
   const startMin = lateStartMinutes(getEmpShift(emp.id));
   const approved = leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved');
 
-  let lateDays = 0, lateMinutes = 0, leaveDays = 0, deductibleLeaveDays = 0;
+  const shift = getEmpShift(emp.id);
+  let lateDays = 0, lateMinutes = 0, earlyDays = 0, earlyMinutes = 0, violDays = 0, leaveDays = 0, deductibleLeaveDays = 0;
   const lateDates = [], leaveDates = [];
 
   daysInMonth(month).forEach(date => {
     const rec = attendance[date] && attendance[date][emp.id];
     if (!rec) return;
-    if (rec.status === 'present' && rec.checkin && startMin !== null) {
-      const m = timeToMinutes(rec.checkin) - startMin;
-      if (m > 0) { lateDays++; lateMinutes += m; lateDates.push(`${date.slice(8)} (+${m} នាទី)`); }
+    if (rec.status === 'present') {
+      let flagged = false;
+      const inMin = timeToMinutes(rec.checkin);
+      if (inMin !== null && startMin !== null) {
+        const m = inMin - startMin;
+        if (m > 0) { lateDays++; lateMinutes += m; flagged = true; lateDates.push(`${date.slice(8)} (យឺត ${m}′)`); }
+      }
+      // ចេញមុនម៉ោង៖ ស្កេនចេញមុនម៉ោងចេញរបស់វេន
+      const outMin = timeToMinutes(rec.checkout);
+      if (outMin !== null && (inMin === null || outMin > inMin)) {
+        const em = shift.end - outMin;
+        if (em > 0) { earlyDays++; earlyMinutes += em; flagged = true; lateDates.push(`${date.slice(8)} (ចេញមុន ${em}′)`); }
+      }
+      if (flagged) violDays++;
     } else if (rec.status === 'leave') {
       const req = approved.find(r => r.start_date <= date && date <= r.end_date);
       const type = req && LEAVE_TYPE_LABELS[req.leave_type] ? req.leave_type : 'other';
@@ -1530,9 +1545,14 @@ function calcDeductionRow(emp, month) {
 
   const round4 = n => Math.round(n * 10000) / 10000;
   const perLeaveDay = dailyRate + (deductRules.leaveFood ? (settings.foodDaily || 0) / exRate : 0);
-  const lateDeduct = round4(lateDays * deductRules.latePerDay + lateMinutes * deductRules.latePerMin);
+  // យឺត + ចេញមុន សរុបក្នុងមួយខែ៖ ក្នុងកំណត់ (graceMinutes) មិនកាត់; លើសពីនោះទើបកាត់
+  const violMinutes = lateMinutes + earlyMinutes;
+  const grace = deductRules.graceMinutes;
+  const exceeded = violMinutes > grace;
+  const excessMinutes = exceeded ? violMinutes - grace : 0;
+  const lateDeduct = exceeded ? round4(violDays * deductRules.latePerDay + excessMinutes * deductRules.latePerMin) : 0;
   const leaveDeduct = round4(deductibleLeaveDays * perLeaveDay);
-  return { lateDays, lateMinutes, leaveDays, deductibleLeaveDays, lateDates, leaveDates, lateDeduct, leaveDeduct, total: round4(lateDeduct + leaveDeduct) };
+  return { lateDays, lateMinutes, earlyDays, earlyMinutes, violDays, violMinutes, grace, exceeded, excessMinutes, leaveDays, deductibleLeaveDays, lateDates, leaveDates, lateDeduct, leaveDeduct, total: round4(lateDeduct + leaveDeduct) };
 }
 
 function renderDeductTab() {
@@ -1547,19 +1567,19 @@ function renderDeductTab() {
     .map(e => ({ emp: e, r: calcDeductionRow(e, month) }))
     .filter(({ r }) => {
       if (search) return true; // ស្វែងរកជាក់លាក់ → បង្ហាញតែងតែ (អាចបន្ថែមអត្ថប្រយោជន៍ដល់អ្នកដែលមិនយឺត/មិនសុំច្បាប់)
-      if (filter === 'late') return r.lateDays > 0;
+      if (filter === 'late') return r.violDays > 0;
       if (filter === 'leave') return r.leaveDays > 0;
-      if (filter === 'any') return r.lateDays > 0 || r.leaveDays > 0;
+      if (filter === 'any') return r.violDays > 0 || r.leaveDays > 0;
       return true;
     });
 
   const sum = rows.reduce((a, { r }) => ({
-    late: a.late + r.lateDays, leave: a.leave + r.leaveDays, total: a.total + r.total,
+    late: a.late + r.violDays, leave: a.leave + r.leaveDays, total: a.total + r.total,
   }), { late: 0, leave: 0, total: 0 });
 
   document.getElementById('dedStats').innerHTML = `
     <div class="stat-card"><div class="num">${rows.length}</div><div class="label">បុគ្គលិកក្នុងបញ្ជី</div></div>
-    <div class="stat-card"><div class="num">${sum.late}</div><div class="label">ថ្ងៃមកយឺតសរុប</div></div>
+    <div class="stat-card"><div class="num">${sum.late}</div><div class="label">ថ្ងៃយឺត/ចេញមុនសរុប</div></div>
     <div class="stat-card"><div class="num">${sum.leave}</div><div class="label">ថ្ងៃសុំច្បាប់សរុប</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(sum.total)}</div><div class="label">ប្រាក់ត្រូវកាត់សរុប ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(sum.total * (settings.exchangeRate || 0))} ៛</div><div class="label">ប្រាក់ត្រូវកាត់សរុប (រៀល)</div></div>`;
@@ -1574,12 +1594,12 @@ function renderDeductTab() {
     if (r.total <= 0) action = existing ? `<button class="danger" onclick="removeDeductionItem('${emp.id}')">🗑 ដកចេញ</button>` : '-';
     else if (existing && Math.abs(existing.amount - r.total) < 0.00005) action = '<span class="badge active">✓ បានបន្ថែមហើយ</span>';
     else action = `<button onclick="applyDeductionItem('${emp.id}')">${existing ? '🔄 អាប់ដេត' : '➕ បន្ថែមប្រាក់កាត់'}</button>`;
-    const detail = [r.lateDates.length ? 'យឺត៖ ' + r.lateDates.join(', ') : '', r.leaveDates.length ? 'ច្បាប់៖ ' + r.leaveDates.join(', ') : ''].filter(Boolean).join(' | ');
+    const detail = [r.lateDates.length ? 'យឺត/ចេញមុន៖ ' + r.lateDates.join(', ') : '', r.leaveDates.length ? 'ច្បាប់៖ ' + r.leaveDates.join(', ') : ''].filter(Boolean).join(' | ');
     return `<tr>
       <td>${escapeHtml(emp.username || '-')}</td>
       <td>${escapeHtml(emp.name)}</td>
-      <td>${r.lateDays ? `<span class="badge inactive">${r.lateDays}</span>` : '-'}</td>
-      <td>${r.lateMinutes || '-'}</td>
+      <td>${r.violDays ? `<span class="badge inactive">${r.violDays}</span>` : '-'}</td>
+      <td>${r.violMinutes ? `${r.violMinutes} <small style="color:var(--text-muted);">(យឺត ${r.lateMinutes} + មុន ${r.earlyMinutes})</small><br>${r.exceeded ? `<span class="badge inactive">លើស ${r.excessMinutes} នាទី</span>` : `<span class="badge active">ក្នុងកំណត់ ${r.violMinutes}/${r.grace}</span>`}` : '-'}</td>
       <td>${r.leaveDays ? `<span class="badge pending">${r.leaveDays}</span>` : '-'}</td>
       <td>$${fmtUSD(r.lateDeduct)}</td>
       <td>$${fmtUSD(r.leaveDeduct)}</td>
@@ -1713,7 +1733,7 @@ document.getElementById('reqStatusFilter').addEventListener('change', renderRequ
 initDeductControls();
 ['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
 document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
-['dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
+['dedGrace', 'dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
 document.querySelectorAll('.ded-leave-type').forEach(c => c.addEventListener('change', () => { readDeductControls(); renderDeductTab(); }));
 document.getElementById('dedApplyAllBtn').addEventListener('click', applyAllDeductions);
 payLive = setupLiveSearch('payrollSearch', 'payrollEmployeeSelect', renderPayrollTab);
