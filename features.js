@@ -1,19 +1,16 @@
 /* ==========================================================================
-   features.js — មុខងារថ្មី៖ Dashboard, Super Stars, Org Chart, Activities,
-   KPI, Push Notifications, Feedback, Shift, Setting
+   features.js — មុខងារថ្មី៖ Dashboard, Push Notifications, Feedback, Shift, Setting
    ចាំបាច់ត្រូវដំណើរការ features.sql ក្នុង Supabase សម្រាប់តារាងថ្មីៗ។
    (ឯកសារនេះត្រូវផ្ទុកមុន script.js — មុខងារទាំងអស់ត្រូវបានហៅតាមរយៈ hooks)
    ========================================================================== */
 
-let kpiRows = [], feedbackRows = [], activityRows = [], announcementRows = [];
+let feedbackRows = [], announcementRows = [];
 const featureErrors = {}; // table -> error message (មានន័យថាតារាងមិនទាន់មាន)
-let kpiLive = null, actLive = null, annLive = null;
+let annLive = null;
 
 const FEATURE_TABLES = {
   shifts: 'វេនការងារ (Shift)',
   shift_assignments: 'ការចាត់តាំងវេន',
-  kpi_records: 'KPI',
-  activities: 'Activities',
   feedback: 'Feedback',
   announcements: 'Push Notifications',
 };
@@ -37,14 +34,12 @@ async function fetchTable(table) {
 }
 
 async function loadFeatureData() {
-  const [sh, sa, kp, ac, fb, an] = await Promise.all(
-    ['shifts', 'shift_assignments', 'kpi_records', 'activities', 'feedback', 'announcements'].map(fetchTable)
+  const [sh, sa, fb, an] = await Promise.all(
+    ['shifts', 'shift_assignments', 'feedback', 'announcements'].map(fetchTable)
   );
   shifts = sh;
   shiftAssign = {};
   sa.forEach(r => { shiftAssign[r.employee_id] = r.shift_id; });
-  kpiRows = kp;
-  activityRows = ac;
   feedbackRows = fb.sort(byCreatedDesc);
   announcementRows = an.sort(byCreatedDesc);
 }
@@ -88,24 +83,12 @@ function fillEmployeeSelect(selId) {
 // --------------------------------------------------------------- wiring ----
 function initFeatures() {
   const month = todayStr().slice(0, 7);
-  ['dashMonth', 'starMonth', 'actMonth', 'kpiMonth'].forEach(id => { byId(id).value = month; });
-  byId('actDate').value = todayStr();
+  byId('dashMonth').value = month;
 
-  kpiLive = setupLiveSearch('kpiSearch', 'kpiEmployeeSelect', renderKpi);
-  actLive = setupLiveSearch('actEmpSearch', 'actEmployeeSelect', () => {});
   annLive = setupLiveSearch('annEmpSearch', 'annEmployeeSelect', () => {});
 
   byId('dashMonth').addEventListener('change', renderDashboard);
   byId('dashSearchInput').addEventListener('input', renderDashSearch);
-  byId('starMonth').addEventListener('change', renderStars);
-  byId('orgSearch').addEventListener('input', renderOrgChart);
-  byId('orgShowInactive').addEventListener('change', renderOrgChart);
-  byId('actMonth').addEventListener('change', renderActivities);
-  byId('actSearch').addEventListener('input', renderActivities);
-  byId('actAddBtn').addEventListener('click', addActivity);
-  byId('kpiMonth').addEventListener('change', renderKpi);
-  byId('kpiAddBtn').addEventListener('click', addKpi);
-  byId('kpiCopyBtn').addEventListener('click', copyKpiFromPrevMonth);
   byId('annTargetType').addEventListener('change', onAnnTargetChange);
   byId('annSendBtn').addEventListener('click', sendAnnouncement);
   byId('annImage').addEventListener('change', e => handleAnnImage(e.target.files[0]));
@@ -126,13 +109,9 @@ function initFeatures() {
 }
 
 function renderFeatures() {
-  ['kpiEmployeeSelect', 'actEmployeeSelect', 'annEmployeeSelect'].forEach(fillEmployeeSelect);
-  [kpiLive, actLive, annLive].forEach(l => l && l.sync());
+  fillEmployeeSelect('annEmployeeSelect');
+  if (annLive) annLive.sync();
   renderDashboard();
-  renderStars();
-  renderOrgChart();
-  renderActivities();
-  renderKpi();
   renderAnnouncements();
   renderFeedback();
   renderShift();
@@ -141,8 +120,7 @@ function renderFeatures() {
 
 function onFeatureTab(tab) {
   const map = {
-    dashboard: renderDashboard, superstars: renderStars, orgchart: renderOrgChart,
-    activities: renderActivities, kpi: renderKpi, notify: renderAnnouncements,
+    dashboard: renderDashboard, notify: renderAnnouncements,
     feedback: renderFeedback, shift: renderShift, setting: renderSetting,
   };
   if (map[tab]) map[tab]();
@@ -301,241 +279,6 @@ function renderDashboard() {
       <button class="secondary" onclick="showTab('feedback')">💬 Feedback ថ្មី: <strong>${newFb}</strong></button>
       <button class="secondary" onclick="showTab('deduct')">⏰ យឺត/ច្បាប់ ក្នុងខែ: <strong>${lateDays + leaveDays}</strong></button>
     </div>`;
-}
-
-// ---------------------------------------------------------- Super Stars ----
-function kpiForEmp(empId, month) { return kpiRows.filter(r => r.employee_id === empId && r.month === month); }
-
-function kpiScoreFor(empId, month) {
-  const rows = kpiForEmp(empId, month);
-  const totalWeight = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
-  if (!rows.length || totalWeight <= 0) return { score: null, totalWeight, count: rows.length };
-  const sum = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0) * (parseFloat(r.score) || 0), 0);
-  return { score: Math.round(sum / totalWeight * 10) / 10, totalWeight, count: rows.length };
-}
-
-function kpiGrade(score) {
-  if (score === null || score === undefined) return '-';
-  if (score >= 90) return 'A · ឆ្នើម';
-  if (score >= 80) return 'B · ល្អ';
-  if (score >= 70) return 'C · មធ្យម';
-  if (score >= 60) return 'D · ខ្សោយ';
-  return 'E · ត្រូវកែលម្អ';
-}
-
-function starData(month) {
-  const dates = daysInMonth(month);
-  return activeEmployeesList().map(e => {
-    let present = 0, late = 0, absent = 0;
-    const sh = getEmpShift(e.id);
-    dates.forEach(d => {
-      const rec = attendance[d] && attendance[d][e.id];
-      if (!rec) return;
-      if (rec.status === 'present') {
-        present++;
-        const m = timeToMinutes(rec.checkin);
-        if (m !== null && m > lateStartMinutes(sh)) late++;
-      } else if (rec.status === 'absent') absent++;
-    });
-    const att = Math.max(0, 100 - late * 5 - absent * 10);
-    const k = kpiScoreFor(e.id, month);
-    const final = k.score === null ? att : Math.round((0.6 * k.score + 0.4 * att) * 10) / 10;
-    return { e, present, late, absent, att, kpi: k.score, final };
-  }).filter(x => x.present > 0)
-    .sort((a, b) => b.final - a.final || a.late - b.late || b.present - a.present);
-}
-
-function renderStars() {
-  const monthEl = byId('starMonth');
-  if (!monthEl) return;
-  const month = monthEl.value || todayStr().slice(0, 7);
-  const data = starData(month);
-  byId('starEmpty').style.display = data.length ? 'none' : 'block';
-
-  const medals = ['🥇', '🥈', '🥉'];
-  const top = data.slice(0, 3);
-  const order = top.length === 3 ? [1, 0, 2] : top.map((_, i) => i); // 2nd, 1st, 3rd
-  byId('starPodium').innerHTML = top.length ? order.map(i => {
-    const x = top[i];
-    return `<div class="podium-item rank${i + 1}">
-      <div class="podium-medal">${medals[i]}</div>
-      <div class="podium-avatar">${avatarInner(x.e)}</div>
-      <div class="podium-name">${escapeHtml(x.e.name)}</div>
-      <div class="podium-score">⭐ ${x.final}</div>
-    </div>`;
-  }).join('') : '';
-
-  byId('starBody').innerHTML = data.map((x, i) => `<tr>
-    <td>${i < 3 ? medals[i] : i + 1}</td>
-    <td>${escapeHtml(x.e.username || '-')}</td>
-    <td>${escapeHtml(x.e.name)}</td>
-    <td>${x.present}</td><td>${x.late || '-'}</td><td>${x.absent || '-'}</td>
-    <td>${x.att}</td><td>${x.kpi === null ? '-' : x.kpi}</td>
-    <td><strong>${x.final}</strong></td></tr>`).join('');
-}
-
-// ------------------------------------------------------------- Org Chart ---
-function renderOrgChart() {
-  const box = byId('orgChart');
-  if (!box) return;
-  const q = byId('orgSearch').value.toLowerCase().trim();
-  const showInactive = byId('orgShowInactive').checked;
-  const list = employees.filter(e =>
-    (showInactive || e.status === 'active') &&
-    (!q || [e.name, e.username, e.position, e.dept].some(v => (v || '').toLowerCase().includes(q))));
-
-  const groups = {};
-  list.forEach(e => { const k = e.dept || '(មិនមានផ្នែក)'; (groups[k] = groups[k] || []).push(e); });
-  const names = Object.keys(groups).sort();
-
-  if (!list.length) { box.innerHTML = '<div class="empty-state">រកមិនឃើញបុគ្គលិកទេ</div>'; return; }
-  box.innerHTML = `
-    <div class="org-root"><div class="org-root-card">🏢 ក្រុមហ៊ុន<br><small>${list.length} នាក់ · ${names.length} ផ្នែក</small></div></div>
-    <div class="org-line"></div>
-    <div class="org-depts">
-      ${names.map(k => `
-        <div class="org-dept">
-          <div class="org-dept-head">📁 ${escapeHtml(k)} <span class="badge active">${groups[k].length}</span></div>
-          ${groups[k].sort((a, b) => (a.position || '').localeCompare(b.position || '') || (a.name || '').localeCompare(b.name || '')).map(e => `
-            <div class="org-member${e.status !== 'active' ? ' inactive' : ''}">
-              <div class="org-avatar">${avatarInner(e)}</div>
-              <div class="org-info"><div class="org-name">${escapeHtml(e.name)}</div>
-              <div class="org-pos">${escapeHtml(e.position || '-')}${e.username ? ' · ' + escapeHtml(e.username) : ''}</div></div>
-            </div>`).join('')}
-        </div>`).join('')}
-    </div>`;
-}
-
-// ------------------------------------------------------------ Activities ---
-function renderActivities() {
-  const body = byId('actBody');
-  if (!body) return;
-  showTableWarn('actWarn', 'activities');
-  const month = byId('actMonth').value || todayStr().slice(0, 7);
-  const q = byId('actSearch').value;
-  const rows = activityRows
-    .filter(r => (r.date || '').startsWith(month))
-    .filter(r => { const e = empById(r.employee_id); return e ? employeeMatchesSearch(e, q) : !q; })
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || byCreatedDesc(a, b));
-  byId('actEmpty').style.display = rows.length ? 'none' : 'block';
-  body.innerHTML = rows.map(r => {
-    const e = empById(r.employee_id);
-    return `<tr>
-      <td>${escapeHtml(r.date)}</td>
-      <td>${escapeHtml(e ? (e.username || '-') : '-')}</td>
-      <td>${escapeHtml(e ? e.name : r.employee_id)}</td>
-      <td style="white-space:normal;">${escapeHtml(r.title)}</td>
-      <td style="white-space:normal;max-width:280px;">${escapeHtml(r.note || '')}</td>
-      <td><button class="danger" onclick="deleteActivity('${escapeHtml(r.id)}')">🗑</button></td></tr>`;
-  }).join('');
-}
-
-async function addActivity() {
-  const empId = byId('actEmployeeSelect').value;
-  const date = byId('actDate').value;
-  const title = byId('actTitle').value.trim();
-  const note = byId('actNote').value.trim();
-  if (!empId || !date || !title) { customAlert('សូមជ្រើសរើសបុគ្គលិក ថ្ងៃ និងបំពេញចំណងជើង'); return; }
-  const row = { id: uid(), employee_id: empId, date, title, note, created_at: new Date().toISOString() };
-  if (!(await dbUpsert('activities', row))) return;
-  activityRows.push(row);
-  byId('actTitle').value = ''; byId('actNote').value = '';
-  renderActivities();
-}
-
-async function deleteActivity(id) {
-  if (!(await customConfirm('លុបសកម្មភាពនេះ?'))) return;
-  if (!(await dbDelete('activities', 'id', id))) return;
-  activityRows = activityRows.filter(r => r.id !== id);
-  renderActivities();
-}
-
-// ------------------------------------------------------------------- KPI ---
-function currentKpiEmp() { return byId('kpiEmployeeSelect').value; }
-function currentKpiMonth() { return byId('kpiMonth').value || todayStr().slice(0, 7); }
-
-function renderKpi() {
-  const body = byId('kpiBody');
-  if (!body) return;
-  showTableWarn('kpiWarn', 'kpi_records');
-  const empId = currentKpiEmp(), month = currentKpiMonth();
-  const rows = kpiForEmp(empId, month);
-  const k = kpiScoreFor(empId, month);
-  const e = empById(empId);
-  const wOk = Math.round(k.totalWeight) === 100;
-  byId('kpiSummary').innerHTML =
-    statCard(escapeHtml(e ? e.name : '-'), 'បុគ្គលិក') +
-    statCard(k.totalWeight + '%', 'ទម្ងន់សរុប' + (rows.length && !wOk ? ' (គួរស្មើ 100%)' : ''), rows.length && !wOk ? '#d97706' : '') +
-    statCard(k.score === null ? '-' : k.score, 'ពិន្ទុ KPI (ទម្ងន់)') +
-    statCard(kpiGrade(k.score), 'ថ្នាក់');
-  byId('kpiEmpty').style.display = rows.length ? 'none' : 'block';
-  body.innerHTML = rows.map(r => `<tr>
-    <td><input type="text" value="${escapeHtml(r.name)}" onchange="updateKpi('${escapeHtml(r.id)}','name',this.value)" style="width:100%;min-width:160px;text-align:left;"></td>
-    <td><input type="number" min="0" max="100" value="${parseFloat(r.weight) || 0}" onchange="updateKpi('${escapeHtml(r.id)}','weight',this.value)" style="width:90px;"></td>
-    <td><input type="number" min="0" max="100" value="${parseFloat(r.score) || 0}" onchange="updateKpi('${escapeHtml(r.id)}','score',this.value)" style="width:90px;"></td>
-    <td><button class="danger" onclick="deleteKpi('${escapeHtml(r.id)}')">🗑</button></td></tr>`).join('');
-
-  byId('kpiAllBody').innerHTML = activeEmployeesList().map(x => {
-    const s = kpiScoreFor(x.id, month);
-    return `<tr style="cursor:pointer;" onclick="pickKpiEmployee('${escapeHtml(x.id)}')">
-      <td>${escapeHtml(x.username || '-')}</td><td>${escapeHtml(x.name)}</td><td>${s.count || '-'}</td>
-      <td>${s.count ? s.totalWeight + '%' : '-'}</td><td>${s.score === null ? '-' : s.score}</td><td>${kpiGrade(s.score)}</td></tr>`;
-  }).join('');
-}
-
-function pickKpiEmployee(id) {
-  byId('kpiEmployeeSelect').value = id;
-  if (kpiLive) kpiLive.sync();
-  renderKpi();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function clamp100(v) { const n = parseFloat(v); return isNaN(n) ? 0 : Math.max(0, Math.min(100, n)); }
-
-async function addKpi() {
-  const empId = currentKpiEmp(), month = currentKpiMonth();
-  const name = byId('kpiName').value.trim();
-  if (!empId) { customAlert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
-  if (!name) { customAlert('សូមបញ្ចូលឈ្មោះសូចនាករ'); return; }
-  const row = { id: uid(), employee_id: empId, month, name, weight: clamp100(byId('kpiWeight').value), score: clamp100(byId('kpiScore').value), created_at: new Date().toISOString() };
-  if (!(await dbUpsert('kpi_records', row))) return;
-  kpiRows.push(row);
-  byId('kpiName').value = ''; byId('kpiWeight').value = ''; byId('kpiScore').value = '';
-  renderKpi(); renderStars(); renderDashboard();
-}
-
-async function updateKpi(id, field, value) {
-  const row = kpiRows.find(r => r.id === id);
-  if (!row) return;
-  const next = { ...row, [field]: field === 'name' ? String(value).trim() : clamp100(value) };
-  if (field === 'name' && !next.name) { renderKpi(); return; }
-  if (!(await dbUpsert('kpi_records', next))) { renderKpi(); return; }
-  Object.assign(row, next);
-  renderKpi(); renderStars();
-}
-
-async function deleteKpi(id) {
-  if (!(await customConfirm('លុប KPI នេះ?'))) return;
-  if (!(await dbDelete('kpi_records', 'id', id))) return;
-  kpiRows = kpiRows.filter(r => r.id !== id);
-  renderKpi(); renderStars();
-}
-
-async function copyKpiFromPrevMonth() {
-  const empId = currentKpiEmp(), month = currentKpiMonth();
-  if (!empId) return;
-  const [y, m] = month.split('-').map(Number);
-  const prev = new Date(y, m - 2, 1);
-  const prevMonth = prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
-  const existing = new Set(kpiForEmp(empId, month).map(r => r.name));
-  const src = kpiForEmp(empId, prevMonth).filter(r => !existing.has(r.name));
-  if (!src.length) { customAlert('មិនមាន KPI ពីខែមុន (' + prevMonth + ') ដើម្បីចម្លងទេ'); return; }
-  for (const r of src) {
-    const row = { id: uid(), employee_id: empId, month, name: r.name, weight: r.weight, score: 0, created_at: new Date().toISOString() };
-    if (!(await dbUpsert('kpi_records', row))) break;
-    kpiRows.push(row);
-  }
-  renderKpi(); renderStars();
 }
 
 // ---------------------------------------------- Push Notifications (admin) --

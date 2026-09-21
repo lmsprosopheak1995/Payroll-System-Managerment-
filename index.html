@@ -49,8 +49,6 @@
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-brand">🏢 ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក</div>
     <button class="nav-item active" data-tab="dashboard"><span class="ico">📊</span><span class="lbl">Dashboard</span></button>
-    <button class="nav-item" data-tab="superstars"><span class="ico">⭐</span><span class="lbl">Super Stars</span></button>
-    <button class="nav-item" data-tab="orgchart"><span class="ico">🗂</span><span class="lbl">Org Chart</span></button>
     <button class="nav-item" data-tab="employees"><span class="ico">👥</span><span class="lbl">បញ្ជីបុគ្គលិក</span></button>
     <div class="nav-group open">
       <button class="nav-item nav-parent"><span class="ico">🗓</span><span class="lbl">Attendances</span><span class="chev">‹</span></button>
@@ -59,8 +57,6 @@
         <button class="nav-item" data-tab="scan"><span class="dot"></span><span class="lbl">ស្កេនចូល-ចេញ</span></button>
       </div>
     </div>
-    <button class="nav-item" data-tab="activities"><span class="ico">📍</span><span class="lbl">Activities</span></button>
-    <button class="nav-item" data-tab="kpi"><span class="ico">🎯</span><span class="lbl">KPI</span></button>
     <button class="nav-item" data-tab="requests"><span class="ico">📝</span><span class="lbl">Leave / Overtime <span id="pendingReqBadge"></span></span></button>
     <button class="nav-item" data-tab="leavebalance"><span class="ico">🌴</span><span class="lbl">ច្បាប់ប្រចាំឆ្នាំ</span></button>
     <button class="nav-item" data-tab="notify"><span class="ico">🔔</span><span class="lbl">Push Notifications</span></button>
@@ -493,84 +489,6 @@
       </div>
     </div>
     <div class="scan-result-card" id="dashAlerts" style="margin-top:14px;"></div>
-  </div>
-
-  <div id="superstarsTab" class="tab-content">
-    <div class="attendance-controls">
-      <h2 class="page-title">⭐ Super Stars — បុគ្គលិកឆ្នើមប្រចាំខែ</h2>
-      <input type="month" id="starMonth">
-    </div>
-    <div id="starPodium" class="podium"></div>
-    <p class="scan-hint">ពិន្ទុ = KPI 60% + វត្តមាន 40% (បើមិនមាន KPI ប្រើវត្តមានតែម្យ៉ាង)។ ពិន្ទុវត្តមាន = 100 − (5 × ថ្ងៃយឺត) − (10 × ថ្ងៃអវត្តមាន)។ ត្រូវមានថ្ងៃមកធ្វើការយ៉ាងតិច ១ ថ្ងៃ។</p>
-    <div class="table-wrap">
-      <table><thead><tr><th>#</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃមក</th><th>យឺត</th><th>អវត្តមាន</th><th>វត្តមាន</th><th>KPI</th><th>ពិន្ទុសរុប</th></tr></thead><tbody id="starBody"></tbody></table>
-      <div class="empty-state" id="starEmpty" style="display:none;">មិនទាន់មានទិន្នន័យវត្តមានក្នុងខែនេះទេ</div>
-    </div>
-  </div>
-
-  <div id="orgchartTab" class="tab-content">
-    <div class="attendance-controls">
-      <h2 class="page-title">🗂 Org Chart — រចនាសម្ព័ន្ធតាមផ្នែក</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input type="text" id="orgSearch" placeholder="🔍 អត្តលេខ / ឈ្មោះ / តួនាទី / ផ្នែក..." style="min-width:220px;">
-        <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;"><input type="checkbox" id="orgShowInactive"> បង្ហាញអ្នកឈប់ផង</label>
-      </div>
-    </div>
-    <div id="orgChart"></div>
-  </div>
-
-  <div id="activitiesTab" class="tab-content">
-    <div class="attendance-controls">
-      <h2 class="page-title">📍 Activities — កត់ត្រាសកម្មភាព</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input type="month" id="actMonth">
-        <input type="text" id="actSearch" placeholder="🔍 ត្រងតាមអត្តលេខ / ឈ្មោះ..." style="min-width:200px;">
-      </div>
-    </div>
-    <p class="scan-hint danger-text" id="actWarn" style="display:none;"></p>
-    <div class="scan-result-card" style="margin-bottom:14px;">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="form-group" style="margin:0;"><label>បុគ្គលិក</label><div class="live-search"><input type="text" id="actEmpSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off"><div class="ls-panel"></div></div><select id="actEmployeeSelect" style="display:none;"></select></div>
-        <div class="form-group" style="margin:0;"><label>ថ្ងៃ</label><input type="date" id="actDate"></div>
-        <div class="form-group" style="margin:0;flex:1 1 180px;"><label>ចំណងជើង</label><input type="text" id="actTitle" placeholder="ឧ. ជួបអតិថិជន / ដឹកទំនិញ" style="width:100%;"></div>
-        <div class="form-group" style="margin:0;flex:2 1 220px;"><label>កំណត់ចំណាំ</label><input type="text" id="actNote" style="width:100%;"></div>
-        <button id="actAddBtn">➕ បន្ថែម</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>ថ្ងៃ</th><th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ចំណងជើង</th><th>កំណត់ចំណាំ</th><th>សកម្មភាព</th></tr></thead><tbody id="actBody"></tbody></table>
-      <div class="empty-state" id="actEmpty" style="display:none;">មិនមានសកម្មភាពក្នុងខែនេះទេ</div>
-    </div>
-  </div>
-
-  <div id="kpiTab" class="tab-content">
-    <div class="attendance-controls">
-      <h2 class="page-title">🎯 KPI — វាយតម្លៃលទ្ធផល</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <div class="live-search"><input type="text" id="kpiSearch" placeholder="🔍 វាយស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." autocomplete="off"><div class="ls-panel"></div></div><select id="kpiEmployeeSelect" style="display:none;"></select>
-        <input type="month" id="kpiMonth">
-        <button class="secondary" id="kpiCopyBtn">📋 ចម្លងពីខែមុន</button>
-      </div>
-    </div>
-    <p class="scan-hint danger-text" id="kpiWarn" style="display:none;"></p>
-    <div class="attendance-stats" id="kpiSummary"></div>
-    <br>
-    <div class="scan-result-card" style="margin-bottom:14px;">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="form-group" style="margin:0;flex:2 1 200px;"><label>ឈ្មោះសូចនាករ (KPI)</label><input type="text" id="kpiName" placeholder="ឧ. គុណភាពការងារ" style="width:100%;"></div>
-        <div class="form-group" style="margin:0;"><label>ទម្ងន់ (%)</label><input type="number" id="kpiWeight" min="0" max="100" step="1" style="width:100px;"></div>
-        <div class="form-group" style="margin:0;"><label>ពិន្ទុ (0–100)</label><input type="number" id="kpiScore" min="0" max="100" step="1" style="width:110px;"></div>
-        <button id="kpiAddBtn">➕ បន្ថែម</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>សូចនាករ</th><th>ទម្ងន់ (%)</th><th>ពិន្ទុ (0–100)</th><th>សកម្មភាព</th></tr></thead><tbody id="kpiBody"></tbody></table>
-      <div class="empty-state" id="kpiEmpty" style="display:none;">មិនទាន់មាន KPI សម្រាប់បុគ្គលិក/ខែនេះទេ</div>
-    </div>
-    <h3 class="sec-title">ពិន្ទុ KPI របស់បុគ្គលិកទាំងអស់ ក្នុងខែនេះ</h3>
-    <div class="table-wrap">
-      <table><thead><tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ចំនួន KPI</th><th>ទម្ងន់សរុប</th><th>ពិន្ទុ</th><th>ថ្នាក់</th></tr></thead><tbody id="kpiAllBody"></tbody></table>
-    </div>
   </div>
 
   <div id="notifyTab" class="tab-content">
