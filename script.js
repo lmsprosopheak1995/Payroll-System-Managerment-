@@ -394,7 +394,15 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
   const shiftTotal = shiftTotalMinutes(shift);
   const rawIn = timeToMinutes(checkin);
   let rawOut = timeToMinutes(checkout);
-  if (rawIn === null || rawOut === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
+  if (rawIn === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
+  // មិនទាន់មានម៉ោងចេញ៖ បើមានស្កេនចេញសម្រាក (ព្រឹក) គិតតែម៉ោងព្រឹក (ឧ. 07:00–11:00 = 4 ម៉ោង)
+  if (rawOut === null) {
+    const boEarly = timeToMinutes(breakOut);
+    if (boEarly === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
+    const mIn = Math.max(rawIn, shift.start);
+    const mOut = Math.min(boEarly, shift.breakOut);
+    return { normalMinutes: Math.max(0, mOut - mIn), otMinutes: 0, rawIn, shiftTotal };
+  }
   if (rawOut < rawIn) rawOut += 24 * 60;
 
   // ព្រឹក៖ ស្កេនចូលមុនម៉ោងចូល → តម្រឹមមកម៉ោងចូល; ចេញសម្រាកក្រោយម៉ោងកំណត់ → គិតត្រឹមម៉ោងកំណត់
@@ -491,7 +499,7 @@ function computeRow(emp, record, date) {
   const breakIn = record?.breakIn || '';
   let normalHours = 0, otHours = 0, late = false, fullDay = false;
 
-  if (status === 'present' && checkin && checkout) {
+  if (status === 'present' && checkin && (checkout || breakOut)) {
     const sh = getEmpShift(emp.id);
     const w = computeWorkMinutes(checkin, checkout, breakOut, breakIn, sh);
     normalHours = w.normalMinutes / 60;
