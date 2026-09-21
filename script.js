@@ -1670,29 +1670,53 @@ function renderScanLog() {
       <span>${escapeHtml(r.name)}</span>
       <span class="scan-log-item-right">
         <span>${escapeHtml(r.text)}</span>
-        <button class="scan-log-del" title="លុបស្កេនចុងក្រោយ" onclick="adminDeleteLastScan('${r.empId}')">🗑</button>
+        <button class="scan-log-del" title="លុបការស្កេន" onclick="openScanDeleteModal('${r.empId}')">🗑</button>
       </span>
     </div>
   `).join('');
 }
 
-// អ្នកគ្រប់គ្រងលុបការស្កេនចុងក្រោយរបស់បុគ្គលិកម្នាក់ (ប្រើពេលបុគ្គលិកស្កេនខុស ដូចជាស្កេន "ចេញ" មុនម៉ោង)
-function adminDeleteLastScan(empId) {
+// អ្នកគ្រប់គ្រងចុច 🗑 លើឈ្មោះបុគ្គលិក — បើកបង្អួចឱ្យជ្រើសរើសថាតើម៉ោងស្កេនណាដែលខុសត្រូវលុប
+function openScanDeleteModal(empId) {
   const date = todayStr();
   const dayRec = attendance[date] && attendance[date][empId];
   if (!dayRec) return;
 
-  let last = null;
-  for (const step of SCAN_STEPS) { if (dayRec[step.field]) last = step; }
-  if (!last) return;
+  const filled = SCAN_STEPS.filter(step => dayRec[step.field]);
+  if (filled.length === 0) return;
 
   const emp = employees.find(x => x.id === empId);
+  document.getElementById('scanDeleteEmpName').textContent = emp ? emp.name : empId;
+
+  const optionsBox = document.getElementById('scanDeleteOptions');
+  optionsBox.innerHTML = filled.map(step => `
+    <button class="danger" style="width:100%;text-align:left;" onclick="performScanDelete('${empId}','${step.field}')">
+      🗑 ${step.label} — ${dayRec[step.field]}
+    </button>
+  `).join('');
+
+  document.getElementById('scanDeleteOverlay').classList.add('open');
+}
+
+function closeScanDeleteModal() {
+  document.getElementById('scanDeleteOverlay').classList.remove('open');
+}
+
+// ធ្វើការលុបម៉ោងស្កេនជាក់លាក់ណាមួយដែលអ្នកគ្រប់គ្រងបានជ្រើសរើស
+function performScanDelete(empId, field) {
+  const date = todayStr();
+  const dayRec = attendance[date] && attendance[date][empId];
+  if (!dayRec || !dayRec[field]) { closeScanDeleteModal(); return; }
+
+  const step = SCAN_STEPS.find(s => s.field === field);
+  const emp = employees.find(x => x.id === empId);
   const empName = emp ? emp.name : empId;
-  if (!confirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${last.label}" (${dayRec[last.field]}) របស់ ${empName} ដែរឬទេ? បុគ្គលិកនឹងអាចស្កេនម្តងទៀតបានវិញ។`)) return;
+  if (!confirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${step.label}" (${dayRec[field]}) របស់ ${empName} ដែរឬទេ? បុគ្គលិកនឹងអាចស្កេនម្តងទៀតបានវិញ។`)) return;
 
-  dayRec[last.field] = '';
-  if (last.field === 'checkin') dayRec.status = ''; // ជំហានទីមួយ — ត្រឡប់ទៅដូចមិនទាន់ស្កេនអ្វីទាំងអស់
+  dayRec[field] = '';
+  if (field === 'checkin') dayRec.status = ''; // ជំហានទីមួយ — ត្រឡប់ទៅដូចមិនទាន់ស្កេនអ្វីទាំងអស់
 
+  closeScanDeleteModal();
   renderScanLog();
   renderAttendanceTab();
   upsertAttendanceRecord(date, empId, dayRec);
@@ -2178,6 +2202,9 @@ document.getElementById('settingsCancelBtn').addEventListener('click', closeSett
 document.getElementById('settingsSaveBtn').addEventListener('click', saveSettingsForm);
 document.getElementById('settingsOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'settingsOverlay') closeSettingsModal();
+});
+document.getElementById('scanDeleteOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'scanDeleteOverlay') closeScanDeleteModal();
 });
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
