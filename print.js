@@ -3,6 +3,72 @@
    ផ្នែក "core" (openPrintWindow) ប្រើទាំងទំព័រ Admin និងទំព័របុគ្គលិក។
    ========================================================================== */
 
+// ==== ប្រអប់ dialog ផ្ទាល់ខ្លួន (ជំនួស alert/confirm/prompt ដើម native របស់ browser) ====
+// ដាក់នៅ print.js ព្រោះឯកសារនេះត្រូវបានផ្ទុកទាំងទំព័រ Admin (index.html) និងទំព័របុគ្គលិក (employee.html)
+function ensureCustomDialog() {
+  if (document.getElementById('customDialogOverlay')) return;
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.id = 'customDialogOverlay';
+  div.innerHTML = `
+    <div class="modal" style="max-width:380px;">
+      <p id="customDialogMessage" style="white-space:pre-wrap;margin:0 0 14px;"></p>
+      <input type="text" id="customDialogInput" style="display:none;width:100%;margin-bottom:14px;" />
+      <div class="modal-actions" id="customDialogActions"></div>
+    </div>
+  `;
+  document.body.appendChild(div);
+}
+
+function closeCustomDialog() {
+  const overlay = document.getElementById('customDialogOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function customAlert(message) {
+  ensureCustomDialog();
+  return new Promise((resolve) => {
+    document.getElementById('customDialogMessage').textContent = message;
+    document.getElementById('customDialogInput').style.display = 'none';
+    const actions = document.getElementById('customDialogActions');
+    actions.innerHTML = '<button id="cdOkBtn">យល់ព្រម</button>';
+    document.getElementById('customDialogOverlay').classList.add('open');
+    document.getElementById('cdOkBtn').onclick = () => { closeCustomDialog(); resolve(true); };
+  });
+}
+
+function customConfirm(message) {
+  ensureCustomDialog();
+  return new Promise((resolve) => {
+    document.getElementById('customDialogMessage').textContent = message;
+    document.getElementById('customDialogInput').style.display = 'none';
+    const actions = document.getElementById('customDialogActions');
+    actions.innerHTML = '<button class="secondary" id="cdCancelBtn">បោះបង់</button><button class="danger" id="cdOkBtn">យល់ព្រម</button>';
+    document.getElementById('customDialogOverlay').classList.add('open');
+    document.getElementById('cdOkBtn').onclick = () => { closeCustomDialog(); resolve(true); };
+    document.getElementById('cdCancelBtn').onclick = () => { closeCustomDialog(); resolve(false); };
+  });
+}
+
+function customPrompt(message, isPassword) {
+  ensureCustomDialog();
+  return new Promise((resolve) => {
+    document.getElementById('customDialogMessage').textContent = message;
+    const input = document.getElementById('customDialogInput');
+    input.style.display = '';
+    input.type = isPassword ? 'password' : 'text';
+    input.value = '';
+    const actions = document.getElementById('customDialogActions');
+    actions.innerHTML = '<button class="secondary" id="cdCancelBtn">បោះបង់</button><button id="cdOkBtn">យល់ព្រម</button>';
+    document.getElementById('customDialogOverlay').classList.add('open');
+    const submit = () => { closeCustomDialog(); resolve(input.value); };
+    document.getElementById('cdOkBtn').onclick = submit;
+    document.getElementById('cdCancelBtn').onclick = () => { closeCustomDialog(); resolve(null); };
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
 const PRINT_CSS = `
 @page { size: A4 portrait; margin: 12mm; }
 * { box-sizing: border-box; }
@@ -43,7 +109,7 @@ function printEsc(v) {
 function openPrintWindow(title, bodyHtml, landscape) {
   const w = window.open('', '_blank');
   if (!w) {
-    alert('កម្មវិធីរុករកបានរារាំងបង្អួច Popup — សូមអនុញ្ញាត Popup សម្រាប់គេហទំព័រនេះ រួចព្យាយាមម្តងទៀត');
+    customAlert('កម្មវិធីរុករកបានរារាំងបង្អួច Popup — សូមអនុញ្ញាត Popup សម្រាប់គេហទំព័រនេះ រួចព្យាយាមម្តងទៀត');
     return;
   }
   const css = PRINT_CSS.replace('size: A4 portrait', landscape ? 'size: A4 landscape' : 'size: A4 portrait');
@@ -158,7 +224,7 @@ function attendancePrintPage(emp, month) {
 
 function printAttendance() {
   const emp = employees.find(e => e.id === currentAttendanceEmployeeId());
-  if (!emp) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
+  if (!emp) { customAlert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
   const month = currentAttendanceMonth();
   openPrintWindow(`វត្តមាន ${emp.name} ${month}`, attendancePrintPage(emp, month), true);
 }
@@ -170,7 +236,7 @@ function printPayrollSheet() {
   const month = currentPayrollMonth();
   const list = employees.filter(e => e.status === 'active')
     .sort((a, b) => (a.dept || '').localeCompare(b.dept || '') || (a.name || '').localeCompare(b.name || ''));
-  if (!list.length) { alert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
+  if (!list.length) { customAlert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
   const g = { work: 0, ot: 0, total: 0, ben: 0, ded: 0, net: 0, netRiel: 0 };
   const rows = list.map((e, i) => {
     const t = summarizeEmpMonth(e, month);
@@ -252,7 +318,7 @@ function printPayslipFor(emp, month) {
 
 function printPayslip() {
   const emp = employees.find(e => e.id === currentPayrollEmployeeId());
-  if (!emp) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
+  if (!emp) { customAlert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
   printPayslipFor(emp, currentPayrollMonth());
 }
 
@@ -260,7 +326,7 @@ function printAllPayslips() {
   const month = currentPayrollMonth();
   const list = employees.filter(e => e.status === 'active')
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  if (!list.length) { alert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
+  if (!list.length) { customAlert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
   openPrintWindow(`Payslip ទាំងអស់ ${month}`, list.map(e => payslipPageHtml(e, month)).join(''), false);
 }
 

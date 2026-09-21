@@ -53,14 +53,14 @@ async function dbUpsert(table, row, conflict) {
   const { error } = await supabaseClient.from(table).upsert(row, { onConflict: conflict || 'id' });
   if (error) {
     console.error(table, error);
-    alert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ features.sql ក្នុង Supabase ហើយឬនៅ?)');
+    customAlert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ features.sql ក្នុង Supabase ហើយឬនៅ?)');
     return false;
   }
   return true;
 }
 async function dbDelete(table, column, value) {
   const { error } = await supabaseClient.from(table).delete().eq(column, value);
-  if (error) { console.error(table, error); alert('លុបមិនជោគជ័យ៖ ' + error.message); return false; }
+  if (error) { console.error(table, error); customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return false; }
   return true;
 }
 
@@ -435,7 +435,7 @@ async function addActivity() {
   const date = byId('actDate').value;
   const title = byId('actTitle').value.trim();
   const note = byId('actNote').value.trim();
-  if (!empId || !date || !title) { alert('សូមជ្រើសរើសបុគ្គលិក ថ្ងៃ និងបំពេញចំណងជើង'); return; }
+  if (!empId || !date || !title) { customAlert('សូមជ្រើសរើសបុគ្គលិក ថ្ងៃ និងបំពេញចំណងជើង'); return; }
   const row = { id: uid(), employee_id: empId, date, title, note, created_at: new Date().toISOString() };
   if (!(await dbUpsert('activities', row))) return;
   activityRows.push(row);
@@ -444,7 +444,7 @@ async function addActivity() {
 }
 
 async function deleteActivity(id) {
-  if (!confirm('លុបសកម្មភាពនេះ?')) return;
+  if (!(await customConfirm('លុបសកម្មភាពនេះ?'))) return;
   if (!(await dbDelete('activities', 'id', id))) return;
   activityRows = activityRows.filter(r => r.id !== id);
   renderActivities();
@@ -495,8 +495,8 @@ function clamp100(v) { const n = parseFloat(v); return isNaN(n) ? 0 : Math.max(0
 async function addKpi() {
   const empId = currentKpiEmp(), month = currentKpiMonth();
   const name = byId('kpiName').value.trim();
-  if (!empId) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
-  if (!name) { alert('សូមបញ្ចូលឈ្មោះសូចនាករ'); return; }
+  if (!empId) { customAlert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
+  if (!name) { customAlert('សូមបញ្ចូលឈ្មោះសូចនាករ'); return; }
   const row = { id: uid(), employee_id: empId, month, name, weight: clamp100(byId('kpiWeight').value), score: clamp100(byId('kpiScore').value), created_at: new Date().toISOString() };
   if (!(await dbUpsert('kpi_records', row))) return;
   kpiRows.push(row);
@@ -515,7 +515,7 @@ async function updateKpi(id, field, value) {
 }
 
 async function deleteKpi(id) {
-  if (!confirm('លុប KPI នេះ?')) return;
+  if (!(await customConfirm('លុប KPI នេះ?'))) return;
   if (!(await dbDelete('kpi_records', 'id', id))) return;
   kpiRows = kpiRows.filter(r => r.id !== id);
   renderKpi(); renderStars();
@@ -529,7 +529,7 @@ async function copyKpiFromPrevMonth() {
   const prevMonth = prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
   const existing = new Set(kpiForEmp(empId, month).map(r => r.name));
   const src = kpiForEmp(empId, prevMonth).filter(r => !existing.has(r.name));
-  if (!src.length) { alert('មិនមាន KPI ពីខែមុន (' + prevMonth + ') ដើម្បីចម្លងទេ'); return; }
+  if (!src.length) { customAlert('មិនមាន KPI ពីខែមុន (' + prevMonth + ') ដើម្បីចម្លងទេ'); return; }
   for (const r of src) {
     const row = { id: uid(), employee_id: empId, month, name: r.name, weight: r.weight, score: 0, created_at: new Date().toISOString() };
     if (!(await dbUpsert('kpi_records', row))) break;
@@ -575,7 +575,7 @@ function handleAnnImage(file) {
   annPendingImage = null;
   byId('annImagePreview').innerHTML = '';
   if (!file) return;
-  if (!/^image\//.test(file.type)) { alert('សូមជ្រើសរើសឯកសាររូបភាព'); byId('annImage').value = ''; return; }
+  if (!/^image\//.test(file.type)) { customAlert('សូមជ្រើសរើសឯកសាររូបភាព'); byId('annImage').value = ''; return; }
   const reader = new FileReader();
   reader.onload = () => {
     const img = new Image();
@@ -588,7 +588,7 @@ function handleAnnImage(file) {
       annPendingImage = c.toDataURL('image/jpeg', 0.75);
       byId('annImagePreview').innerHTML = `<img src="${annPendingImage}" style="max-width:220px;border-radius:8px;display:block;">`;
     };
-    img.onerror = () => alert('មិនអាចអានរូបភាពនេះបានទេ');
+    img.onerror = () => customAlert('មិនអាចអានរូបភាពនេះបានទេ');
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
@@ -598,11 +598,11 @@ async function sendAnnouncement() {
   const title = byId('annTitle').value.trim();
   const text = byId('annText').value.trim();
   const type = byId('annTargetType').value;
-  if (!title) { alert('សូមបញ្ចូលចំណងជើង'); return; }
+  if (!title) { customAlert('សូមបញ្ចូលចំណងជើង'); return; }
   let value = null;
   if (type === 'dept') value = byId('annDeptSelect').value;
   if (type === 'employee') value = byId('annEmployeeSelect').value;
-  if (type !== 'all' && !value) { alert('សូមជ្រើសរើសអ្នកទទួល'); return; }
+  if (type !== 'all' && !value) { customAlert('សូមជ្រើសរើសអ្នកទទួល'); return; }
   const row = { id: uid(), title, body: text, target_type: type, target_value: value, created_at: new Date().toISOString() };
   if (annPendingImage) row.image = annPendingImage;
   if (!(await dbUpsert('announcements', row))) return;
@@ -610,11 +610,11 @@ async function sendAnnouncement() {
   byId('annTitle').value = ''; byId('annText').value = '';
   annPendingImage = null; byId('annImage').value = ''; byId('annImagePreview').innerHTML = '';
   renderAnnouncements();
-  alert('✓ បានផ្ញើប្រកាសជូនបុគ្គលិករួចរាល់');
+  customAlert('✓ បានផ្ញើប្រកាសជូនបុគ្គលិករួចរាល់');
 }
 
 async function deleteAnnouncement(id) {
-  if (!confirm('លុបប្រកាសនេះ?')) return;
+  if (!(await customConfirm('លុបប្រកាសនេះ?'))) return;
   if (!(await dbDelete('announcements', 'id', id))) return;
   announcementRows = announcementRows.filter(r => r.id !== id);
   renderAnnouncements();
@@ -661,7 +661,7 @@ async function replyFeedback(id) {
 }
 
 async function deleteFeedback(id) {
-  if (!confirm('លុបមតិកែលម្អនេះ?')) return;
+  if (!(await customConfirm('លុបមតិកែលម្អនេះ?'))) return;
   if (!(await dbDelete('feedback', 'id', id))) return;
   feedbackRows = feedbackRows.filter(r => r.id !== id);
   renderFeedback(); renderDashboard();
@@ -721,9 +721,9 @@ async function saveShift() {
   const name = byId('shiftName').value.trim();
   const start = byId('shiftStart').value, bo = byId('shiftBreakOut').value;
   const bi = byId('shiftBreakIn').value, end = byId('shiftEnd').value;
-  if (!name || !start || !bo || !bi || !end) { alert('សូមបំពេញឈ្មោះវេន និងម៉ោងទាំង ៤'); return; }
+  if (!name || !start || !bo || !bi || !end) { customAlert('សូមបំពេញឈ្មោះវេន និងម៉ោងទាំង ៤'); return; }
   const t = [start, bo, bi, end].map(timeToMinutes);
-  if (!(t[0] < t[1] && t[1] <= t[2] && t[2] < t[3])) { alert('លំដាប់ម៉ោងមិនត្រឹមត្រូវ៖ ចូល < ចេញបាយ ≤ ចូលវិញ < ចេញ (វេនឆ្លងអធ្រាត្រមិនទាន់គាំទ្រ)'); return; }
+  if (!(t[0] < t[1] && t[1] <= t[2] && t[2] < t[3])) { customAlert('លំដាប់ម៉ោងមិនត្រឹមត្រូវ៖ ចូល < ចេញបាយ ≤ ចូលវិញ < ចេញ (វេនឆ្លងអធ្រាត្រមិនទាន់គាំទ្រ)'); return; }
   const id = byId('shiftEditId').value || uid();
   const row = { id, name, start_time: start, break_out: bo, break_in: bi, end_time: end };
   if (!(await dbUpsert('shifts', row))) return;
@@ -735,7 +735,8 @@ async function saveShift() {
 
 async function deleteShift(id) {
   const r = shifts.find(x => x.id === id);
-  if (!r || !confirm(`លុបវេន "${r.name}"? បុគ្គលិកដែលប្រើវេននេះនឹងត្រឡប់ទៅវេនលំនាំដើម។`)) return;
+  if (!r) return;
+  if (!(await customConfirm(`លុបវេន "${r.name}"? បុគ្គលិកដែលប្រើវេននេះនឹងត្រឡប់ទៅវេនលំនាំដើម។`))) return;
   if (!(await dbDelete('shift_assignments', 'shift_id', id))) return;
   if (!(await dbDelete('shifts', 'id', id))) return;
   shifts = shifts.filter(x => x.id !== id);

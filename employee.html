@@ -166,7 +166,6 @@
           <div id="empQrReader" style="display:none; margin-top:10px;"></div>
           <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
           <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
-          <button id="undoScanBtn" style="display:none;width:100%;margin-top:10px;background:transparent;color:var(--danger);border:1px solid var(--danger);padding:8px;border-radius:8px;font-size:0.78rem;font-weight:600;"></button>
         </div>
       </div>
       <div class="portal-card history">
@@ -681,16 +680,16 @@ async function addActivityEmp() {
   const date = document.getElementById('actEDate').value;
   const title = document.getElementById('actETitle').value.trim();
   const note = document.getElementById('actENote').value.trim();
-  if (!date || !title) { alert('សូមបំពេញថ្ងៃ និងចំណងជើង'); return; }
+  if (!date || !title) { customAlert('សូមបំពេញថ្ងៃ និងចំណងជើង'); return; }
   const { error } = await supabaseClient.from('activities').insert({ id: empUid('act'), employee_id: currentEmployee.id, date, title, note, created_at: new Date().toISOString() });
-  if (error) { alert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message); return; }
   document.getElementById('actETitle').value = ''; document.getElementById('actENote').value = '';
   renderActivitiesEmp();
 }
 async function deleteActivityEmp(id) {
-  if (!confirm('លុបសកម្មភាពនេះ?')) return;
+  if (!(await customConfirm('លុបសកម្មភាពនេះ?'))) return;
   const { error } = await supabaseClient.from('activities').delete().eq('id', id).eq('employee_id', currentEmployee.id);
-  if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
   renderActivitiesEmp();
 }
 
@@ -708,11 +707,11 @@ async function renderFeedbackEmp() {
 }
 async function sendFeedbackEmp() {
   const message = document.getElementById('fbEMsg').value.trim();
-  if (!message) { alert('សូមសរសេរមតិ'); return; }
+  if (!message) { customAlert('សូមសរសេរមតិ'); return; }
   const { error } = await supabaseClient.from('feedback').insert({ id: empUid('fb'), employee_id: currentEmployee.id, category: document.getElementById('fbECat').value, message, status: 'new', created_at: new Date().toISOString() });
-  if (error) { alert('ផ្ញើមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('ផ្ញើមិនជោគជ័យ៖ ' + error.message); return; }
   document.getElementById('fbEMsg').value = '';
-  alert('✓ បានផ្ញើមតិរួចរាល់ សូមអរគុណ');
+  customAlert('✓ បានផ្ញើមតិរួចរាល់ សូមអរគុណ');
   renderFeedbackEmp();
 }
 
@@ -769,9 +768,9 @@ function startAnnouncementPolling() {
   annTimer = setInterval(() => { if (!document.hidden) refreshAnnouncements(true); }, 60000);
 }
 async function enableBrowserNotifications() {
-  if (!window.Notification) { alert('កម្មវិធីរុករកនេះមិនគាំទ្រការជូនដំណឹងទេ'); return; }
+  if (!window.Notification) { customAlert('កម្មវិធីរុករកនេះមិនគាំទ្រការជូនដំណឹងទេ'); return; }
   const p = await Notification.requestPermission();
-  alert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
+  customAlert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
 }
 
 const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', activities:'សកម្មភាព', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
@@ -866,7 +865,7 @@ function toggleEmpScanner() {
 
 function startEmpScanner() {
   if (typeof Html5Qrcode === 'undefined') {
-    alert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
+    customAlert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
     return;
   }
   document.getElementById('empQrReader').style.display = '';
@@ -959,81 +958,6 @@ async function getTodayRecord() {
   return data;
 }
 
-// ជំហានស្កេនតាមលំដាប់ (ប្រើសម្រាប់កំណត់ថាតើត្រូវ undo ត្រង់ field មួយណា)
-const CLOCK_STEPS = [
-  { field: 'checkin', label: 'ម៉ោងចូល' },
-  { field: 'break_out', label: 'ចេញបាយ' },
-  { field: 'break_in', label: 'ចូលវិញ (ក្រោយបាយ)' },
-  { field: 'checkout', label: 'ម៉ោងចេញ' },
-];
-
-// អនុញ្ញាតឱ្យលុប (undo) បានតែក្នុងរយៈពេលខ្លីៗក្រោយស្កេន (ការពារកុំឱ្យកែប្រែវត្តមានចាស់ៗ)
-const UNDO_WINDOW_MINUTES = 15;
-
-function renderUndoScanBtn(rec) {
-  const btn = document.getElementById('undoScanBtn');
-  if (!btn) return;
-  if (!rec || !rec.checkin) { btn.style.display = 'none'; return; }
-
-  // រកជំហានចុងក្រោយដែលបានស្កេន
-  let last = null;
-  for (const step of CLOCK_STEPS) { if (rec[step.field]) last = step; }
-  if (!last) { btn.style.display = 'none'; return; }
-
-  const lastTime = rec[last.field];
-  const diff = timeToMinutes(nowTimeStr()) - timeToMinutes(lastTime);
-  if (diff === null || diff > UNDO_WINDOW_MINUTES || diff < -5) {
-    // ហួសពេលកំណត់ — មិនអនុញ្ញាតឱ្យលុបខ្លួនឯងទៀតទេ សុំឱ្យទាក់ទងអ្នកគ្រប់គ្រង
-    btn.style.display = '';
-    btn.textContent = '🗑 ស្កេនខុសទេ? (ហួសពេល ១៥នាទី សូមទាក់ទងអ្នកគ្រប់គ្រង)';
-    btn.disabled = true;
-    btn.style.opacity = '0.55';
-    btn.style.cursor = 'default';
-    return;
-  }
-  btn.disabled = false;
-  btn.style.opacity = '1';
-  btn.style.cursor = 'pointer';
-  btn.style.display = '';
-  btn.textContent = `🗑 លុបស្កេន "${last.label}" (${lastTime})`;
-}
-
-async function undoLastScan() {
-  const rec = await getTodayRecord();
-  if (!rec || !rec.checkin) return;
-
-  let last = null;
-  for (const step of CLOCK_STEPS) { if (rec[step.field]) last = step; }
-  if (!last) return;
-
-  const diff = timeToMinutes(nowTimeStr()) - timeToMinutes(rec[last.field]);
-  if (diff === null || diff > UNDO_WINDOW_MINUTES || diff < -5) {
-    alert('ស្កេននេះហួសពេលកំណត់ហើយ (លើសពី ១៥នាទី) មិនអាចលុបខ្លួនឯងបានទេ សូមទាក់ទងអ្នកគ្រប់គ្រងឱ្យកែ។');
-    return;
-  }
-
-  if (!confirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${last.label}" (${rec[last.field]}) ដែរឬទេ? អ្នកនឹងអាចស្កេនម្តងទៀតបានវិញ។`)) return;
-
-  const session = getSession();
-  const today = todayStr();
-
-  if (last.field === 'checkin') {
-    // ជំហានទីមួយ — លុបចេញទាំងកំណត់ត្រា ដើម្បីអោយចាប់ផ្តើមម្តងទៀតបានស្អាត
-    const { error } = await supabaseClient.from('attendance').delete()
-      .eq('date', today).eq('employee_id', session.id);
-    if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
-  } else {
-    const { error } = await supabaseClient.from('attendance')
-      .update({ [last.field]: '' })
-      .eq('date', today).eq('employee_id', session.id);
-    if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
-  }
-  await renderClockBox();
-  await renderHistory();
-}
-
-document.getElementById('undoScanBtn').addEventListener('click', undoLastScan);
-
 async function renderClockBox() {
   const box = document.getElementById('clockBox');
   box.innerHTML = '<div class="status-line">កំពុងផ្ទុក...</div>';
@@ -1070,7 +994,6 @@ async function renderClockBox() {
       <div class="status-line" style="margin-top:6px;">ចូល ${rec.checkin} · ចេញបាយ ${rec.break_out} · ចូលវិញ ${rec.break_in} · ចេញ ${rec.checkout}</div>
     `;
   }
-  renderUndoScanBtn(rec);
 }
 
 async function clockBreakOut() {
@@ -1079,7 +1002,7 @@ async function clockBreakOut() {
   const { error } = await supabaseClient.from('attendance')
     .update({ break_out: nowTimeStr() })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
   await renderClockBox();
   await renderHistory();
 }
@@ -1090,7 +1013,7 @@ async function clockBreakIn() {
   const { error } = await supabaseClient.from('attendance')
     .update({ break_in: nowTimeStr() })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
   await renderClockBox();
   await renderHistory();
 }
@@ -1100,7 +1023,7 @@ async function clockIn() {
   const today = todayStr();
   const row = { date: today, employee_id: session.id, status: 'present', checkin: nowTimeStr(), checkout: '', break_out: '', break_in: '' };
   const { error } = await supabaseClient.from('attendance').upsert(row, { onConflict: 'date,employee_id' });
-  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
   await renderClockBox();
   await renderHistory();
 }
@@ -1111,7 +1034,7 @@ async function clockOut() {
   const { error } = await supabaseClient.from('attendance')
     .update({ checkout: nowTimeStr() })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { alert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
   await renderClockBox();
   await renderHistory();
 }
@@ -1510,7 +1433,7 @@ async function downloadPayrollPDF() {
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgWidth, imgHeight);
     pdf.save(`payslip_${currentEmployee.name}_${month}.pdf`);
   } catch (e) {
-    alert('មិនអាចបង្កើត PDF បានទេ៖ ' + e.message);
+    customAlert('មិនអាចបង្កើត PDF បានទេ៖ ' + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = '⬇ ទាញយក Payroll Slip (PDF)';

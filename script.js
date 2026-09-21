@@ -84,16 +84,16 @@ function doAdminLogout() {
 }
 
 async function changeAdminPassword() {
-  const oldPw = prompt('បញ្ចូលពាក្យសម្ងាត់បច្ចុប្បន្ន៖');
+  const oldPw = await customPrompt('បញ្ចូលពាក្យសម្ងាត់បច្ចុប្បន្ន៖', true);
   if (oldPw === null) return;
-  const newPw = prompt('បញ្ចូលពាក្យសម្ងាត់ថ្មី (យ៉ាងតិច ៦ តួអក្សរ)៖');
+  const newPw = await customPrompt('បញ្ចូលពាក្យសម្ងាត់ថ្មី (យ៉ាងតិច ៦ តួអក្សរ)៖', true);
   if (newPw === null) return;
-  if (newPw.length < 6) { alert('ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
-  const confirmPw = prompt('បញ្ជាក់ពាក្យសម្ងាត់ថ្មីម្ដងទៀត៖');
-  if (newPw !== confirmPw) { alert('ពាក្យសម្ងាត់ថ្មីមិនដូចគ្នាទេ'); return; }
+  if (newPw.length < 6) { customAlert('ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
+  const confirmPw = await customPrompt('បញ្ជាក់ពាក្យសម្ងាត់ថ្មីម្ដងទៀត៖', true);
+  if (newPw !== confirmPw) { customAlert('ពាក្យសម្ងាត់ថ្មីមិនដូចគ្នាទេ'); return; }
   const { data, error } = await supabaseClient.rpc('set_admin_password', { p_old_password: oldPw, p_new_password: newPw });
-  if (error || !data) { alert('ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ពាក្យសម្ងាត់បច្ចុប្បន្នប្រហែលមិនត្រឹមត្រូវ'); return; }
-  alert('ប្តូរពាក្យសម្ងាត់ជោគជ័យ');
+  if (error || !data) { customAlert('ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ពាក្យសម្ងាត់បច្ចុប្បន្នប្រហែលមិនត្រឹមត្រូវ'); return; }
+  customAlert('ប្តូរពាក្យសម្ងាត់ជោគជ័យ');
 }
 
 const DEFAULT_SETTINGS = {
@@ -195,7 +195,7 @@ async function loadData() {
   const { data, error } = res;
   if (error) {
     console.error('Load employees failed', error);
-    alert('មិនអាចទាញយកទិន្នន័យបុគ្គលិកពី Supabase បានទេ៖ ' + error.message);
+    customAlert('មិនអាចទាញយកទិន្នន័យបុគ្គលិកពី Supabase បានទេ៖ ' + error.message);
     employees = [];
     return;
   }
@@ -206,7 +206,7 @@ async function loadAttendance() {
   const { data, error } = await supabaseClient.from('attendance').select('*');
   if (error) {
     console.error('Load attendance failed', error);
-    alert('មិនអាចទាញយកទិន្នន័យវត្តមានពី Supabase បានទេ៖ ' + error.message);
+    customAlert('មិនអាចទាញយកទិន្នន័យវត្តមានពី Supabase បានទេ៖ ' + error.message);
     attendance = {};
     return;
   }
@@ -256,7 +256,7 @@ async function upsertEmployee(emp) {
     .select('id, name, position, dept, phone, email, start_date, salary, status, username, created_at');
   if (error) {
     console.error('Save employee failed', error);
-    alert('រក្សាទុកបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    customAlert('រក្សាទុកបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
   }
 }
 
@@ -264,7 +264,7 @@ async function deleteEmployeeRow(id) {
   const { error } = await supabaseClient.from('employees').delete().eq('id', id);
   if (error) {
     console.error('Delete employee failed', error);
-    alert('លុបបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    customAlert('លុបបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
   }
 }
 
@@ -272,7 +272,7 @@ async function upsertAttendanceRecord(date, empId, rec) {
   const { error } = await supabaseClient.from('attendance').upsert(attRecordToRow(date, empId, rec), { onConflict: 'date,employee_id' });
   if (error) {
     console.error('Save attendance failed', error);
-    alert('រក្សាទុកវត្តមានលើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    customAlert('រក្សាទុកវត្តមានលើ Supabase មិនជោគជ័យ៖ ' + error.message);
   }
 }
 
@@ -302,7 +302,7 @@ async function upsertSettings() {
   }
   if (error) {
     console.error('Save settings failed', error);
-    alert('រក្សាទុកការកំណត់លើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    customAlert('រក្សាទុកការកំណត់លើ Supabase មិនជោគជ័យ៖ ' + error.message);
     return false;
   }
   return true;
@@ -463,18 +463,18 @@ function renderHolidayBox() {
 async function addHoliday() {
   const date = document.getElementById('holidayDate').value;
   const name = document.getElementById('holidayName').value.trim();
-  if (!date) { alert('សូមជ្រើសរើសថ្ងៃបុណ្យ'); return; }
+  if (!date) { customAlert('សូមជ្រើសរើសថ្ងៃបុណ្យ'); return; }
   const { error } = await supabaseClient.from('holidays').upsert({ date, name }, { onConflict: 'date' });
-  if (error) { alert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
+  if (error) { customAlert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
   holidays[date] = name; holidaysAvailable = true;
   document.getElementById('holidayName').value = '';
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
 
 async function removeHoliday(date) {
-  if (!confirm(`លុបថ្ងៃបុណ្យ ${date} ?`)) return;
+  if (!(await customConfirm(`លុបថ្ងៃបុណ្យ ${date} ?`))) return;
   const { error } = await supabaseClient.from('holidays').delete().eq('date', date);
-  if (error) { alert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
   delete holidays[date];
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
@@ -654,7 +654,7 @@ function saveSettingsForm() {
 function exportAttendanceCSV() {
   const activeEmployees = employees.filter(e => e.status === 'active');
   if (activeEmployees.length === 0) {
-    alert('មិនមានទិន្នន័យបុគ្គលិកទេ');
+    customAlert('មិនមានទិន្នន័យបុគ្គលិកទេ');
     return;
   }
   const empId = currentAttendanceEmployeeId();
@@ -744,7 +744,7 @@ async function upsertPayrollItemRow(item) {
   const { data, error } = await supabaseClient.from('payroll_items').upsert(row, { onConflict: 'id' }).select().single();
   if (error) {
     console.error('Save payroll item failed', error);
-    alert('រក្សាទុកធាតុមិនជោគជ័យ៖ ' + error.message);
+    customAlert('រក្សាទុកធាតុមិនជោគជ័យ៖ ' + error.message);
     return null;
   }
   return data;
@@ -752,7 +752,7 @@ async function upsertPayrollItemRow(item) {
 
 async function deletePayrollItemRow(id) {
   const { error } = await supabaseClient.from('payroll_items').delete().eq('id', id);
-  if (error) { console.error('Delete payroll item failed', error); alert('លុបមិនជោគជ័យ៖ ' + error.message); }
+  if (error) { console.error('Delete payroll item failed', error); customAlert('លុបមិនជោគជ័យ៖ ' + error.message); }
 }
 
 // Amounts applicable to a given employee+month, converted to both currencies for display/summing.
@@ -998,7 +998,7 @@ function openAddPayrollItemModal(type, forEmpId, forMonth) {
   }
   if (forMonth) document.getElementById('payrollMonth').value = forMonth;
   const empId = currentPayrollEmployeeId();
-  if (!empId) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
+  if (!empId) { customAlert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
   document.getElementById('piId').value = '';
   document.getElementById('piType').value = type;
   document.getElementById('payrollItemModalTitle').textContent = type === 'benefit' ? 'បន្ថែមអត្ថប្រយោជន៍' : 'បន្ថែមប្រាក់កាត់';
@@ -1040,13 +1040,13 @@ async function savePayrollItem() {
   const name = document.getElementById('piName').value.trim();
   const amount = parseFloat(document.getElementById('piAmount').value);
   if (!name || isNaN(amount) || amount < 0) {
-    alert('សូមបំពេញឈ្មោះធាតុ និងទឹកប្រាក់ត្រឹមត្រូវ');
+    customAlert('សូមបំពេញឈ្មោះធាតុ និងទឹកប្រាក់ត្រឹមត្រូវ');
     return;
   }
   const recurrence = document.getElementById('piRecurrence').value;
   const month = document.getElementById('piMonth').value || currentPayrollMonth();
   if (recurrence === 'variable' && !month) {
-    alert('សូមជ្រើសរើសខែសម្រាប់ធាតុប្រែប្រួល');
+    customAlert('សូមជ្រើសរើសខែសម្រាប់ធាតុប្រែប្រួល');
     return;
   }
 
@@ -1074,10 +1074,10 @@ async function savePayrollItem() {
   await upsertPayrollItemRow(item);
 }
 
-function deletePayrollItem(id) {
+async function deletePayrollItem(id) {
   const p = payrollItems.find(x => x.id === id);
   if (!p) return;
-  if (!confirm(`តើអ្នកប្រាកដជាចង់លុប "${p.name}" មែនទេ?`)) return;
+  if (!(await customConfirm(`តើអ្នកប្រាកដជាចង់លុប "${p.name}" មែនទេ?`))) return;
   payrollItems = payrollItems.filter(x => x.id !== id);
   renderPayrollTab();
   renderDeductTab();
@@ -1164,7 +1164,7 @@ async function approveLeaveRequest(id) {
   if (!req) return;
   const { error } = await supabaseClient.from('leave_requests')
     .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
-  if (error) { alert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
   // Mark each day in the approved range as 'leave' on the attendance sheet.
   const dates = datesInRange(req.start_date, req.end_date);
   for (const date of dates) {
@@ -1180,10 +1180,10 @@ async function approveLeaveRequest(id) {
 }
 
 async function rejectLeaveRequest(id) {
-  const note = prompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖') || '';
+  const note = (await customPrompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖')) || '';
   const { error } = await supabaseClient.from('leave_requests')
     .update({ status: 'rejected', admin_note: note, decided_at: new Date().toISOString() }).eq('id', id);
-  if (error) { alert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
   const req = leaveRequests.find(r => r.id === id);
   if (req) { req.status = 'rejected'; req.admin_note = note; }
   renderRequestsTab();
@@ -1286,17 +1286,17 @@ function renderLeaveBalanceTab() {
 async function approveOTRequest(id) {
   const { error } = await supabaseClient.from('overtime_requests')
     .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
-  if (error) { alert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
   const req = overtimeRequests.find(r => r.id === id);
   if (req) req.status = 'approved';
   renderRequestsTab();
 }
 
 async function rejectOTRequest(id) {
-  const note = prompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖') || '';
+  const note = (await customPrompt('មូលហេតុបដិសេធ (មិនចាំបាច់)៖')) || '';
   const { error } = await supabaseClient.from('overtime_requests')
     .update({ status: 'rejected', admin_note: note, decided_at: new Date().toISOString() }).eq('id', id);
-  if (error) { alert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('បដិសេធមិនជោគជ័យ៖ ' + error.message); return; }
   const req = overtimeRequests.find(r => r.id === id);
   if (req) { req.status = 'rejected'; req.admin_note = note; }
   renderRequestsTab();
@@ -1438,7 +1438,7 @@ function setPhotoPreview(e) {
 // កាត់រូបជាការ៉េ 256×256 ហើយបង្ហាប់ជា JPEG (ទំហំតូច រក្សាទុកក្នុងតារាង employees បានដោយផ្ទាល់)
 function handlePhotoFile(file) {
   if (!file) return;
-  if (!/^image\//.test(file.type)) { alert('សូមជ្រើសរើសឯកសាររូបភាព'); return; }
+  if (!/^image\//.test(file.type)) { customAlert('សូមជ្រើសរើសឯកសាររូបភាព'); return; }
   const reader = new FileReader();
   reader.onload = () => {
     const img = new Image();
@@ -1451,7 +1451,7 @@ function handlePhotoFile(file) {
       pendingPhoto = canvas.toDataURL('image/jpeg', 0.8);
       setPhotoPreview(editingId ? employees.find(x => x.id === editingId) : null);
     };
-    img.onerror = () => alert('មិនអាចអានរូបភាពនេះបានទេ');
+    img.onerror = () => customAlert('មិនអាចអានរូបភាពនេះបានទេ');
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
@@ -1522,7 +1522,7 @@ async function saveEmployee() {
   const dept = document.getElementById('empDept').value.trim();
 
   if (!name || !position || !dept) {
-    alert('សូមបំពេញព័ត៌មានចាំបាច់៖ ឈ្មោះ តួនាទី និងផ្នែក');
+    customAlert('សូមបំពេញព័ត៌មានចាំបាច់៖ ឈ្មោះ តួនាទី និងផ្នែក');
     return;
   }
 
@@ -1532,13 +1532,13 @@ async function saveEmployee() {
   const username = (existingEmp && existingEmp.username) ? existingEmp.username : document.getElementById('empUsername').value.trim();
   if (username && !(existingEmp && existingEmp.username)) {
     const dup = employees.find(x => x.id !== editingId && (x.username || '').toLowerCase() === username.toLowerCase());
-    if (dup) { alert(`អត្តលេខ "${username}" ត្រូវបានប្រើដោយ "${dup.name}" រួចហើយ សូមប្រើអត្តលេខផ្សេង`); return; }
+    if (dup) { customAlert(`អត្តលេខ "${username}" ត្រូវបានប្រើដោយ "${dup.name}" រួចហើយ សូមប្រើអត្តលេខផ្សេង`); return; }
   }
   // ត្រូវការពាក្យសម្ងាត់ទាំងពេលបង្កើតគណនីថ្មី ទាំងពេលបន្ថែម username ដំបូងគេទៅឲ្យបុគ្គលិកចាស់
   // (មុននេះការត្រួតពិនិត្យអនុវត្តតែពេលបង្កើតថ្មី ធ្វើឲ្យអាចរក្សាទុក username ដោយគ្មានពាក្យសម្ងាត់ពេលកែប្រែ)
   const isFirstTimeUsername = username && (!existingEmp || !existingEmp.username);
   if (isFirstTimeUsername && passwordInput === '') {
-    alert('សូមកំណត់ពាក្យសម្ងាត់សម្រាប់គណនីនេះ (គណនីនេះមិនទាន់មានពាក្យសម្ងាត់ទេ)');
+    customAlert('សូមកំណត់ពាក្យសម្ងាត់សម្រាប់គណនីនេះ (គណនីនេះមិនទាន់មានពាក្យសម្ងាត់ទេ)');
     return;
   }
 
@@ -1554,12 +1554,12 @@ async function saveEmployee() {
   };
   const idCard = document.getElementById('empIdCard').value.trim();
   if (idCard !== ((existingEmp && existingEmp.idCard) || '')) {
-    if (!idCardColumnAvailable) { alert('មិនទាន់អាចរក្សាទុកអត្តសញ្ញាណប័ណ្ណបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ id_card)'); return; }
+    if (!idCardColumnAvailable) { customAlert('មិនទាន់អាចរក្សាទុកអត្តសញ្ញាណប័ណ្ណបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ id_card)'); return; }
     data.idCard = idCard;
     data._idCardDirty = true;
   }
   if (pendingPhoto !== undefined) {
-    if (!photoColumnAvailable) { alert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ photo)'); return; }
+    if (!photoColumnAvailable) { customAlert('មិនទាន់អាចរក្សាទុករូបថតបានទេ — សូមដំណើរការ employees.sql ក្នុង Supabase ជាមុនសិន (បន្ថែមជួរ និងសិទ្ធិ photo)'); return; }
     data.photo = pendingPhoto;
     data._photoDirty = true;
   }
@@ -1584,14 +1584,14 @@ async function saveEmployee() {
       p_employee_id: savedEmp.id,
       p_password: passwordInput,
     });
-    if (error) alert('រក្សាទុកព័ត៌មានបុគ្គលិកបានជោគជ័យ ប៉ុន្តែកំណត់ពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + error.message);
+    if (error) customAlert('រក្សាទុកព័ត៌មានបុគ្គលិកបានជោគជ័យ ប៉ុន្តែកំណត់ពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + error.message);
   }
 }
 
-function deleteEmployee(id) {
+async function deleteEmployee(id) {
   const e = employees.find(x => x.id === id);
   if (!e) return;
-  if (!confirm(`តើអ្នកប្រាកដជាចង់លុប "${e.name}" មែនទេ?`)) return;
+  if (!(await customConfirm(`តើអ្នកប្រាកដជាចង់លុប "${e.name}" មែនទេ?`))) return;
   employees = employees.filter(x => x.id !== id);
   renderAll();
   deleteEmployeeRow(id);
@@ -1599,7 +1599,7 @@ function deleteEmployee(id) {
 
 function exportCSV() {
   if (employees.length === 0) {
-    alert('មិនមានទិន្នន័យសម្រាប់នាំចេញទេ');
+    customAlert('មិនមានទិន្នន័យសម្រាប់នាំចេញទេ');
     return;
   }
   const headers = ['ឈ្មោះ', 'តួនាទី', 'ផ្នែក', 'ទូរស័ព្ទ', 'អត្តសញ្ញាណប័ណ្ណ', 'ថ្ងៃចូលធ្វើការ', 'ប្រាក់ខែ', 'ស្ថានភាព'];
@@ -1703,7 +1703,7 @@ function closeScanDeleteModal() {
 }
 
 // ធ្វើការលុបម៉ោងស្កេនជាក់លាក់ណាមួយដែលអ្នកគ្រប់គ្រងបានជ្រើសរើស
-function performScanDelete(empId, field) {
+async function performScanDelete(empId, field) {
   const date = todayStr();
   const dayRec = attendance[date] && attendance[date][empId];
   if (!dayRec || !dayRec[field]) { closeScanDeleteModal(); return; }
@@ -1711,7 +1711,7 @@ function performScanDelete(empId, field) {
   const step = SCAN_STEPS.find(s => s.field === field);
   const emp = employees.find(x => x.id === empId);
   const empName = emp ? emp.name : empId;
-  if (!confirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${step.label}" (${dayRec[field]}) របស់ ${empName} ដែរឬទេ? បុគ្គលិកនឹងអាចស្កេនម្តងទៀតបានវិញ។`)) return;
+  if (!(await customConfirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${step.label}" (${dayRec[field]}) របស់ ${empName} ដែរឬទេ? បុគ្គលិកនឹងអាចស្កេនម្តងទៀតបានវិញ។`))) return;
 
   dayRec[field] = '';
   if (field === 'checkin') dayRec.status = ''; // ជំហានទីមួយ — ត្រឡប់ទៅដូចមិនទាន់ស្កេនអ្វីទាំងអស់
@@ -1973,8 +1973,8 @@ async function removeDeductionItem(empId) {
 async function applyAllDeductions() {
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
   const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
-  if (targets.length === 0) { alert('មិនមានប្រាក់ត្រូវកាត់ទេ (សូមពិនិត្យលក្ខខណ្ឌកាត់លុយ)'); return; }
-  if (!confirm(`បន្ថែមប្រាក់កាត់សម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`)) return;
+  if (targets.length === 0) { customAlert('មិនមានប្រាក់ត្រូវកាត់ទេ (សូមពិនិត្យលក្ខខណ្ឌកាត់លុយ)'); return; }
+  if (!(await customConfirm(`បន្ថែមប្រាក់កាត់សម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`))) return;
   for (const e of targets) await applyDeductionItem(e.id, true);
   renderDeductTab();
   renderPayrollTab();
@@ -2119,7 +2119,7 @@ async function applyBonusItem(empId, silent) {
   if (bonusRules.mode === 'manual') {
     const input = document.querySelector(`.bonus-manual-amt[data-emp="${empId}"]`);
     amount = round2(parseFloat(input && input.value) || 0);
-    if (amount <= 0) { if (!silent) alert('សូមវាយបញ្ចូលទឹកប្រាក់បំណាច់ឲ្យបុគ្គលិកនេះជាមុនសិន'); return; }
+    if (amount <= 0) { if (!silent) customAlert('សូមវាយបញ្ចូលទឹកប្រាក់បំណាច់ឲ្យបុគ្គលិកនេះជាមុនសិន'); return; }
   }
   const item = {
     id: bonusItemId(empId, month),
@@ -2149,15 +2149,15 @@ async function removeBonusItem(empId) {
 async function applyAllBonus() {
   const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
   const targets = employees.filter(e => e.status === 'active').filter(e => calcBonusRow(e, month, bonusRules).eligible);
-  if (targets.length === 0) { alert('មិនមានបុគ្គលិកមានសិទ្ធិទទួលបំណាច់ឆ្នាំទេ (សូមពិនិត្យលក្ខខណ្ឌ)'); return; }
+  if (targets.length === 0) { customAlert('មិនមានបុគ្គលិកមានសិទ្ធិទទួលបំណាច់ឆ្នាំទេ (សូមពិនិត្យលក្ខខណ្ឌ)'); return; }
   if (bonusRules.mode === 'manual') {
     const missing = targets.filter(e => {
       const input = document.querySelector(`.bonus-manual-amt[data-emp="${e.id}"]`);
       return !(parseFloat(input && input.value) > 0);
     });
-    if (missing.length > 0) { alert(`សូមវាយបញ្ចូលទឹកប្រាក់ឲ្យបុគ្គលិកគ្រប់នាក់ជាមុនសិន (នៅខ្វះ ${missing.length} នាក់)`); return; }
+    if (missing.length > 0) { customAlert(`សូមវាយបញ្ចូលទឹកប្រាក់ឲ្យបុគ្គលិកគ្រប់នាក់ជាមុនសិន (នៅខ្វះ ${missing.length} នាក់)`); return; }
   }
-  if (!confirm(`បន្ថែមបំណាច់ឆ្នាំសម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`)) return;
+  if (!(await customConfirm(`បន្ថែមបំណាច់ឆ្នាំសម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`))) return;
   for (const e of targets) await applyBonusItem(e.id, true);
   renderBonusTab();
   renderPayrollTab();
