@@ -37,6 +37,18 @@
   .who-row .logout { font-size:0.72rem; background:transparent; color:var(--text-muted); border:1px solid var(--border); padding:5px 10px; }
   .emp-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
   .emp-info-grid .item .lbl { color:var(--text-muted); font-size:0.66rem; margin-bottom:2px; }
+  .pf-title { font-weight:700; font-size:0.9rem; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .pf-sub { font-weight:500; font-size:0.7rem; color:var(--text-muted); }
+  .pf-leave-num { font-size:1.9rem; font-weight:800; line-height:1.1; }
+  .pf-leave-num small { font-size:0.8rem; font-weight:600; color:var(--text-muted); margin-left:4px; }
+  .pf-bar { height:10px; border-radius:999px; background:color-mix(in srgb, var(--text) 10%, transparent); overflow:hidden; margin:10px 0 6px; }
+  .pf-bar > div { height:100%; border-radius:999px; background:var(--brand); transition:width .4s; }
+  .pf-bar.low > div { background:#ef4444; }
+  .pf-meta { display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted); }
+  button.pf-btn { width:100%; margin-top:12px; padding:11px; border-radius:12px; background:var(--brand); color:#fff; font-size:0.85rem; font-weight:600; border:0; }
+  .pf-quick { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button.pf-q { display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px; border-radius:14px; background:color-mix(in srgb, var(--c) 12%, transparent); color:var(--text); border:1px solid color-mix(in srgb, var(--c) 30%, transparent); font-size:0.78rem; font-weight:600; }
+  button.pf-q .qi { font-size:1.5rem; }
   .emp-info-grid .item .val { font-size:0.78rem; font-weight:600; word-break:break-word; }
   .clock-box { text-align:center; padding:22px 10px; border:1px solid var(--border); border-radius:16px; margin-bottom:18px; position:relative; overflow:hidden; }
   .clock-box::before { content:""; position:absolute; top:0; left:0; right:0; height:4px; background:var(--brand); }
@@ -155,6 +167,27 @@
           <button class="logout" id="logoutBtn">ចាកចេញ</button>
         </div>
         <div class="emp-info-grid" id="empInfoGrid"></div>
+      </div>
+
+      <div class="portal-card" style="margin-bottom:14px;">
+        <div class="pf-title"><span>📊 ស្ថិតិខែនេះ</span><span class="pf-sub" id="pfMonthLbl"></span></div>
+        <div class="attendance-stats" id="pfStats" style="grid-template-columns:repeat(2,1fr);"></div>
+      </div>
+
+      <div class="portal-card" style="margin-bottom:14px;">
+        <div class="pf-title"><span>🌴 ច្បាប់ប្រចាំឆ្នាំនៅសល់</span><span class="pf-sub" id="pfLeaveYear"></span></div>
+        <div id="pfLeaveBody"><div class="hist-empty">កំពុងផ្ទុក...</div></div>
+        <button class="pf-btn" data-go="leave">📝 សុំច្បាប់</button>
+      </div>
+
+      <div class="portal-card">
+        <div class="pf-title"><span>⚡ ប៊ូតុងរហ័ស</span></div>
+        <div class="pf-quick">
+          <button class="pf-q" data-go="clock" style="--c:#f59e0b"><span class="qi">🕐</span>កត់ត្រាវត្តមាន</button>
+          <button class="pf-q" data-go="ot" style="--c:#10b981"><span class="qi">⏱</span>សុំថែមម៉ោង</button>
+          <button class="pf-q" data-go="payroll" style="--c:#0ea5e9"><span class="qi">💰</span>ប្រាក់ខែ</button>
+          <button class="pf-q" data-go="feedback" style="--c:#ec4899"><span class="qi">💬</span>មតិកែលម្អ</button>
+        </div>
       </div>
     </div>
 
@@ -594,6 +627,7 @@ async function loadSettings() {
     workplaceLat: data.workplace_lat ?? null,
     workplaceLng: data.workplace_lng ?? null,
     workplaceRadius: data.workplace_radius ?? 100,
+    annualQuotaDays: parseFloat(data.annual_quota_days) > 0 ? parseFloat(data.annual_quota_days) : 18, // លំនាំដើម 18 ថ្ងៃ (ដូច admin)
   };
 }
 
@@ -630,6 +664,55 @@ function renderEmpInfo() {
     ['ប្រាក់គោល', '$' + fmtUSD(currentEmployee.salary)],
   ];
   grid.innerHTML = items.map(([l, v]) => `<div class="item"><div class="lbl">${escapeHtml(l)}</div><div class="val">${escapeHtml(String(v))}</div></div>`).join('');
+}
+
+// ==== ប្រវត្តិរូប៖ ស្ថិតិខែនេះ + ច្បាប់ប្រចាំឆ្នាំនៅសល់ ====
+function annualMonthsInYearEmp(startDate, year) {
+  if (!startDate) return 12;
+  const sy = parseInt(startDate.slice(0, 4), 10), sm = parseInt(startDate.slice(5, 7), 10);
+  if (isNaN(sy) || isNaN(sm)) return 12;
+  if (sy > year) return 0;
+  if (sy < year) return 12;
+  return 13 - sm;
+}
+
+async function renderProfileExtras() {
+  if (!currentEmployee) return;
+  const month = todayStr().slice(0, 7), year = parseInt(month.slice(0, 4), 10);
+  document.getElementById('pfMonthLbl').textContent = month;
+  document.getElementById('pfLeaveYear').textContent = year;
+
+  try {
+    const t = await summarizeMonth(month);
+    document.getElementById('pfStats').innerHTML = `
+      <div class="stat-card"><div class="num">${t.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
+      <div class="stat-card"><div class="num">${t.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
+      <div class="stat-card"><div class="num">${t.otHours ? fmtHours(t.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
+      <div class="stat-card"><div class="num">$${fmtUSD(t.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>`;
+  } catch (e) {
+    console.warn('Profile stats failed', e);
+    document.getElementById('pfStats').innerHTML = '<div class="hist-empty" style="grid-column:1/-1;">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>';
+  }
+
+  const body = document.getElementById('pfLeaveBody');
+  const { data, error } = await supabaseClient.from('leave_requests')
+    .select('start_date,end_date').eq('employee_id', currentEmployee.id).eq('status', 'approved').eq('leave_type', 'annual');
+  if (error) { body.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
+  const yStart = `${year}-01-01`, yEnd = `${year}-12-31`;
+  const used = (data || []).reduce((sum, r) => {
+    const s = r.start_date < yStart ? yStart : r.start_date;
+    const e = r.end_date > yEnd ? yEnd : r.end_date;
+    return s > e ? sum : sum + datesInRange(s, e).length;
+  }, 0);
+  const months = annualMonthsInYearEmp(currentEmployee.startDate, year);
+  const base = settings.annualQuotaDays || 18;
+  const quota = months > 0 ? Math.round(base * months / 12 * 100) / 100 : 0;
+  const remaining = Math.round((quota - used) * 100) / 100;
+  const pct = quota > 0 ? Math.max(0, Math.min(100, remaining / quota * 100)) : 0;
+  body.innerHTML = `
+    <div class="pf-leave-num">${remaining}<small>ថ្ងៃ នៅសល់</small></div>
+    <div class="pf-bar${pct <= 15 ? ' low' : ''}"><div style="width:${pct}%"></div></div>
+    <div class="pf-meta"><span>ប្រើរួច ${used} ថ្ងៃ</span><span>សរុប ${quota} ថ្ងៃ</span></div>`;
 }
 
 async function showMain() {
@@ -861,6 +944,7 @@ function switchEmpTab(tab) {
   if (tab === 'activities') renderActivitiesEmp();
   if (tab === 'feedback') renderFeedbackEmp();
   if (tab === 'notify') renderNotifyEmp();
+  if (tab === 'profile') renderProfileExtras();
 }
 
 // ==== In-page QR self-scan (clock tab) ====
