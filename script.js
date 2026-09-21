@@ -1762,7 +1762,7 @@ async function applyAllDeductions() {
 
 // ==== បំណាច់ឆ្នាំ (Year-end Bonus) ====
 const BONUS_RULES_KEY = 'bonus_rules_v1';
-const BONUS_DEFAULTS = { mode: 'flat', flatAmount: 50, perYearAmount: 10, minMonths: 12 };
+const BONUS_DEFAULTS = { mode: 'days', flatAmount: 50, perYearAmount: 10, daysPerMonth: 1.5, minMonths: 0 };
 
 function loadBonusRules() {
   try {
@@ -1780,6 +1780,7 @@ function readBonusControls() {
   bonusRules.mode = document.getElementById('bonusMode').value;
   bonusRules.flatAmount = parseFloat(document.getElementById('bonusFlatAmount').value) || 0;
   bonusRules.perYearAmount = parseFloat(document.getElementById('bonusPerYearAmount').value) || 0;
+  bonusRules.daysPerMonth = parseFloat(document.getElementById('bonusDaysPerMonth').value) || 0;
   const mm = parseFloat(document.getElementById('bonusMinMonths').value);
   bonusRules.minMonths = isNaN(mm) ? 0 : Math.max(0, mm);
   saveBonusRules();
@@ -1789,11 +1790,13 @@ function onBonusModeChange() {
   const mode = document.getElementById('bonusMode').value;
   document.getElementById('bonusFlatGroup').style.display = mode === 'flat' ? '' : 'none';
   document.getElementById('bonusPerYearGroup').style.display = mode === 'years' ? '' : 'none';
+  document.getElementById('bonusDaysGroup').style.display = mode === 'days' ? '' : 'none';
 }
 function initBonusControls() {
   document.getElementById('bonusMode').value = bonusRules.mode;
   document.getElementById('bonusFlatAmount').value = bonusRules.flatAmount;
   document.getElementById('bonusPerYearAmount').value = bonusRules.perYearAmount;
+  document.getElementById('bonusDaysPerMonth').value = bonusRules.daysPerMonth;
   document.getElementById('bonusMinMonths').value = bonusRules.minMonths;
   document.getElementById('bonusMonth').value = `${todayStr().slice(0, 4)}-12`;
   onBonusModeChange();
@@ -1821,10 +1824,12 @@ function calcBonusRow(emp, month, rules) {
   const years = months / 12;
   const eligible = rules.mode === 'manual' ? true : months >= rules.minMonths;
   const salary = parseFloat(emp.salary) || 0;
+  const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   let amount = 0;
   if (eligible) {
     if (rules.mode === 'flat') amount = rules.flatAmount;
     else if (rules.mode === 'years') amount = years * rules.perYearAmount;
+    else if (rules.mode === 'days') amount = months * rules.daysPerMonth * dailyRate;
     else if (rules.mode === 'salary') amount = salary;
     // 'manual' → 0 (admin types the amount per employee)
   }
@@ -2033,7 +2038,7 @@ initBonusControls();
 ['bonusMonth', 'bonusFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderBonusTab));
 document.getElementById('bonusSearch').addEventListener('input', renderBonusTab);
 document.getElementById('bonusMode').addEventListener('change', () => { readBonusControls(); renderBonusTab(); });
-['bonusFlatAmount', 'bonusPerYearAmount', 'bonusMinMonths'].forEach(id => document.getElementById(id).addEventListener('input', () => { readBonusControls(); renderBonusTab(); }));
+['bonusFlatAmount', 'bonusPerYearAmount', 'bonusDaysPerMonth', 'bonusMinMonths'].forEach(id => document.getElementById(id).addEventListener('input', () => { readBonusControls(); renderBonusTab(); }));
 document.getElementById('bonusApplyAllBtn').addEventListener('click', applyAllBonus);
 payLive = setupLiveSearch('payrollSearch', 'payrollEmployeeSelect', renderPayrollTab);
 document.getElementById('holidayAddBtn').addEventListener('click', addHoliday);
