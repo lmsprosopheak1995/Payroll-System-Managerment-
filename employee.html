@@ -1122,6 +1122,7 @@ async function renderAttendanceTabEmp() {
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន (៛)</div></div>
+    <div class="stat-card"><div class="num">${totals.otHours ? fmtHours(totals.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
   `;
 }
 
