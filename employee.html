@@ -1171,12 +1171,13 @@ async function renderAttendanceTabEmp() {
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
-  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, leaveDays: 0 };
+  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, leaveDays: 0, otHours: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const r = computeRow(salary, dayMap[date], date);
     totals.total += r.total;
     totals.riel += r.riel;
+    totals.otHours += r.otHours;
     if (r.status === 'present') totals.workDays++;
     if (r.status === 'leave') totals.leaveDays++;
     if (r.late) totals.lateDays++;
