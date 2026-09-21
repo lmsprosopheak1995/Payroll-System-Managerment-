@@ -1239,7 +1239,6 @@ function renderAll() {
 function renderWorkplaceQR() {
   const wrap = document.getElementById('workplaceQrCanvasWrap');
   if (!wrap) return;
-  renderWpGeoInfo();
   if (!settings.workplaceCode) { wrap.innerHTML = ''; return; }
   if (typeof qrcode === 'undefined') {
     console.error('QR library (qrcode-generator) failed to load — check that the CDN script tag loaded, or network/ad-blocker issues.');
@@ -1267,40 +1266,6 @@ function downloadWorkplaceQR() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-}
-
-// ---- ទីតាំងកន្លែងធ្វើការ (Geofence) ----
-function renderWpGeoInfo() {
-  const el = document.getElementById('wpGeoInfo');
-  if (!el) return;
-  el.textContent = settings.workplaceLat != null
-    ? `ទីតាំងបានកំណត់៖ ${Number(settings.workplaceLat).toFixed(5)}, ${Number(settings.workplaceLng).toFixed(5)}`
-    : 'មិនទាន់កំណត់ទីតាំង — បុគ្គលិកអាចស្កេនពីទីណាក៏បាន';
-  const inp = document.getElementById('wpRadiusInput');
-  if (inp && document.activeElement !== inp) inp.value = settings.workplaceRadius || 100;
-}
-
-async function saveWpGeo(useCurrent) {
-  const msg = document.getElementById('wpGeoMsg');
-  const say = (t, ok) => { msg.style.color = ok ? 'var(--success)' : 'var(--danger)'; msg.textContent = t; };
-  settings.workplaceRadius = Math.max(50, parseInt(document.getElementById('wpRadiusInput').value, 10) || 100);
-  const done = async () => {
-    const ok = await upsertSettings();
-    renderWpGeoInfo();
-    if (settingsGeoMissing) say('✕ ត្រូវរត់ SQL បន្ថែម column ទីតាំងក្នុង Supabase ជាមុនសិន', false);
-    else if (ok) say('✓ បានរក្សាទុក', true);
-  };
-  if (!useCurrent) {
-    if (settings.workplaceLat == null) { say('សូមចុច «កំណត់ទីតាំងនេះ» ជាមុនសិន', false); return; }
-    return done();
-  }
-  if (!navigator.geolocation) { say('✕ ឧបករណ៍នេះមិនគាំទ្រទីតាំង', false); return; }
-  say('⏳ កំពុងយកទីតាំង...', true);
-  navigator.geolocation.getCurrentPosition(pos => {
-    settings.workplaceLat = pos.coords.latitude;
-    settings.workplaceLng = pos.coords.longitude;
-    done().then(() => { if (!settingsGeoMissing && pos.coords.accuracy > 100) say(`⚠ បានរក្សាទុក ប៉ុន្តែភាពត្រឹមត្រូវទាប(±${Math.round(pos.coords.accuracy)} ម៉ែត្រ) — គួរកំណត់ពីទូរស័ព្ទនៅច្រកចូល`, false); });
-  }, () => say('✕ មិនអាចយកទីតាំងបានទេ សូមអនុញ្ញាតទីតាំង (Location) ក្នុង browser', false), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
 
 let pendingPhoto; // undefined = មិនប្តូរ, '' = លុប, 'data:...' = រូបថ្មី
@@ -1836,8 +1801,6 @@ document.getElementById('settingsOverlay').addEventListener('click', (e) => {
 document.getElementById('scanStartBtn').addEventListener('click', startScanner);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanner);
 document.getElementById('workplaceQrDownloadBtn').addEventListener('click', downloadWorkplaceQR);
-document.getElementById('wpGeoSetBtn').addEventListener('click', () => saveWpGeo(true));
-document.getElementById('wpRadiusInput').addEventListener('change', () => saveWpGeo(false));
 function closeSidebar() {
   const sb = document.getElementById('sidebar');
   if (sb) sb.classList.remove('open');
