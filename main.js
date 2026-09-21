@@ -52,9 +52,10 @@ if (!app.requestSingleInstanceLock()) {
       if (!file.startsWith(APP_DIR + path.sep)) return new Response('Forbidden', { status: 403 });
       return net.fetch(pathToFileURL(file).toString());
     });
-    // អនុញ្ញាតតែកាមេរ៉ា (ស្កេន QR) — ការអនុញ្ញាតផ្សេងៗបដិសេធ
-    session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media'));
-    session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media');
+    // អនុញ្ញាតកាមេរ៉ា (ស្កេន QR) និង Geolocation (កំណត់ទីតាំង Geofence) — ការអនុញ្ញាតផ្សេងៗបដិសេធ
+    const ALLOWED_PERMISSIONS = ['media', 'geolocation'];
+    session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(ALLOWED_PERMISSIONS.includes(permission)));
+    session.defaultSession.setPermissionCheckHandler((wc, permission) => ALLOWED_PERMISSIONS.includes(permission));
     createWindow();
 
     // ⚡ Auto-Update: ពិនិត្យរក version ថ្មីពី GitHub Releases ដោយស្វ័យប្រវត្តិ
