@@ -1176,6 +1176,7 @@ async function approveLeaveRequest(id) {
   req.status = 'approved';
   renderAttendanceTab();
   renderRequestsTab();
+  renderLeaveBalanceTab();
 }
 
 async function rejectLeaveRequest(id) {
@@ -1186,6 +1187,100 @@ async function rejectLeaveRequest(id) {
   const req = leaveRequests.find(r => r.id === id);
   if (req) { req.status = 'rejected'; req.admin_note = note; }
   renderRequestsTab();
+}
+
+// ==== ច្បាប់ប្រចាំឆ្នាំ — ប្រើអស់ / នៅសល់ (Annual Leave Balance) ====
+const LB_RULES_KEY = 'leave_balance_rules_v1';
+const LB_DEFAULTS = { annualQuotaDays: 18, prorate: true };
+
+function loadLbRules() {
+  try {
+    const raw = localStorage.getItem(LB_RULES_KEY);
+    if (raw) return { ...LB_DEFAULTS, ...JSON.parse(raw) };
+  } catch (e) { /* ignore */ }
+  return { ...LB_DEFAULTS };
+}
+function saveLbRules() {
+  try { localStorage.setItem(LB_RULES_KEY, JSON.stringify(lbRules)); } catch (e) { /* ignore */ }
+}
+let lbRules = loadLbRules();
+
+function readLbControls() {
+  lbRules.annualQuotaDays = parseFloat(document.getElementById('lbQuotaDays').value) || 0;
+  lbRules.prorate = document.getElementById('lbProrate').checked;
+  saveLbRules();
+}
+function initLbControls() {
+  document.getElementById('lbQuotaDays').value = lbRules.annualQuotaDays;
+  document.getElementById('lbProrate').checked = lbRules.prorate;
+  document.getElementById('lbYear').value = todayStr().slice(0, 4);
+}
+
+// ចំនួនខែដែលបុគ្គលិកបានបម្រើការក្នុងឆ្នាំដែលបានជ្រើសរើស (0-12)
+function annualLeaveMonthsInYear(emp, year) {
+  if (!emp.startDate) return 12;
+  const startYear = parseInt(emp.startDate.slice(0, 4), 10);
+  const startMonth = parseInt(emp.startDate.slice(5, 7), 10);
+  if (isNaN(startYear) || isNaN(startMonth)) return 12;
+  if (startYear > year) return 0;
+  if (startYear < year) return 12;
+  return 13 - startMonth;
+}
+
+// ចំនួនថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលបានអនុម័ត ហើយស្ថិតក្នុងឆ្នាំដែលបានជ្រើសរើស
+function usedAnnualLeaveDays(empId, year) {
+  const yearStart = `${year}-01-01`, yearEnd = `${year}-12-31`;
+  return leaveRequests
+    .filter(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === 'annual')
+    .reduce((sum, r) => {
+      const s = r.start_date < yearStart ? yearStart : r.start_date;
+      const e = r.end_date > yearEnd ? yearEnd : r.end_date;
+      if (s > e) return sum;
+      return sum + datesInRange(s, e).length;
+    }, 0);
+}
+
+function calcLeaveBalanceRow(emp, year, rules) {
+  const months = annualLeaveMonthsInYear(emp, year);
+  const quota = months > 0 ? (rules.prorate ? round2(rules.annualQuotaDays * months / 12) : rules.annualQuotaDays) : 0;
+  const used = usedAnnualLeaveDays(emp.id, year);
+  const remaining = round2(quota - used);
+  return { months, quota: round2(quota), used, remaining };
+}
+
+function renderLeaveBalanceTab() {
+  const body = document.getElementById('lbBody');
+  if (!body) return;
+  const year = parseInt(document.getElementById('lbYear').value, 10) || parseInt(todayStr().slice(0, 4), 10);
+  const search = document.getElementById('lbSearch').value.toLowerCase().trim();
+
+  const rows = employees.filter(e => e.status === 'active')
+    .filter(e => employeeMatchesSearch(e, search))
+    .map(emp => ({ emp, r: calcLeaveBalanceRow(emp, year, lbRules) }));
+
+  const sum = rows.reduce((a, { r }) => ({
+    quota: a.quota + r.quota, used: a.used + r.used, remaining: a.remaining + r.remaining,
+  }), { quota: 0, used: 0, remaining: 0 });
+
+  document.getElementById('lbStats').innerHTML = `
+    <div class="stat-card"><div class="num">${rows.length}</div><div class="label">បុគ្គលិកសកម្ម</div></div>
+    <div class="stat-card"><div class="num">${sum.quota.toFixed(1)}</div><div class="label">កូតាសរុប (ថ្ងៃ)</div></div>
+    <div class="stat-card"><div class="num">${sum.used.toFixed(1)}</div><div class="label">ប្រើអស់សរុប (ថ្ងៃ)</div></div>
+    <div class="stat-card"><div class="num">${sum.remaining.toFixed(1)}</div><div class="label">នៅសល់សរុប (ថ្ងៃ)</div></div>`;
+
+  const empty = document.getElementById('lbEmpty');
+  if (rows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  body.innerHTML = rows.map(({ emp, r }) => `
+    <tr>
+      <td>${escapeHtml(emp.username || '-')}</td>
+      <td>${escapeHtml(emp.name)}</td>
+      <td>${emp.startDate || '-'}</td>
+      <td>${r.quota.toFixed(1)}</td>
+      <td>${r.used.toFixed(1)}</td>
+      <td>${r.remaining < 0 ? `<span class="badge inactive">${r.remaining.toFixed(1)}</span>` : `<strong>${r.remaining.toFixed(1)}</strong>`}</td>
+    </tr>`).join('');
 }
 
 async function approveOTRequest(id) {
@@ -1294,6 +1389,7 @@ function renderAll() {
   renderWorkplaceQR();
   renderDeductTab();
   renderBonusTab();
+  renderLeaveBalanceTab();
   renderHolidayBox();
   if (typeof renderFeatures === 'function') renderFeatures();
 }
@@ -2077,6 +2173,7 @@ function showTab(tab) {
   if (tab === 'payroll') renderPayrollTab();
   if (tab === 'attendance') renderAttendanceTab();
   if (tab === 'requests') renderRequestsTab();
+  if (tab === 'leavebalance') renderLeaveBalanceTab();
   if (typeof onFeatureTab === 'function') onFeatureTab(tab);
   if (tab === 'scan') {
     renderScanLog();
@@ -2091,6 +2188,9 @@ document.querySelectorAll('.nav-parent').forEach(btn => btn.addEventListener('cl
 document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
 document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
+initLbControls();
+['lbYear', 'lbSearch'].forEach(id => document.getElementById(id).addEventListener('input', renderLeaveBalanceTab));
+['lbQuotaDays', 'lbProrate'].forEach(id => document.getElementById(id).addEventListener('input', () => { readLbControls(); renderLeaveBalanceTab(); }));
 initDeductControls();
 ['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
 document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
