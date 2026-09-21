@@ -70,6 +70,7 @@
       <div class="nav-sub">
         <button class="nav-item" data-tab="payroll"><span class="dot"></span><span class="lbl">អត្ថប្រយោជន៍ & ប្រាក់កាត់</span></button>
         <button class="nav-item" data-tab="deduct"><span class="dot"></span><span class="lbl">យឺត/ច្បាប់ → កាត់លុយ</span></button>
+        <button class="nav-item" data-tab="bonus"><span class="dot"></span><span class="lbl">បំណាច់ឆ្នាំ</span></button>
       </div>
     </div>
     <button class="nav-item" data-tab="setting"><span class="ico">⚙️</span><span class="lbl">Setting</span></button>
@@ -296,6 +297,62 @@
         <tbody id="dedBody"></tbody>
       </table>
       <div class="empty-state" id="dedEmpty" style="display:none;">មិនមានបុគ្គលិកមកយឺត ឬសុំច្បាប់ក្នុងខែនេះទេ</div>
+    </div>
+  </div>
+
+  <div id="bonusTab" class="tab-content">
+    <div class="attendance-controls">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <input type="month" id="bonusMonth">
+        <input type="text" id="bonusSearch" placeholder="🔍 ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
+        <select id="bonusFilter">
+          <option value="eligible">មានសិទ្ធិទទួលបំណាច់</option>
+          <option value="all">បុគ្គលិកទាំងអស់</option>
+        </select>
+      </div>
+      <button id="bonusApplyAllBtn">➕ បន្ថែមទាំងអស់ទៅ "អត្ថប្រយោជន៍"</button>
+    </div>
+
+    <div class="scan-result-card" style="margin-bottom:16px;">
+      <h3 style="font-size:0.85rem;margin:0 0 10px;">⚙️ លក្ខខណ្ឌគណនាបំណាច់ឆ្នាំ</h3>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0;">
+          <label>របៀបគណនា</label>
+          <select id="bonusMode" style="width:230px;">
+            <option value="flat">ចំនួនថេរដូចគ្នាទាំងអស់ ($)</option>
+            <option value="years">តាមចំនួនឆ្នាំបម្រើការ ($/ឆ្នាំ)</option>
+            <option value="salary">ស្មើនឹងប្រាក់ខែគោល ១ខែ (Bonus ខែទី១៣)</option>
+            <option value="manual">វាយបញ្ចូលដោយដៃម្នាក់ៗ</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;" id="bonusFlatGroup">
+          <label>ទឹកប្រាក់ថេរ ($/នាក់)</label>
+          <input type="number" id="bonusFlatAmount" min="0" step="0.01" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;" id="bonusPerYearGroup">
+          <label>ទឹកប្រាក់ក្នុងមួយឆ្នាំបម្រើការ ($/ឆ្នាំ)</label>
+          <input type="number" id="bonusPerYearAmount" min="0" step="0.01" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>ត្រូវការបម្រើការយ៉ាងតិច (ខែ) ទើបមានសិទ្ធិ</label>
+          <input type="number" id="bonusMinMonths" min="0" step="1" style="width:150px;">
+        </div>
+      </div>
+      <p class="scan-hint">*ឆ្នាំបម្រើការគណនាគិតត្រឹមចុងខែដែលបានជ្រើសរើសខាងលើ (ថ្ងៃចូលធ្វើការ → ចុងខែ)។ បុគ្គលិកដែលមិនគ្រប់ខែអប្បបរមា នឹងគ្មានសិទ្ធិទទួលបំណាច់ទេ (លើកលែងជ្រើសរើស "វាយបញ្ចូលដោយដៃ")។ ការចុច "បន្ថែម" នឹងកត់ត្រាទុកជា "អត្ថប្រយោជន៍" ប្រភេទ "ប្រែប្រួល" ក្នុងខែដែលបានជ្រើសរើស ហើយនឹងបូកចូលទៅប្រាក់ខែសុទ្ធក្នុងផ្ទាំង "តារាងវត្តមាន" ដោយស្វ័យប្រវត្តិ។</p>
+    </div>
+
+    <div class="attendance-stats" id="bonusStats"></div>
+    <br>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>អត្តលេខ</th><th>បុគ្គលិក</th><th>ថ្ងៃចូលធ្វើការ</th><th>ឆ្នាំបម្រើការ</th><th>សិទ្ធិទទួល</th><th>ចំនួនបំណាច់ ($)</th><th>សកម្មភាព</th>
+          </tr>
+        </thead>
+        <tbody id="bonusBody"></tbody>
+      </table>
+      <div class="empty-state" id="bonusEmpty" style="display:none;">មិនមានបុគ្គលិកទេ</div>
     </div>
   </div>
 

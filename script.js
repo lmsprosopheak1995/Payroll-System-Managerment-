@@ -1231,6 +1231,7 @@ function renderAll() {
   renderRequestsTab();
   renderWorkplaceQR();
   renderDeductTab();
+  renderBonusTab();
   renderHolidayBox();
   if (typeof renderFeatures === 'function') renderFeatures();
 }
@@ -1759,6 +1760,184 @@ async function applyAllDeductions() {
   renderPayrollTab();
 }
 
+// ==== បំណាច់ឆ្នាំ (Year-end Bonus) ====
+const BONUS_RULES_KEY = 'bonus_rules_v1';
+const BONUS_DEFAULTS = { mode: 'flat', flatAmount: 50, perYearAmount: 10, minMonths: 12 };
+
+function loadBonusRules() {
+  try {
+    const raw = localStorage.getItem(BONUS_RULES_KEY);
+    if (raw) return { ...BONUS_DEFAULTS, ...JSON.parse(raw) };
+  } catch (e) { /* ignore */ }
+  return { ...BONUS_DEFAULTS };
+}
+function saveBonusRules() {
+  try { localStorage.setItem(BONUS_RULES_KEY, JSON.stringify(bonusRules)); } catch (e) { /* ignore */ }
+}
+let bonusRules = loadBonusRules();
+
+function readBonusControls() {
+  bonusRules.mode = document.getElementById('bonusMode').value;
+  bonusRules.flatAmount = parseFloat(document.getElementById('bonusFlatAmount').value) || 0;
+  bonusRules.perYearAmount = parseFloat(document.getElementById('bonusPerYearAmount').value) || 0;
+  const mm = parseFloat(document.getElementById('bonusMinMonths').value);
+  bonusRules.minMonths = isNaN(mm) ? 0 : Math.max(0, mm);
+  saveBonusRules();
+  onBonusModeChange();
+}
+function onBonusModeChange() {
+  const mode = document.getElementById('bonusMode').value;
+  document.getElementById('bonusFlatGroup').style.display = mode === 'flat' ? '' : 'none';
+  document.getElementById('bonusPerYearGroup').style.display = mode === 'years' ? '' : 'none';
+}
+function initBonusControls() {
+  document.getElementById('bonusMode').value = bonusRules.mode;
+  document.getElementById('bonusFlatAmount').value = bonusRules.flatAmount;
+  document.getElementById('bonusPerYearAmount').value = bonusRules.perYearAmount;
+  document.getElementById('bonusMinMonths').value = bonusRules.minMonths;
+  document.getElementById('bonusMonth').value = `${todayStr().slice(0, 4)}-12`;
+  onBonusModeChange();
+}
+
+function bonusItemId(empId, month) { return `auto_bonus_${empId}_${month}`; }
+
+const round2 = n => Math.round(n * 100) / 100;
+
+// ចំនួនខែបម្រើការ គិតពីថ្ងៃចូលធ្វើការ ដល់ថ្ងៃចុងក្រោយនៃខែដែលបានជ្រើសរើស
+function monthsOfService(startDateStr, asOfDateStr) {
+  if (!startDateStr) return 0;
+  const start = new Date(startDateStr + 'T00:00:00');
+  const asOf = new Date(asOfDateStr + 'T00:00:00');
+  if (isNaN(start) || isNaN(asOf) || asOf < start) return 0;
+  let months = (asOf.getFullYear() - start.getFullYear()) * 12 + (asOf.getMonth() - start.getMonth());
+  if (asOf.getDate() < start.getDate()) months--;
+  return Math.max(0, months);
+}
+
+function calcBonusRow(emp, month, rules) {
+  const monthDates = daysInMonth(month);
+  const asOfDate = monthDates[monthDates.length - 1];
+  const months = monthsOfService(emp.startDate, asOfDate);
+  const years = months / 12;
+  const eligible = rules.mode === 'manual' ? true : months >= rules.minMonths;
+  const salary = parseFloat(emp.salary) || 0;
+  let amount = 0;
+  if (eligible) {
+    if (rules.mode === 'flat') amount = rules.flatAmount;
+    else if (rules.mode === 'years') amount = years * rules.perYearAmount;
+    else if (rules.mode === 'salary') amount = salary;
+    // 'manual' → 0 (admin types the amount per employee)
+  }
+  return { months, years, eligible, amount: round2(amount) };
+}
+
+function renderBonusTab() {
+  const body = document.getElementById('bonusBody');
+  if (!body) return;
+  const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  const search = document.getElementById('bonusSearch').value.toLowerCase().trim();
+  const filter = document.getElementById('bonusFilter').value;
+  const mode = bonusRules.mode;
+
+  let rows = employees.filter(e => e.status === 'active')
+    .filter(e => employeeMatchesSearch(e, search))
+    .map(e => ({ emp: e, r: calcBonusRow(e, month, bonusRules) }))
+    .filter(({ r }) => (search || filter === 'all') ? true : r.eligible);
+
+  const existingAmount = (empId) => {
+    const ex = payrollItems.find(p => p.id === bonusItemId(empId, month));
+    return ex ? ex.amount : null;
+  };
+
+  const sum = rows.reduce((a, { r, emp }) => {
+    const amt = mode === 'manual' ? (existingAmount(emp.id) || 0) : r.amount;
+    return { count: a.count + (r.eligible ? 1 : 0), total: a.total + (r.eligible ? amt : 0) };
+  }, { count: 0, total: 0 });
+
+  document.getElementById('bonusStats').innerHTML = `
+    <div class="stat-card"><div class="num">${sum.count}</div><div class="label">បុគ្គលិកមានសិទ្ធិ</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(sum.total)}</div><div class="label">ប្រាក់បំណាច់សរុប ($)</div></div>
+    <div class="stat-card"><div class="num">${fmtRiel(sum.total * (settings.exchangeRate || 0))} ៛</div><div class="label">ប្រាក់បំណាច់សរុប (រៀល)</div></div>`;
+
+  const empty = document.getElementById('bonusEmpty');
+  if (rows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  body.innerHTML = rows.map(({ emp, r }) => {
+    const existing = payrollItems.find(p => p.id === bonusItemId(emp.id, month));
+    const amountCell = mode === 'manual'
+      ? `<input type="number" min="0" step="0.01" class="bonus-manual-amt" data-emp="${emp.id}" style="width:100px;" value="${existing ? existing.amount : ''}" placeholder="0.00">`
+      : `$${fmtUSD(r.amount)}`;
+    let action;
+    if (!r.eligible) action = existing ? `<button class="danger" onclick="removeBonusItem('${emp.id}')">🗑 ដកចេញ</button>` : '-';
+    else if (mode !== 'manual' && existing && Math.abs(existing.amount - r.amount) < 0.005) action = '<span class="badge active">✓ បានបន្ថែមហើយ</span>';
+    else action = `<button onclick="applyBonusItem('${emp.id}')">${existing ? '🔄 អាប់ដេត' : '➕ បន្ថែម'}</button>`;
+    return `<tr>
+      <td>${escapeHtml(emp.username || '-')}</td>
+      <td>${escapeHtml(emp.name)}</td>
+      <td>${emp.startDate || '-'}</td>
+      <td>${r.months} ខែ (${r.years.toFixed(1)} ឆ្នាំ)</td>
+      <td>${r.eligible ? '<span class="badge active">មាន</span>' : '<span class="badge inactive">គ្មាន</span>'}</td>
+      <td>${amountCell}</td>
+      <td><div class="row-actions" style="justify-content:center;">${action}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function applyBonusItem(empId, silent) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  const r = calcBonusRow(emp, month, bonusRules);
+  if (!r.eligible) return;
+  let amount = r.amount;
+  if (bonusRules.mode === 'manual') {
+    const input = document.querySelector(`.bonus-manual-amt[data-emp="${empId}"]`);
+    amount = round2(parseFloat(input && input.value) || 0);
+    if (amount <= 0) { if (!silent) alert('សូមវាយបញ្ចូលទឹកប្រាក់បំណាច់ឲ្យបុគ្គលិកនេះជាមុនសិន'); return; }
+  }
+  const item = {
+    id: bonusItemId(empId, month),
+    employeeId: empId,
+    type: 'benefit',
+    name: `បំណាច់ឆ្នាំ ${month.slice(0, 4)}`,
+    recurrence: 'variable',
+    month,
+    currency: 'USD',
+    amount,
+  };
+  const idx = payrollItems.findIndex(x => x.id === item.id);
+  if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
+  await upsertPayrollItemRow(item);
+  if (!silent) { renderBonusTab(); renderPayrollTab(); }
+}
+
+async function removeBonusItem(empId) {
+  const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  const id = bonusItemId(empId, month);
+  payrollItems = payrollItems.filter(x => x.id !== id);
+  await deletePayrollItemRow(id);
+  renderBonusTab();
+  renderPayrollTab();
+}
+
+async function applyAllBonus() {
+  const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  const targets = employees.filter(e => e.status === 'active').filter(e => calcBonusRow(e, month, bonusRules).eligible);
+  if (targets.length === 0) { alert('មិនមានបុគ្គលិកមានសិទ្ធិទទួលបំណាច់ឆ្នាំទេ (សូមពិនិត្យលក្ខខណ្ឌ)'); return; }
+  if (bonusRules.mode === 'manual') {
+    const missing = targets.filter(e => {
+      const input = document.querySelector(`.bonus-manual-amt[data-emp="${e.id}"]`);
+      return !(parseFloat(input && input.value) > 0);
+    });
+    if (missing.length > 0) { alert(`សូមវាយបញ្ចូលទឹកប្រាក់ឲ្យបុគ្គលិកគ្រប់នាក់ជាមុនសិន (នៅខ្វះ ${missing.length} នាក់)`); return; }
+  }
+  if (!confirm(`បន្ថែមបំណាច់ឆ្នាំសម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`)) return;
+  for (const e of targets) await applyBonusItem(e.id, true);
+  renderBonusTab();
+  renderPayrollTab();
+}
+
 // ---- Employee QR code (for scanning) ----
 document.getElementById('addBtn').addEventListener('click', openAddModal);
 document.getElementById('empUsernameRegenBtn').addEventListener('click', () => {
@@ -1826,6 +2005,7 @@ function showTab(tab) {
   closeSidebar();
   window.scrollTo({ top: 0 });
   if (tab === 'deduct') renderDeductTab();
+  if (tab === 'bonus') renderBonusTab();
   if (tab === 'payroll') renderPayrollTab();
   if (tab === 'attendance') renderAttendanceTab();
   if (tab === 'requests') renderRequestsTab();
@@ -1849,6 +2029,12 @@ document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
 ['dedGrace', 'dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
 document.querySelectorAll('.ded-leave-type').forEach(c => c.addEventListener('change', () => { readDeductControls(); renderDeductTab(); }));
 document.getElementById('dedApplyAllBtn').addEventListener('click', applyAllDeductions);
+initBonusControls();
+['bonusMonth', 'bonusFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderBonusTab));
+document.getElementById('bonusSearch').addEventListener('input', renderBonusTab);
+document.getElementById('bonusMode').addEventListener('change', () => { readBonusControls(); renderBonusTab(); });
+['bonusFlatAmount', 'bonusPerYearAmount', 'bonusMinMonths'].forEach(id => document.getElementById(id).addEventListener('input', () => { readBonusControls(); renderBonusTab(); }));
+document.getElementById('bonusApplyAllBtn').addEventListener('click', applyAllBonus);
 payLive = setupLiveSearch('payrollSearch', 'payrollEmployeeSelect', renderPayrollTab);
 document.getElementById('holidayAddBtn').addEventListener('click', addHoliday);
 
