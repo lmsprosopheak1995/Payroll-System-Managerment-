@@ -926,6 +926,68 @@ function renderPayrollTab() {
   `;
 
   renderAttendanceTab();
+  renderPayrollHistory();
+}
+
+// ---- ប្រវត្តិបើកប្រាក់ខែ (Payroll payment history) ----
+function monthsBack(endMonth, n) {
+  const [y, m] = endMonth.split('-').map(Number);
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    let mm = m - i, yy = y;
+    while (mm <= 0) { mm += 12; yy--; }
+    arr.push(`${yy}-${String(mm).padStart(2, '0')}`);
+  }
+  return arr;
+}
+
+function renderPayrollHistory() {
+  const body = document.getElementById('payHistoryBody');
+  const empty = document.getElementById('payHistoryEmpty');
+  if (!body) return;
+  const empId = currentPayrollEmployeeId();
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+
+  const endMonth = currentPayrollMonth();
+  const rangeSel = document.getElementById('payHistoryRange');
+  const rangeVal = rangeSel ? rangeSel.value : '12';
+
+  let months;
+  if (rangeVal === 'all') {
+    const startMonth = (emp.startDate || endMonth).slice(0, 7);
+    let [ey, em] = endMonth.split('-').map(Number);
+    const [sy, sm] = startMonth.split('-').map(Number);
+    months = [];
+    while ((ey > sy || (ey === sy && em >= sm)) && months.length < 60) {
+      months.push(`${ey}-${String(em).padStart(2, '0')}`);
+      em--; if (em <= 0) { em += 12; ey--; }
+    }
+  } else {
+    months = monthsBack(endMonth, parseInt(rangeVal, 10) || 12);
+  }
+
+  if (months.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  body.innerHTML = months.map(month => {
+    const t = summarizeEmpMonth(emp, month);
+    return `<tr>
+      <td>${month}</td>
+      <td>${t.workDays}</td>
+      <td>+$${fmtUSD(t.benefitsUSD)}</td>
+      <td>−$${fmtUSD(t.deductionsUSD)}</td>
+      <td><strong>$${fmtUSD(t.net)}</strong></td>
+      <td>${fmtRiel(t.netRiel)} ៛</td>
+      <td><button class="secondary" onclick="adminPrintPayslipMonth('${emp.id}','${month}')">🖨 Payslip</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function adminPrintPayslipMonth(empId, month) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  if (typeof printPayslipFor === 'function') printPayslipFor(emp, month);
 }
 
 function openAddPayrollItemModal(type, forEmpId, forMonth) {
@@ -1970,6 +2032,7 @@ attLive = setupLiveSearch('attendanceSearch', 'attendanceEmployeeSelect', render
 document.getElementById('attendanceMonth').addEventListener('change', renderAttendanceTab);
 document.getElementById('payrollEmployeeSelect').addEventListener('change', renderPayrollTab);
 document.getElementById('payrollMonth').addEventListener('change', renderPayrollTab);
+document.getElementById('payHistoryRange').addEventListener('change', renderPayrollHistory);
 document.getElementById('addBenefitBtn').addEventListener('click', () => openAddPayrollItemModal('benefit'));
 document.getElementById('addDeductionBtn').addEventListener('click', () => openAddPayrollItemModal('deduction'));
 document.getElementById('payrollItemOverlay').addEventListener('click', (e) => {

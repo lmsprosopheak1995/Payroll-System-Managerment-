@@ -246,11 +246,14 @@ function payslipPageHtml(emp, month) {
   </div>`;
 }
 
+function printPayslipFor(emp, month) {
+  openPrintWindow(`Payslip ${emp.name} ${month}`, payslipPageHtml(emp, month), false);
+}
+
 function printPayslip() {
   const emp = employees.find(e => e.id === currentPayrollEmployeeId());
   if (!emp) { alert('សូមជ្រើសរើសបុគ្គលិកជាមុនសិន'); return; }
-  const month = currentPayrollMonth();
-  openPrintWindow(`Payslip ${emp.name} ${month}`, payslipPageHtml(emp, month), false);
+  printPayslipFor(emp, currentPayrollMonth());
 }
 
 function printAllPayslips() {

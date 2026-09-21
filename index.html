@@ -411,6 +411,25 @@
       </div>
     </div>
     <style>@media (max-width: 720px) { #payrollGrid { grid-template-columns: 1fr !important; } }</style>
+
+    <div class="scan-result-card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <h3 style="font-size:0.85rem;margin:0;">🧾 ប្រវត្តិបើកប្រាក់ខែ</h3>
+        <select id="payHistoryRange" style="font-size:0.78rem;">
+          <option value="6">៦ខែចុងក្រោយ</option>
+          <option value="12" selected>១២ខែចុងក្រោយ</option>
+          <option value="24">២៤ខែចុងក្រោយ</option>
+          <option value="all">តាំងពីថ្ងៃចូលធ្វើការ</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ខែ</th><th>ថ្ងៃធ្វើការ</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>Payslip</th></tr></thead>
+          <tbody id="payHistoryBody"></tbody>
+        </table>
+        <div class="empty-state" id="payHistoryEmpty" style="display:none;">មិនមានទិន្នន័យទេ</div>
+      </div>
+    </div>
   </div>
 
   <div id="dashboardTab" class="tab-content active">

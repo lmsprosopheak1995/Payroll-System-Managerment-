@@ -328,6 +328,18 @@
         <button class="primary-btn" id="payrollPdfBtn" style="margin-top:14px;">⬇ ទាញយក Payroll Slip (PDF)</button>
         <button class="secondary" id="payrollPrintBtn" style="margin-top:8px;width:100%;">🖨 ព្រីន Payslip</button>
       </div>
+
+      <div class="portal-card" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          <h2 style="margin:0;font-size:0.9rem;">🧾 ប្រវត្តិបើកប្រាក់ខែ</h2>
+          <select id="payHistoryRangeEmp" style="font-size:0.78rem;">
+            <option value="3">៣ខែចុងក្រោយ</option>
+            <option value="6" selected>៦ខែចុងក្រោយ</option>
+            <option value="12">១២ខែចុងក្រោយ</option>
+          </select>
+        </div>
+        <div id="payHistoryListEmp"><div class="hist-empty">កំពុងផ្ទុក...</div></div>
+      </div>
     </div>
     <nav class="bnav">
       <button class="bnav-item active" data-go="home"><span class="ic">🏠</span>ទំព័រដើម</button>
@@ -835,7 +847,7 @@ function switchEmpTab(tab) {
   if (tab === 'attendance') renderAttendanceTabEmp();
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
-  if (tab === 'payroll') renderPayrollSummary();
+  if (tab === 'payroll') { renderPayrollSummary(); renderPayrollHistoryEmp(); }
   if (tab === 'activities') renderActivitiesEmp();
   if (tab === 'feedback') renderFeedbackEmp();
   if (tab === 'notify') renderNotifyEmp();
@@ -934,7 +946,8 @@ document.getElementById('subBack').addEventListener('click', () => switchEmpTab(
 document.getElementById('homeBanner').addEventListener('scroll', updateBannerDots, { passive: true });
 document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
-document.getElementById('payrollMonthInput').addEventListener('change', renderPayrollSummary);
+document.getElementById('payrollMonthInput').addEventListener('change', () => { renderPayrollSummary(); renderPayrollHistoryEmp(); });
+document.getElementById('payHistoryRangeEmp').addEventListener('change', renderPayrollHistoryEmp);
 
 async function getTodayRecord() {
   const session = getSession();
@@ -1147,6 +1160,45 @@ async function summarizeMonth(month) {
   return t;
 }
 
+function monthsBackEmp(endMonth, n) {
+  const [y, m] = endMonth.split('-').map(Number);
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    let mm = m - i, yy = y;
+    while (mm <= 0) { mm += 12; yy--; }
+    arr.push(`${yy}-${String(mm).padStart(2, '0')}`);
+  }
+  return arr;
+}
+
+async function renderPayrollHistoryEmp() {
+  const box = document.getElementById('payHistoryListEmp');
+  if (!box || !currentEmployee) return;
+  box.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
+  const rangeSel = document.getElementById('payHistoryRangeEmp');
+  const n = parseInt((rangeSel && rangeSel.value) || '6', 10);
+  const endMonth = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
+  const months = monthsBackEmp(endMonth, n);
+  const rows = [];
+  for (const month of months) {
+    const t = await summarizeMonth(month);
+    rows.push({ month, t });
+  }
+  box.innerHTML = rows.map(({ month, t }) => `
+    <div class="req-row">
+      <div>
+        <div><strong>${escapeHtml(month)}</strong></div>
+        <div class="rmeta">ថ្ងៃធ្វើការ ${t.workDays} · អត្ថប្រយោជន៍ +$${fmtUSD(t.benefitsUSD)} · ប្រាក់កាត់ −$${fmtUSD(t.deductionsUSD)}</div>
+      </div>
+      <div class="rright">
+        <div><strong>$${fmtUSD(t.net)}</strong></div>
+        <div class="rmeta">${fmtRiel(t.netRiel)} ៛</div>
+        <button class="secondary" style="margin-top:4px;font-size:0.68rem;padding:4px 8px;" onclick="printPayslipEmp('${month}')">🖨 Payslip</button>
+      </div>
+    </div>
+  `).join('');
+}
+
 // ==== ស្នើសុំច្បាប់ ====
 function previewLeaveAttachment() {
   const fileInput = document.getElementById('leaveAttachment');
@@ -1331,11 +1383,11 @@ function buildPayslipHtml(t, month) {
   `;
 }
 
-async function printPayslipEmp() {
+async function printPayslipEmp(month) {
   if (!currentEmployee) return;
-  const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
-  const t = await summarizeMonth(month);
-  openPrintWindow(`Payslip ${currentEmployee.name} ${month}`, `<div class="page ps-wrap">${buildPayslipHtml(t, month)}</div>`, false);
+  const m = month || document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
+  const t = await summarizeMonth(m);
+  openPrintWindow(`Payslip ${currentEmployee.name} ${m}`, `<div class="page ps-wrap">${buildPayslipHtml(t, m)}</div>`, false);
 }
 
 function printAttendanceEmp() {
@@ -1392,7 +1444,7 @@ document.getElementById('leaveSubmitBtn').addEventListener('click', submitLeaveR
 document.getElementById('leaveAttachment').addEventListener('change', previewLeaveAttachment);
 document.getElementById('otSubmitBtn').addEventListener('click', submitOTRequest);
 document.getElementById('payrollPdfBtn').addEventListener('click', downloadPayrollPDF);
-document.getElementById('payrollPrintBtn').addEventListener('click', printPayslipEmp);
+document.getElementById('payrollPrintBtn').addEventListener('click', () => printPayslipEmp());
 document.getElementById('attPrintBtn').addEventListener('click', printAttendanceEmp);
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
