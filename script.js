@@ -1635,6 +1635,14 @@ function setScanResult(type, text) {
   box.textContent = text;
 }
 
+// ជំហានស្កេនតាមលំដាប់ (ប្រើសម្រាប់កំណត់ថាតើត្រូវលុបត្រង់ field មួយណា)
+const SCAN_STEPS = [
+  { field: 'checkin', label: 'ម៉ោងចូល' },
+  { field: 'breakOut', label: 'ចេញបាយ' },
+  { field: 'breakIn', label: 'ចូលវិញ (ក្រោយបាយ)' },
+  { field: 'checkout', label: 'ម៉ោងចេញ' },
+];
+
 function renderScanLog() {
   const logBox = document.getElementById('scanLog');
   if (!logBox) return;
@@ -1649,7 +1657,7 @@ function renderScanLog() {
       if (r.breakOut) parts.push(`ចេញបាយ ${r.breakOut}`);
       if (r.breakIn) parts.push(`ចូលវិញ ${r.breakIn}`);
       if (r.checkout) parts.push(`ចេញ ${r.checkout}`);
-      return { name: e.name, text: parts.join(' · '), lastTime: r.checkout || r.breakIn || r.breakOut || r.checkin };
+      return { empId: e.id, name: e.name, text: parts.join(' · '), lastTime: r.checkout || r.breakIn || r.breakOut || r.checkin };
     })
     .sort((a, b) => (b.lastTime || '').localeCompare(a.lastTime || ''));
 
@@ -1657,7 +1665,37 @@ function renderScanLog() {
     logBox.innerHTML = '<div class="scan-log-empty">មិនទាន់មានការស្កេនថ្ងៃនេះទេ</div>';
     return;
   }
-  logBox.innerHTML = rows.map(r => `<div class="scan-log-item"><span>${escapeHtml(r.name)}</span><span>${escapeHtml(r.text)}</span></div>`).join('');
+  logBox.innerHTML = rows.map(r => `
+    <div class="scan-log-item">
+      <span>${escapeHtml(r.name)}</span>
+      <span class="scan-log-item-right">
+        <span>${escapeHtml(r.text)}</span>
+        <button class="scan-log-del" title="លុបស្កេនចុងក្រោយ" onclick="adminDeleteLastScan('${r.empId}')">🗑</button>
+      </span>
+    </div>
+  `).join('');
+}
+
+// អ្នកគ្រប់គ្រងលុបការស្កេនចុងក្រោយរបស់បុគ្គលិកម្នាក់ (ប្រើពេលបុគ្គលិកស្កេនខុស ដូចជាស្កេន "ចេញ" មុនម៉ោង)
+function adminDeleteLastScan(empId) {
+  const date = todayStr();
+  const dayRec = attendance[date] && attendance[date][empId];
+  if (!dayRec) return;
+
+  let last = null;
+  for (const step of SCAN_STEPS) { if (dayRec[step.field]) last = step; }
+  if (!last) return;
+
+  const emp = employees.find(x => x.id === empId);
+  const empName = emp ? emp.name : empId;
+  if (!confirm(`តើអ្នកប្រាកដជាចង់លុបការស្កេន "${last.label}" (${dayRec[last.field]}) របស់ ${empName} ដែរឬទេ? បុគ្គលិកនឹងអាចស្កេនម្តងទៀតបានវិញ។`)) return;
+
+  dayRec[last.field] = '';
+  if (last.field === 'checkin') dayRec.status = ''; // ជំហានទីមួយ — ត្រឡប់ទៅដូចមិនទាន់ស្កេនអ្វីទាំងអស់
+
+  renderScanLog();
+  renderAttendanceTab();
+  upsertAttendanceRecord(date, empId, dayRec);
 }
 
 function handleScanResult(decodedText) {

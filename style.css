@@ -360,12 +360,25 @@ footer {
 .scan-log-item {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font-size: 0.75rem;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+.scan-log-item-right { display: flex; align-items: center; gap: 8px; }
+.scan-log-del {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.scan-log-del:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .scan-log-empty { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 12px; }
 
 /* ==================================================================
