@@ -104,6 +104,8 @@ h1 { font-size: 1.15rem; margin: 0; }
   color: transparent;
 }
 .stat-card .label { font-size: 0.7rem; color: var(--text-muted); }
+.stat-card[onclick] { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.stat-card[onclick]:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.18); }
 
 .toolbar {
   display: flex;

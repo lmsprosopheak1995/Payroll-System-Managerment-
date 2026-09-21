@@ -356,8 +356,13 @@
       <h2 class="page-title">📊 Dashboard</h2>
       <input type="month" id="dashMonth">
     </div>
+    <div class="toolbar" style="margin-bottom:8px;">
+      <input type="text" id="dashSearchInput" placeholder="🔍 ស្វែងរកបុគ្គលិក (ឈ្មោះ/username)..." style="flex:1 1 260px;max-width:380px;">
+    </div>
+    <div class="scan-log" id="dashSearchResults" style="display:none;margin-bottom:14px;"></div>
     <h3 class="sec-title">ថ្ងៃនេះ · <span id="dashToday"></span></h3>
     <div class="attendance-stats" id="dashTodayStats"></div>
+    <div class="scan-result-card" id="dashDetailList" style="display:none;margin:12px 0;"></div>
     <h3 class="sec-title">ខែនេះ (ប្រាក់ខែប៉ាន់ស្មាន)</h3>
     <div class="attendance-stats" id="dashMonthStats"></div>
     <div class="dash-grid">

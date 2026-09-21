@@ -96,6 +96,7 @@ function initFeatures() {
   annLive = setupLiveSearch('annEmpSearch', 'annEmployeeSelect', () => {});
 
   byId('dashMonth').addEventListener('change', renderDashboard);
+  byId('dashSearchInput').addEventListener('input', renderDashSearch);
   byId('starMonth').addEventListener('change', renderStars);
   byId('orgSearch').addEventListener('input', renderOrgChart);
   byId('orgShowInactive').addEventListener('change', renderOrgChart);
@@ -148,8 +149,73 @@ function onFeatureTab(tab) {
 }
 
 // ------------------------------------------------------------ Dashboard ----
-function statCard(num, label, color) {
-  return `<div class="stat-card"><div class="num"${color ? ` style="color:${color}"` : ''}>${num}</div><div class="label">${label}</div></div>`;
+function statCard(num, label, color, clickKey) {
+  const clickAttr = clickKey ? ` onclick="toggleDashDetail('${clickKey}')" style="cursor:pointer;"` : '';
+  return `<div class="stat-card"${clickAttr}><div class="num"${color ? ` style="color:${color}"` : ''}>${num}</div><div class="label">${label}</div></div>`;
+}
+
+const DASH_DETAIL_LABELS = {
+  present: 'មកធ្វើការ', late: 'ស្កេនយឺត', leave: 'សុំច្បាប់',
+  absent: 'អ្នកមិនមកធ្វើការ', notyet: 'មិនស្កេន',
+};
+let dashLists = {};
+let dashDetailOpen = null;
+
+function toggleDashDetail(key) {
+  dashDetailOpen = dashDetailOpen === key ? null : key;
+  renderDashDetailPanel();
+}
+
+function renderDashDetailPanel() {
+  const box = byId('dashDetailList');
+  if (!box) return;
+  if (!dashDetailOpen) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const list = dashLists[dashDetailOpen] || [];
+  box.style.display = '';
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong>${escapeHtml(DASH_DETAIL_LABELS[dashDetailOpen] || '')} (${list.length})</strong>
+      <button class="secondary" style="padding:3px 9px;font-size:0.72rem;" onclick="toggleDashDetail('${dashDetailOpen}')">✕ បិទ</button>
+    </div>
+    ${list.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;">${list.map(e => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 10px 5px 5px;border:1px solid var(--border);border-radius:999px;font-size:0.8rem;">
+        <span class="avatar" style="width:24px;height:24px;font-size:0.68rem;">${e.photo ? `<img src="${escapeHtml(e.photo)}" alt="">` : escapeHtml((e.name || '?').charAt(0).toUpperCase())}</span>
+        ${escapeHtml(e.name)}
+      </div>`).join('')}</div>` : '<div class="scan-log-empty">មិនមានបុគ្គលិកក្នុងចំណាត់ថ្នាក់នេះទេ</div>'}
+  `;
+}
+
+function todayStatusLabel(e, today) {
+  const rec = attendance[today] && attendance[today][e.id];
+  if (!rec || !rec.status) return { text: 'មិនស្កេន', color: 'var(--text-muted)' };
+  if (rec.status === 'present') {
+    const m = timeToMinutes(rec.checkin);
+    const isLate = m !== null && m > lateStartMinutes(getEmpShift(e.id));
+    return isLate
+      ? { text: `ស្កេនយឺត (${rec.checkin})`, color: '#d97706' }
+      : { text: `មកធ្វើការ (${rec.checkin})`, color: 'var(--success)' };
+  }
+  if (rec.status === 'leave') return { text: 'សុំច្បាប់', color: '#d97706' };
+  if (rec.status === 'absent') return { text: 'អ្នកមិនមកធ្វើការ', color: 'var(--danger)' };
+  return { text: 'មិនស្កេន', color: 'var(--text-muted)' };
+}
+
+function renderDashSearch() {
+  const input = byId('dashSearchInput');
+  const box = byId('dashSearchResults');
+  if (!input || !box) return;
+  const q = (input.value || '').trim();
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const today = todayStr();
+  const matches = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
+  box.style.display = '';
+  box.className = 'scan-log';
+  box.innerHTML = matches.length
+    ? matches.map(e => {
+        const s = todayStatusLabel(e, today);
+        return `<div class="scan-log-item"><span>${escapeHtml(e.name)}</span><span style="color:${s.color};font-weight:600;">${escapeHtml(s.text)}</span></div>`;
+      }).join('')
+    : '<div class="scan-log-empty">រកមិនឃើញបុគ្គលិក</div>';
 }
 
 function renderDashboard() {
@@ -161,23 +227,27 @@ function renderDashboard() {
 
   const active = activeEmployeesList();
   let present = 0, leave = 0, late = 0, absent = 0, notYet = 0;
+  const presentList = [], lateList = [], leaveList = [], absentList = [], notYetList = [];
   active.forEach(e => {
     const rec = attendance[today] && attendance[today][e.id];
-    if (!rec || !rec.status) { notYet++; return; }
+    if (!rec || !rec.status) { notYet++; notYetList.push(e); return; }
     if (rec.status === 'present') {
-      present++;
+      present++; presentList.push(e);
       const m = timeToMinutes(rec.checkin);
-      if (m !== null && m > lateStartMinutes(getEmpShift(e.id))) late++;
-    } else if (rec.status === 'leave') leave++;
-    else if (rec.status === 'absent') absent++;
+      if (m !== null && m > lateStartMinutes(getEmpShift(e.id))) { late++; lateList.push(e); }
+    } else if (rec.status === 'leave') { leave++; leaveList.push(e); }
+    else if (rec.status === 'absent') { absent++; absentList.push(e); }
   });
+  dashLists = { present: presentList, late: lateList, leave: leaveList, absent: absentList, notyet: notYetList };
   byId('dashTodayStats').innerHTML =
     statCard(active.length, 'បុគ្គលិកកំពុងបម្រើការ') +
-    statCard(present, 'មកធ្វើការ', 'var(--success)') +
-    statCard(late, 'មកយឺត', '#d97706') +
-    statCard(leave, 'សុំច្បាប់', '#d97706') +
-    statCard(absent, 'អវត្តមាន', 'var(--danger)') +
-    statCard(notYet, 'មិនទាន់កត់ត្រា', 'var(--text-muted)');
+    statCard(present, 'មកធ្វើការ', 'var(--success)', 'present') +
+    statCard(late, 'ស្កេនយឺត', '#d97706', 'late') +
+    statCard(leave, 'សុំច្បាប់', '#d97706', 'leave') +
+    statCard(absent, 'អ្នកមិនមកធ្វើការ', 'var(--danger)', 'absent') +
+    statCard(notYet, 'មិនស្កេន', 'var(--text-muted)', 'notyet');
+  renderDashDetailPanel();
+  renderDashSearch();
 
   const dates = daysInMonth(month);
   let payroll = 0, otHours = 0, lateDays = 0, leaveDays = 0, absentDays = 0, workDays = 0;
