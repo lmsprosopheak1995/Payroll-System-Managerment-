@@ -362,6 +362,8 @@ function timeToMinutes(t) {
 // ---- វេនការងារ (Shift) ----
 const SHIFT = {
   otMealBlockHours: 2,   // ប្រាក់បាយ OT ផ្តល់ជូនរៀងរាល់ 2 ម៉ោង OT
+  graceMinutes: 10,      // ការអនុគ្រោះស្កេនចូល៖ ស្កេនយឺតមិនលើស 10 នាទី គិតម៉ោងធម្មតាគ្រប់ (តែនៅតែកត់ថាយឺត)
+  outGraceMinutes: 15,   // ការអនុគ្រោះស្កេនចេញ៖ ស្កេនចេញមុនម៉ោងកំណត់ មិនលើស 15 នាទី ចាត់ទុកថាទាន់ម៉ោង (គិតគ្រប់ម៉ោង, មិនចេញមុន)
   otAfterMinutes: 60,    // ស្កេនចេញយឺតជាង ម៉ោងចេញ +60 នាទី ទើបគិត OT (រាប់ចាប់ពីម៉ោងចេញ)
 };
 // វេនលំនាំដើម៖ ព្រឹក 07:00–11:00 · ថ្ងៃ 12:00–16:00
@@ -399,31 +401,31 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
   if (rawOut === null) {
     const boEarly = timeToMinutes(breakOut);
     if (boEarly === null) return { normalMinutes: 0, otMinutes: 0, rawIn, shiftTotal };
-    const mIn = Math.max(rawIn, shift.start);
-    const mOut = Math.min(boEarly, shift.breakOut);
+    const mIn = rawIn <= shift.start + SHIFT.graceMinutes ? shift.start : rawIn;
+    const mOut = boEarly >= shift.breakOut - SHIFT.outGraceMinutes ? shift.breakOut : boEarly;
     return { normalMinutes: Math.max(0, mOut - mIn), otMinutes: 0, rawIn, shiftTotal };
   }
   if (rawOut < rawIn) rawOut += 24 * 60;
 
   // ព្រឹក៖ ស្កេនចូលមុនម៉ោងចូល → តម្រឹមមកម៉ោងចូល; ចេញសម្រាកក្រោយម៉ោងកំណត់ → គិតត្រឹមម៉ោងកំណត់
-  const morningIn = Math.max(rawIn, shift.start);
+  const morningIn = rawIn <= shift.start + SHIFT.graceMinutes ? shift.start : Math.max(rawIn, shift.start);
   let morningOut = shift.breakOut;
   const bo = timeToMinutes(breakOut);
-  if (bo !== null && bo < morningOut) morningOut = bo;
+  if (bo !== null && bo < morningOut - SHIFT.outGraceMinutes) morningOut = bo;
 
   // រសៀល៖ ស្កេនចូលវិញមុនម៉ោងកំណត់ → តម្រឹមមកម៉ោងកំណត់
   let afternoonIn = shift.breakIn;
   const bi = timeToMinutes(breakIn);
-  if (bi !== null && bi > afternoonIn) afternoonIn = bi;
+  if (bi !== null && bi > afternoonIn + SHIFT.graceMinutes) afternoonIn = bi;
   afternoonIn = Math.max(afternoonIn, rawIn);
-  const afternoonOut = Math.min(rawOut, shift.end);
+  const afternoonOut = rawOut >= shift.end - SHIFT.outGraceMinutes ? Math.min(Math.max(rawOut, shift.end), shift.end) : rawOut;
 
   const morningMinutes = Math.max(0, Math.min(morningOut, rawOut) - morningIn);
   const afternoonMinutes = Math.max(0, afternoonOut - afternoonIn);
   const normalMinutes = Math.min(morningMinutes + afternoonMinutes, shiftTotal);
 
   // OT៖ ស្កេនចេញក្នុង 1 ម៉ោងដំបូងក្រោយម៉ោងចេញ មិនគិត OT; បើលើសនោះ គិតពីម៉ោងចេញរហូតដល់ម៉ោងស្កេនចេញ
-  const otMinutes = rawOut >= shift.end + SHIFT.otAfterMinutes ? rawOut - shift.end : 0;
+  const otMinutes = rawOut >= shift.end + SHIFT.otAfterMinutes ? Math.floor((rawOut - shift.end) / 60) * 60 : 0; // គិតជាម៉ោងពេញ (18:01 = 2 ម៉ោង)
   return { normalMinutes, otMinutes, rawIn, shiftTotal };
 }
 
@@ -505,7 +507,7 @@ function computeRow(emp, record, date) {
     normalHours = w.normalMinutes / 60;
     otHours = w.otMinutes / 60;
     fullDay = w.shiftTotal > 0 && w.normalMinutes >= w.shiftTotal;
-    if (w.rawIn > lateStartMinutes(sh)) late = true;
+    if (w.rawIn > lateStartMinutes(sh)) late = true; // ស្កេនចូលក្រោយម៉ោង = យឺត (ទោះគិតម៉ោងគ្រប់ក្នុងការអនុគ្រោះ 10 នាទី)
   }
 
   const round4 = n => Math.round(n * 10000) / 10000;
@@ -1866,7 +1868,7 @@ function calcDeductionRow(emp, month) {
       const outMin = timeToMinutes(rec.checkout);
       if (outMin !== null && (inMin === null || outMin > inMin)) {
         const em = shift.end - outMin;
-        if (em > 0) { earlyDays++; earlyMinutes += em; flagged = true; lateDates.push(`${date.slice(8)} (ចេញមុន ${em}′)`); }
+        if (em > SHIFT.outGraceMinutes) { earlyDays++; earlyMinutes += em; flagged = true; lateDates.push(`${date.slice(8)} (ចេញមុន ${em}′)`); }
       }
       if (flagged) violDays++;
     } else if (rec.status === 'leave') {
