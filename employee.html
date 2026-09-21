@@ -906,9 +906,13 @@ async function checkWpGeo() {
   } catch (err) {
     return { ok: false, msg: '✕ សូមអនុញ្ញាតឱ្យប្រើទីតាំង (Location) ក្នុង browser ដើម្បីកត់ត្រាវត្តមាន' };
   }
+  const acc = pos.coords.accuracy || 0;
+  if (acc > 150) {
+    return { ok: false, msg: `✕ សញ្ញា GPS ទូរស័ព្ទអ្នកមិនច្បាស់ (ភាពត្រឹមត្រូវ ±${Math.round(acc)} ម៉ែត្រ) — សូមចេញក្រៅអាគារ ឬបើក Location ជា High Accuracy រួចសាកល្បងម្តងទៀត` };
+  }
   const d = distMeters(pos.coords.latitude, pos.coords.longitude, settings.workplaceLat, settings.workplaceLng);
   const radius = settings.workplaceRadius || 100;
-  if (d - Math.min(pos.coords.accuracy || 0, 50) > radius) {
+  if (d - Math.min(acc, 100) > radius) {
     return { ok: false, msg: `✕ អ្នកនៅឆ្ងាយពីកន្លែងធ្វើការ (ប្រហែល ${Math.round(d)} ម៉ែត្រ) — អនុញ្ញាតត្រឹម ${radius} ម៉ែត្រ` };
   }
   return { ok: true };

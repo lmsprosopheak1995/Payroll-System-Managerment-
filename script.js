@@ -1283,7 +1283,7 @@ function renderWpGeoInfo() {
 async function saveWpGeo(useCurrent) {
   const msg = document.getElementById('wpGeoMsg');
   const say = (t, ok) => { msg.style.color = ok ? 'var(--success)' : 'var(--danger)'; msg.textContent = t; };
-  settings.workplaceRadius = Math.max(20, parseInt(document.getElementById('wpRadiusInput').value, 10) || 100);
+  settings.workplaceRadius = Math.max(50, parseInt(document.getElementById('wpRadiusInput').value, 10) || 100);
   const done = async () => {
     const ok = await upsertSettings();
     renderWpGeoInfo();
