@@ -70,6 +70,7 @@
         <button class="nav-item" data-tab="bonus"><span class="dot"></span><span class="lbl">បំណាច់ឆ្នាំ</span></button>
       </div>
     </div>
+    <button class="nav-item" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI ជំនួយការ</span></button>
     <button class="nav-item" data-tab="setting"><span class="ico">⚙️</span><span class="lbl">Setting</span></button>
   </nav>
   <div class="app-main">
@@ -549,6 +550,43 @@
     </div>
   </div>
 
+  <div id="aiTab" class="tab-content">
+    <div class="attendance-controls"><h2 class="page-title">🤖 AI ជំនួយការ</h2></div>
+
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <h3 class="sec-title" style="margin-top:0;">🔑 ការកំណត់ API Key</h3>
+      <p class="scan-hint" style="margin-top:0;">
+        ត្រូវការ Anthropic API Key (ចាប់ផ្តើមដោយ <code>sk-ant-</code>) ដើម្បីប្រើមុខងារ AI — Key ត្រូវបានរក្សាទុកនៅលើកុំព្យូទ័រនេះប៉ុណ្ណោះ។
+        ទិន្នន័យបុគ្គលិក (ឈ្មោះ ផ្នែក ស្ថិតិវត្តមាន/ប្រាក់ខែ) នឹងត្រូវផ្ញើទៅ Anthropic ដើម្បីវិភាគ — សូមប្រុងប្រយ័ត្ន។
+      </p>
+      <div id="aiKeyStatus" style="margin-bottom:10px;font-size:0.82rem;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="password" id="aiApiKeyInput" placeholder="sk-ant-..." style="flex:1;min-width:220px;">
+        <button id="aiSaveKeyBtn">💾 រក្សាទុក Key</button>
+      </div>
+    </div>
+
+    <div class="scan-result-card" style="margin-bottom:14px;">
+      <h3 class="sec-title" style="margin-top:0;">📊 វិភាគ/សង្ខេបប្រចាំខែ</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:var(--text-muted);">ជ្រើសខែ៖</label>
+        <input type="month" id="aiChatMonth">
+        <button id="aiInsightBtn" disabled>✨ បង្កើតការវិភាគ</button>
+      </div>
+      <div id="aiInsightResult"></div>
+    </div>
+
+    <div class="scan-result-card">
+      <h3 class="sec-title" style="margin-top:0;">💬 ជជែកជាមួយ AI (សួរអំពីទិន្នន័យ)</h3>
+      <div id="aiChatMessages" class="ai-chat-box"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input type="text" id="aiChatInput" placeholder="សរសេរសំណួររបស់អ្នក…" style="flex:1;">
+        <button id="aiChatSendBtn" disabled>ផ្ញើ</button>
+        <button class="secondary" id="aiChatClearBtn" type="button">🗑</button>
+      </div>
+    </div>
+  </div>
+
   <div id="settingTab" class="tab-content">
     <div class="attendance-controls"><h2 class="page-title">⚙️ Setting — ការកំណត់រួម</h2></div>
     <div class="scan-result-card" style="margin-bottom:14px;">
@@ -727,6 +765,11 @@
         <input type="text" id="empIdCard" placeholder="លេខអត្តសញ្ញាណប័ណ្ណ" autocomplete="off">
       </div>
     </div>
+    <div class="form-group">
+      <input type="file" id="aiIdScanInput" accept="image/*" style="display:none;">
+      <button type="button" class="secondary" id="aiScanBtnModal" disabled style="width:100%;">🤖 ស្កេនកាតអត្តសញ្ញាណដោយ AI (បំពេញឈ្មោះ/លេខស្វ័យប្រវត្តិ)</button>
+      <small id="aiIdScanStatus" style="display:none;margin-top:6px;font-size:0.72rem;"></small>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>ថ្ងៃចូលធ្វើការ</label>
@@ -768,6 +811,7 @@
 </div>
 
 <script src="features.js"></script>
+<script src="ai.js"></script>
 <script src="print.js"></script>
 <script src="script.js"></script>
 </body>

@@ -545,6 +545,14 @@ img, canvas, video { max-width: 100%; }
 /* ==== Page headings, dashboard, misc ==== */
 .page-title { font-size: 1.02rem; margin: 0; }
 .sec-title { font-size: 0.85rem; margin: 18px 0 10px; }
+.ai-chat-box { max-height: 360px; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.ai-msg { display: flex; }
+.ai-msg.user { justify-content: flex-end; }
+.ai-msg.assistant { justify-content: flex-start; }
+.ai-msg-bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; }
+.ai-msg.user .ai-msg-bubble { background: var(--grad); color: #fff; border-bottom-right-radius: 2px; }
+.ai-msg.assistant .ai-msg-bubble { background: var(--grad-soft); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+.ai-insight-box { font-size: 0.82rem; line-height: 1.7; background: var(--grad-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
 .danger-text { color: var(--danger); }
 .dash-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-top: 14px; }
 @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }

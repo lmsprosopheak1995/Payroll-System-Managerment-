@@ -100,6 +100,7 @@ function initFeatures() {
   byId('settingPwBtn').addEventListener('click', changeAdminPassword);
   byId('settingQrBtn').addEventListener('click', () => showTab('scan'));
   if (typeof initPrint === 'function') initPrint();
+  if (typeof initAI === 'function') initAI();
   byId('attendanceHolidayBtn').addEventListener('click', () => {
     showTab('setting');
     const box = byId('holidayBox');
@@ -122,6 +123,7 @@ function onFeatureTab(tab) {
   const map = {
     dashboard: renderDashboard, notify: renderAnnouncements,
     feedback: renderFeedback, shift: renderShift, setting: renderSetting,
+    ai: (typeof renderAITab === 'function' ? renderAITab : null),
   };
   if (map[tab]) map[tab]();
 }
