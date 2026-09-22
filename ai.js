@@ -6,7 +6,7 @@
    ========================================================================== */
 
 const AI_SETTINGS_KEY = 'ai_assistant_settings_v1';
-const AI_MODEL = 'gemini-2.0-flash';
+const AI_MODEL = 'gemini-3.6-flash';
 const AI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
 let aiChatMessages = []; // { role: 'user'|'assistant', text }
