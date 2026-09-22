@@ -1,13 +1,13 @@
 /* ==========================================================================
    ai.js — មុខងារ AI ជំនួយការ៖ ជជែក, សង្ខេប/វិភាគស្វ័យប្រវត្តិ, ស្កេនអត្តសញ្ញាណប័ណ្ណ
-   ត្រូវការ Anthropic API Key (ដាក់ក្នុង Tab "AI ជំនួយការ" → ការកំណត់)។
+   ត្រូវការ Google Gemini API Key (ដាក់ក្នុង Tab "AI ជំនួយការ" → ការកំណត់)។
    Key ត្រូវបានរក្សាទុកនៅលើម៉ាស៊ីននេះប៉ុណ្ណោះ (localStorage) មិនផ្ញើទៅ Supabase ទេ។
    (ឯកសារនេះត្រូវផ្ទុកបន្ទាប់ពី features.js និងមុន script.js)
    ========================================================================== */
 
 const AI_SETTINGS_KEY = 'ai_assistant_settings_v1';
-const AI_MODEL = 'claude-sonnet-4-6';
-const AI_API_URL = 'https://api.anthropic.com/v1/messages';
+const AI_MODEL = 'gemini-2.0-flash';
+const AI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
 let aiChatMessages = []; // { role: 'user'|'assistant', text }
 let aiBusy = false;
@@ -51,24 +51,28 @@ function renderAiKeyStatus() {
 }
 
 // --------------------------------------------------------------- API call --
+// បម្លែង { role, content } (Anthropic-style) ទៅជា Gemini "contents" format
+function toGeminiContents(messages) {
+  return messages.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+}
+
 async function callAiApi({ system, messages, maxTokens }) {
   const key = aiApiKey();
-  if (!key) { customAlert('សូមភ្ជាប់ Anthropic API Key ជាមុនសិន (Tab "AI ជំនួយការ")'); return null; }
+  if (!key) { customAlert('សូមភ្ជាប់ Google Gemini API Key ជាមុនសិន (Tab "AI ជំនួយការ")'); return null; }
   try {
-    const res = await fetch(AI_API_URL, {
+    const url = `${AI_API_BASE}${AI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+    const body = {
+      contents: toGeminiContents(messages),
+      generationConfig: { maxOutputTokens: maxTokens || 1024 },
+    };
+    if (system) body.systemInstruction = { parts: [{ text: system }] };
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        max_tokens: maxTokens || 1024,
-        system: system || undefined,
-        messages,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -76,8 +80,12 @@ async function callAiApi({ system, messages, maxTokens }) {
       customAlert('AI មានបញ្ហា៖ ' + (data?.error?.message || res.statusText));
       return null;
     }
-    const textBlock = (data.content || []).find(b => b.type === 'text');
-    return textBlock ? textBlock.text : '';
+    const cand = (data.candidates || [])[0];
+    const text = cand?.content?.parts?.map(p => p.text || '').join('') || '';
+    if (!text && cand?.finishReason && cand.finishReason !== 'STOP') {
+      customAlert('AI មិនបានឆ្លើយតបពេញលេញទេ (' + cand.finishReason + ')');
+    }
+    return text;
   } catch (e) {
     console.error('AI fetch failed', e);
     customAlert('មិនអាចភ្ជាប់ទៅ AI service បានទេ៖ ' + e.message);
@@ -153,7 +161,7 @@ async function sendAiChat() {
   const input = byId('aiChatInput');
   const text = (input.value || '').trim();
   if (!text) return;
-  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Anthropic API Key ជាមុនសិន'); return; }
+  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Google Gemini API Key ជាមុនសិន'); return; }
 
   aiChatMessages.push({ role: 'user', text });
   input.value = '';
@@ -197,7 +205,7 @@ function clearAiChat() {
 // --------------------------------------------------------------- insights --
 async function generateAiInsights() {
   if (aiBusy) return;
-  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Anthropic API Key ជាមុនសិន'); return; }
+  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Google Gemini API Key ជាមុនសិន'); return; }
   const month = aiChatMonth();
   const box = byId('aiInsightResult');
   const btn = byId('aiInsightBtn');
@@ -235,7 +243,7 @@ function fileToBase64(file) {
 }
 
 function triggerAiIdScanPicker() {
-  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Anthropic API Key ជាមុនសិន (Tab "AI ជំនួយការ")'); return; }
+  if (!aiApiKey()) { customAlert('សូមភ្ជាប់ Google Gemini API Key ជាមុនសិន (Tab "AI ជំនួយការ")'); return; }
   byId('aiIdScanInput').click();
 }
 
@@ -250,32 +258,28 @@ async function handleAiIdScanFile(file) {
     const mediaType = file.type || 'image/jpeg';
     const b64 = await fileToBase64(file);
     const key = aiApiKey();
-    const res = await fetch(AI_API_URL, {
+    const url = `${AI_API_BASE}${AI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: AI_MODEL,
-        max_tokens: 500,
-        messages: [{
+        contents: [{
           role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-            { type: 'text', text: 'នេះជារូបអត្តសញ្ញាណប័ណ្ណខ្មែរ (ID card)។ សូមស្រង់ចេញព័ត៌មាន ហើយឆ្លើយតបជា JSON ប៉ុណ្ណោះ (គ្មានអត្ថបទផ្សេងទៀត) ក្នុងទម្រង់៖ {"name":"ឈ្មោះពេញ","idNumber":"លេខអត្តសញ្ញាណប័ណ្ណ","dob":"YYYY-MM-DD ឬទទេប្រសិនអានមិនច្បាស់"}។ បើអានវាល័យណាមួយមិនច្បាស់ សូមដាក់ទទេ។' },
+          parts: [
+            { inline_data: { mime_type: mediaType, data: b64 } },
+            { text: 'នេះជារូបអត្តសញ្ញាណប័ណ្ណខ្មែរ (ID card)។ សូមស្រង់ចេញព័ត៌មាន ហើយឆ្លើយតបជា JSON ប៉ុណ្ណោះ (គ្មានអត្ថបទផ្សេងទៀត គ្មាន markdown fence) ក្នុងទម្រង់៖ {"name":"ឈ្មោះពេញ","idNumber":"លេខអត្តសញ្ញាណប័ណ្ណ","dob":"YYYY-MM-DD ឬទទេប្រសិនអានមិនច្បាស់"}។ បើអានវាល័យណាមួយមិនច្បាស់ សូមដាក់ទទេ។' },
           ],
         }],
+        generationConfig: { maxOutputTokens: 500 },
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error?.message || res.statusText);
-    const textBlock = (data.content || []).find(b => b.type === 'text');
+    const cand = (data.candidates || [])[0];
+    const text = cand?.content?.parts?.map(p => p.text || '').join('') || '';
     let parsed = null;
-    if (textBlock) {
-      const match = textBlock.text.match(/\{[\s\S]*\}/);
+    if (text) {
+      const match = text.match(/\{[\s\S]*\}/);
       if (match) { try { parsed = JSON.parse(match[0]); } catch (e) { parsed = null; } }
     }
     if (!parsed) throw new Error('មិនអាចអានទិន្នន័យបានច្បាស់ទេ');
