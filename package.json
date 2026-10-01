@@ -1,7 +1,7 @@
 {
   "name": "hp-check-me",
   "productName": "HP Check Me",
-  "version": "1.0.2",
+  "version": "1.0.8",
   "description": "Employee Management System (Khmer) - desktop app",
   "main": "main.js",
   "scripts": {
