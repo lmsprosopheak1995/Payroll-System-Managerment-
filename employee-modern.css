@@ -1,0 +1,257 @@
+/* ==========================================================================
+   employee-modern.css — UI ថ្មីសម្រាប់ employee.html
+   ពណ៌ទំនើប (Teal + Sky) · Icon Frame · Grid Column · តូច ស្អាត
+   ដាក់ក្រោម <style> ក្នុង employee.html (មុន </head>)៖
+     <link rel="stylesheet" href="employee-modern.css">
+   លុបវាចេញ → ត្រលប់ទៅរចនាចាស់វិញ
+   ========================================================================== */
+
+/* ---------- 1) ពណ៌ (Design tokens) ---------- */
+:root {
+  --bg: #f3f6f9;
+  --card-bg: #ffffff;
+  --text: #0f1b2d;
+  --text-muted: #5b6b80;
+  --border: #e1e8ef;
+
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --b1: #0d9488;
+  --b2: #0284c7;
+  --brand: linear-gradient(135deg, var(--b1), var(--b2));
+  --success: #059669;
+  --warn: #d97706;
+  --danger: #e11d48;
+  --danger-hover: #be123c;
+  --info: #0284c7;
+
+  --r-lg: 16px;
+  --r-md: 12px;
+  --shadow: 0 1px 2px rgba(15, 27, 45, 0.05), 0 4px 14px rgba(15, 27, 45, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1320; --card-bg: #121d2e; --text: #e6edf6; --text-muted: #94a3b8; --border: #22314a;
+    --accent: #2dd4bf; --accent-hover: #5eead4; --b1: #14b8a6; --b2: #0ea5e9;
+    --success: #34d399; --warn: #fbbf24; --info: #38bdf8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1320; --card-bg: #121d2e; --text: #e6edf6; --text-muted: #94a3b8; --border: #22314a;
+  --accent: #2dd4bf; --accent-hover: #5eead4; --b1: #14b8a6; --b2: #0ea5e9;
+  --success: #34d399; --warn: #fbbf24; --info: #38bdf8;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body { background: var(--bg); }
+.portal { font-size: 0.88rem; }
+
+/* ---------- 2) Icon + Frame ---------- */
+.ui-ico {
+  width: 1.15em; height: 1.15em; flex: 0 0 auto;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+  display: block;
+}
+.ui-ico.inline { display: inline-block; vertical-align: -0.2em; margin-right: 6px; }
+.ico-frame {
+  --tone: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 22%, transparent);
+  font-size: 1rem;
+}
+
+/* ---------- 3) Card ---------- */
+.portal .portal-card {
+  border-radius: var(--r-lg); padding: 14px;
+  border: 1px solid var(--border); background: var(--card-bg); box-shadow: var(--shadow);
+}
+.portal .pf-title { font-size: 0.85rem; margin-bottom: 10px; }
+.portal .pf-title > span:first-child, .portal .portal-card > h2, .portal .portal-card h2:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.portal .pf-title .ui-ico.inline, .portal h2 .ui-ico.inline {
+  box-sizing: content-box; width: 1em; height: 1em; padding: 6px; margin: 0; vertical-align: middle;
+  border-radius: 9px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.portal h3 { font-size: 0.82rem; }
+.portal label { font-size: 0.72rem; }
+
+/* ---------- 4) ក្បាលទំព័រដើម ---------- */
+.home-head { padding: 14px 16px 10px; gap: 10px; }
+.h-avatar { width: 40px; height: 40px; border-radius: 13px; font-size: 0.9rem; box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+.h-hello { font-size: 0.72rem; }
+.h-name { font-size: 0.95rem; }
+
+.banner-track { margin: 0 16px; }
+.banner { aspect-ratio: 16 / 8; border-radius: var(--r-lg); padding: 16px; }
+.banner:nth-child(even) { background: linear-gradient(135deg, #0f766e, #0369a1); }
+.banner h3 { font-size: 0.95rem; }
+.banner p { font-size: 0.75rem; }
+.banner-dots i.on { background: var(--accent); width: 16px; }
+
+/* ---------- 5) Menu → Grid 2 column ---------- */
+.portal .menu-card {
+  margin: 14px 16px; padding: 0; background: none; box-shadow: none; border-radius: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+}
+.portal button.menu-row {
+  --c: var(--accent);
+  padding: 10px; gap: 10px; border: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  border-radius: var(--r-md); background: var(--card-bg); box-shadow: var(--shadow);
+  font-size: 0.8rem; font-weight: 600; line-height: 1.3; min-width: 0;
+}
+.portal button.menu-row:last-child { border-bottom: 1px solid var(--border); }
+.portal button.menu-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.portal button.menu-row:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--border)); box-shadow: 0 8px 20px color-mix(in srgb, var(--c) 16%, transparent); }
+.portal button.menu-row:active { transform: scale(0.98); }
+.menu-ico, .pf-q .qi {
+  width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px;
+  display: grid; place-items: center; color: var(--c); font-size: 1.05rem;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 24%, transparent);
+}
+.menu-row .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.menu-row .go { width: 22px; height: 22px; flex: 0 0 22px; font-size: 1rem; background: color-mix(in srgb, var(--c) 10%, transparent); color: var(--c); }
+
+/* ---------- 6) Stat card = Frame + Icon (Grid) ---------- */
+#pfStats, #empAttStats {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; margin-bottom: 0;
+}
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+.portal .stat-card {
+  --tone: var(--accent);
+  display: grid; grid-template-columns: 1fr; grid-template-areas: "num" "label";
+  column-gap: 10px; align-items: center; text-align: left; min-width: 0;
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--card-bg); border: 1px solid var(--border); box-shadow: none;
+}
+.portal .stat-card::before { display: none; }
+.portal .stat-card.has-ico { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ico num" "ico label"; }
+.portal .stat-card .ico-frame { grid-area: ico; width: 36px; height: 36px; flex-basis: 36px; border-radius: 11px; font-size: 1.05rem; --tone: inherit; }
+.portal .stat-card[data-tone] .ico-frame { --tone: var(--tone-c); }
+.portal .stat-card .num {
+  grid-area: num; font-size: 1.05rem; font-weight: 700; line-height: 1.25; color: var(--text);
+  background: none; -webkit-text-fill-color: currentColor;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+}
+.portal .stat-card .label { grid-area: label; font-size: 0.68rem; color: var(--text-muted); line-height: 1.35; }
+.portal .stat-card:not([data-tone]) .ico-frame { --tone: var(--accent); }
+.stat-card[data-tone="success"] { --tone-c: var(--success); }
+.stat-card[data-tone="warn"]    { --tone-c: var(--warn); }
+.stat-card[data-tone="danger"]  { --tone-c: var(--danger); }
+.stat-card[data-tone="info"]    { --tone-c: var(--info); }
+
+/* ---------- 7) ព័ត៌មានបុគ្គលិក (grid) ---------- */
+.who-row .name { font-size: 0.95rem; }
+.who-row .logout { border-radius: 10px; padding: 5px 10px; }
+.emp-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.emp-info-grid .item { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 6%, var(--card-bg)); border: 1px solid var(--border); }
+.emp-info-grid .item .lbl { font-size: 0.64rem; }
+.emp-info-grid .item .val { font-size: 0.76rem; }
+
+/* ---------- 8) ប៊ូតុងរហ័ស (grid 2) ---------- */
+.pf-quick { gap: 8px; }
+.portal button.pf-q {
+  flex-direction: row; justify-content: flex-start; gap: 9px; padding: 8px 10px;
+  border-radius: var(--r-md); font-size: 0.76rem; text-align: left; line-height: 1.3;
+  background: color-mix(in srgb, var(--c) 7%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--c) 22%, var(--border));
+}
+.pf-q .qi { width: 30px; height: 30px; flex-basis: 30px; border-radius: 9px; font-size: 0.95rem; }
+
+/* ---------- 9) ច្បាប់ប្រចាំឆ្នាំ ---------- */
+.pf-leave-num { font-size: 1.6rem; }
+.pf-bar { height: 8px; }
+.portal button.pf-btn { border-radius: var(--r-md); padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---------- 10) ម៉ោងចូល-ចេញ ---------- */
+.clock-box { border-radius: var(--r-lg); padding: 18px 12px 14px; margin-bottom: 12px; background: color-mix(in srgb, var(--accent) 4%, var(--card-bg)); }
+.clock-box::before { height: 3px; }
+.clock-box .time { font-size: 1.9rem; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; margin-bottom: 6px; }
+.clock-box .status-line { font-size: 0.75rem; margin-bottom: 10px; }
+.next-step {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 4px;
+  margin: 8px 0 0; padding: 9px 12px; border-radius: var(--r-md); font-size: 0.8rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.next-step small { flex: 0 0 100%; }
+.next-step .ui-ico.inline { color: var(--accent); margin-right: 2px; }
+.portal .big-btn { border-radius: var(--r-md); padding: 12px; font-size: 0.88rem; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---------- 11) បញ្ជី / តារាង ---------- */
+.hist-row, .req-row { padding: 8px 2px; font-size: 0.74rem; }
+.hist-empty { font-size: 0.74rem; padding: 14px; }
+.payroll-line { font-size: 0.78rem; }
+.portal .table-wrap { border-radius: var(--r-md); border: 1px solid var(--border); overflow-x: auto; }
+.att-mini-table th { background: color-mix(in srgb, var(--accent) 6%, var(--card-bg)); }
+.att-mini-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.badge.active { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+.badge.pending { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+
+/* ---------- 12) Form + ប៊ូតុង ---------- */
+.portal input, .portal select, .portal textarea { border-radius: 10px; font-size: 0.84rem; padding: 9px 11px; }
+.portal input:focus, .portal select:focus, .portal textarea:focus {
+  outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.portal button.primary-btn { border-radius: var(--r-md); background: var(--brand); color: #fff; font-size: 0.86rem; padding: 11px; display: inline-flex; align-items: center; justify-content: center; }
+.portal button.secondary { border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+.portal button:hover { box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent); }
+.portal button.secondary:hover, .portal button.menu-row:hover, .portal button.bnav-item:hover { box-shadow: none; }
+.portal button.menu-row:hover { box-shadow: 0 8px 20px color-mix(in srgb, var(--c) 16%, transparent); }
+.portal .tab-btn { font-size: 0.72rem; }
+
+/* ---------- 13) Login ---------- */
+#loginCard { padding: 56px 24px 0; }
+.login-logo {
+  width: 88px; height: 88px; margin: 0 auto 32px; border-radius: 26px; font-size: 2.4rem;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.portal #loginCard .form-group { margin-bottom: 12px; }
+.portal #loginCard input {
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card-bg);
+  padding: 12px 14px; font-size: 0.92rem;
+}
+.portal #loginCard input:focus { border-color: var(--accent); }
+.portal #loginCard .primary-btn { margin-top: 8px; border-radius: var(--r-md); padding: 12px; font-size: 0.92rem; }
+
+/* ---------- 14) Sub-head + Bottom nav ---------- */
+.sub-head { padding: 8px 10px; font-size: 0.92rem; gap: 2px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); }
+.sub-head button.back {
+  width: 34px; height: 34px; padding: 0; margin-right: 6px; border-radius: 11px; font-size: 1.3rem;
+  display: grid; place-items: center; background: var(--card-bg); border: 1px solid var(--border);
+}
+.bnav {
+  left: 50%; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: calc(100% - 20px); max-width: 460px;
+  padding: 6px; gap: 2px; border-radius: 18px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card-bg) 92%, transparent); backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(15, 27, 45, 0.16);
+}
+.portal button.bnav-item { padding: 5px 0 4px; font-size: 0.64rem; border-radius: 13px; gap: 2px; }
+.portal button.bnav-item .ic {
+  width: 32px; height: 26px; border-radius: 9px; display: grid; place-items: center;
+  filter: none; opacity: 0.75; font-size: 1.1rem; transition: background 0.2s, color 0.2s;
+}
+.portal button.bnav-item.active { color: var(--accent); }
+.portal button.bnav-item.active .ic { opacity: 1; color: #fff; background: var(--brand); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent); }
+.bnav-item .badge.inactive { top: -1px; left: calc(50% + 4px); }
+.portal { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+@media (max-width: 360px) {
+  .portal .menu-card { grid-template-columns: 1fr; }
+  .portal button.menu-row:last-child:nth-child(odd) { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal button.menu-row:active { transform: none; }
+  .pf-bar > div { transition: none; }
+}
+
+/* icon ក្នុង frame ត្រូវនៅកណ្តាល (មិនមាន margin) */
+.menu-ico .ui-ico.inline, .pf-q .qi .ui-ico.inline, .bnav-item .ic .ui-ico.inline { margin: 0; vertical-align: baseline; }
+.portal button .ui-ico.inline { margin-right: 6px; }
