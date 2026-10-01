@@ -453,7 +453,7 @@ async function loadMyPartialLeaves() {
     const u = leaveUnitOf(r);
     if (u.unit === 'day' || r.leave_type === 'unpaid') return;
     const h = u.unit === 'half' ? std / 2 : Math.min(u.hours, std);
-    partialLeaveByDate[r.start_date] = (partialLeaveByDate[r.start_date] || 0) + h;
+    datesInRange(r.start_date, r.end_date).forEach(dt => { partialLeaveByDate[dt] = (partialLeaveByDate[dt] || 0) + h; }); // ដូច admin៖ រាប់គ្រប់ថ្ងៃក្នុងចន្លោះ
   });
 }
 
@@ -490,7 +490,7 @@ function datesInRange(startStr, endStr) {
   let d = new Date(startStr + 'T00:00:00');
   const end = new Date(endStr + 'T00:00:00');
   while (d <= end) {
-    dates.push(d.toISOString().slice(0, 10));
+    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`); // ម៉ោងក្នុងស្រុក
     d.setDate(d.getDate() + 1);
   }
   return dates;

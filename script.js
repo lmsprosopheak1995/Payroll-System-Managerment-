@@ -204,8 +204,22 @@ async function loadData() {
   employees = (data || []).map(rowToEmployee);
 }
 
+// ទាញទិន្នន័យគ្រប់ជួរ (PostgREST កំណត់ 1000 ជួរ/ស្នើ) — ត្រូវមាន order ច្បាស់លាស់ ទើប range មិនជាន់/ខ្វះជួរ
+async function fetchAllRows(table, orders) {
+  const out = [];
+  for (let from = 0; from < 100000; from += 1000) {
+    let q = supabaseClient.from(table).select('*');
+    (orders || [{ col: 'id' }]).forEach(o => { q = q.order(o.col, { ascending: o.asc !== false }); });
+    const { data, error } = await q.range(from, from + 999);
+    if (error) return { data: null, error };
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}
+
 async function loadAttendance() {
-  const { data, error } = await supabaseClient.from('attendance').select('*');
+  const { data, error } = await fetchAllRows('attendance', [{ col: 'date' }, { col: 'employee_id' }]);
   if (error) {
     console.error('Load attendance failed', error);
     customAlert('មិនអាចទាញយកទិន្នន័យវត្តមានពី Supabase បានទេ៖ ' + error.message);
@@ -1044,20 +1058,20 @@ const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', ap
 const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 
 async function loadLeaveRequests() {
-  const { data, error } = await supabaseClient.from('leave_requests').select('*').order('created_at', { ascending: false });
+  const { data, error } = await fetchAllRows('leave_requests', [{ col: 'created_at', asc: false }, { col: 'id' }]);
   if (error) { console.error('Load leave requests failed', error); leaveRequests = []; return; }
   leaveRequests = data || [];
 }
 
 async function loadOvertimeRequests() {
-  const { data, error } = await supabaseClient.from('overtime_requests').select('*').order('created_at', { ascending: false });
+  const { data, error } = await fetchAllRows('overtime_requests', [{ col: 'created_at', asc: false }, { col: 'id' }]);
   if (error) { console.error('Load overtime requests failed', error); overtimeRequests = []; return; }
   overtimeRequests = data || [];
 }
 
 // ==== Benefits / Deductions (payroll items) ====
 async function loadPayrollItems() {
-  const { data, error } = await supabaseClient.from('payroll_items').select('*').order('created_at', { ascending: false });
+  const { data, error } = await fetchAllRows('payroll_items', [{ col: 'created_at', asc: false }, { col: 'id' }]);
   if (error) { console.error('Load payroll items failed', error); pcLoadFail('ធាតុប្រាក់ខែ', error.message); customAlert('មិនអាចទាញយកធាតុអត្ថប្រយោជន៍/ប្រាក់កាត់បានទេ៖ ' + error.message + '\nលេខប្រាក់ខែនឹងមិនត្រឹមត្រូវ — កុំព្រីន ឬបិទខែ រហូតដល់ដោះស្រាយ'); payrollItems = []; return; }
   payrollItems = (data || []).map(row => ({
     id: row.id,
@@ -1454,7 +1468,7 @@ function datesInRange(startStr, endStr) {
   let d = new Date(startStr + 'T00:00:00');
   const end = new Date(endStr + 'T00:00:00');
   while (d <= end) {
-    dates.push(d.toISOString().slice(0, 10));
+    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`); // ម៉ោងក្នុងស្រុក (មិនប្រើ toISOString ដែលប្តូរថ្ងៃក្នុង UTC+7)
     d.setDate(d.getDate() + 1);
   }
   return dates;
