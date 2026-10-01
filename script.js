@@ -635,6 +635,11 @@ function renderAttendanceTab() {
     : '';
 
   const net2 = v => (Math.round((v || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // ប្រាក់ខែសុទ្ធ បង្ហាញត្រឹម 2 ខ្ទង់
+  // ប្រាក់ខែសុទ្ធ បំបែកជា ដុល្លារពេញ + រៀលសល់ (ពី $ ដែលបានបង្គត់ 2 ខ្ទង់ × អត្រា) ឧ. $281.06 → $281 + 240 ៛
+  const netR = Math.round((netUSD || 0) * 100) / 100;
+  const netDollars = Math.floor(netR + 1e-9);
+  const netRielRem = Math.round((netR - netDollars) * (settings.exchangeRate || 0));
+  const netSplit = `$${netDollars.toLocaleString()} + ${fmtRiel(netRielRem)} ៛`;
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
@@ -645,7 +650,7 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
     <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
     <div class="stat-card"><div class="num">$${net2(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
+    <div class="stat-card"><div class="num">${netSplit}</div><div class="label">ប្រាក់ខែសុទ្ធ (ដុល្លារ + រៀល)</div></div>
   `;
 
   // ប្រអប់បំបែកលម្អិត៖ ចែកដាច់ពីគ្នា (ឈ្នួលធម្មតា / ថែមម៉ោង / ប្រាក់បាយ) មិនបូករួមជាលេខតែមួយ
@@ -664,7 +669,7 @@ function renderAttendanceTab() {
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
-      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${net2(netUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span></span></div>
     `;
 }
 
