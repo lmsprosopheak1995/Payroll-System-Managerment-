@@ -721,7 +721,7 @@ function generateEmployeeCode() {
 
 // ==== Leave / Overtime requests (admin approval) ====
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 
 async function loadLeaveRequests() {
   const { data, error } = await supabaseClient.from('leave_requests').select('*').order('created_at', { ascending: false });
@@ -1196,6 +1196,13 @@ async function approveLeaveRequest(id) {
   if (!req) return;
   const lockedMonth = [...new Set(datesInRange(req.start_date, req.end_date).map(d => d.slice(0, 7)))].find(isMonthLocked);
   if (lockedMonth) { guardLocked(lockedMonth, 'អនុម័តច្បាប់ដែលប៉ះពាល់'); return; }
+  if (req.leave_type === 'paid') {
+    const emp = employees.find(e => e.id === req.employee_id);
+    const year = parseInt(req.start_date.slice(0, 4), 10);
+    const days = datesInRange(req.start_date, req.end_date).length;
+    const remaining = emp ? calcLeaveBalanceRow(emp, year, lbRules).paidRemaining : 0;
+    if (days > remaining && !(await customConfirm(`ច្បាប់មានប្រាក់ខែនៅសល់ ${remaining} ថ្ងៃ ប៉ុន្តែសំណើនេះសុំ ${days} ថ្ងៃ។ នៅតែអនុម័ត?`))) return;
+  }
   const { error } = await supabaseClient.from('leave_requests')
     .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
   if (error) { customAlert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
@@ -1226,7 +1233,7 @@ async function rejectLeaveRequest(id) {
 
 // ==== ច្បាប់ប្រចាំឆ្នាំ — ប្រើអស់ / នៅសល់ (Annual Leave Balance) ====
 const LB_RULES_KEY = 'leave_balance_rules_v1';
-const LB_DEFAULTS = { annualQuotaDays: 18, prorate: true };
+const LB_DEFAULTS = { annualQuotaDays: 18, prorate: true, paidQuotaDays: 7, carryOver: false, carryMaxDays: 5, carryFromYear: new Date().getFullYear() };
 
 function loadLbRules() {
   try {
@@ -1240,14 +1247,40 @@ function saveLbRules() {
 }
 let lbRules = loadLbRules();
 
+let lbSyncTimer = null;
+// ផ្ញើកូតាទៅ Supabase (app_settings) ដើម្បីឱ្យផតថលបុគ្គលិកបង្ហាញលេខដូចគ្នា។ បើ column មិនទាន់មាន → រំលង (មិនបង្អាក់ការងារ)
+function scheduleLbSync() {
+  clearTimeout(lbSyncTimer);
+  lbSyncTimer = setTimeout(async () => {
+    const { error } = await supabaseClient.from('app_settings').update({
+      annual_quota_days: lbRules.annualQuotaDays,
+      annual_prorate: lbRules.prorate,
+      paid_quota_days: lbRules.paidQuotaDays,
+      annual_carry_enabled: lbRules.carryOver,
+      annual_carry_max: lbRules.carryMaxDays,
+      annual_carry_from: lbRules.carryFromYear,
+    }).eq('id', 1);
+    if (error) console.warn('Leave quota sync skipped (សូមបន្ថែម column ក្នុង app_settings):', error.message);
+  }, 800);
+}
+
 function readLbControls() {
   lbRules.annualQuotaDays = parseFloat(document.getElementById('lbQuotaDays').value) || 0;
   lbRules.prorate = document.getElementById('lbProrate').checked;
+  lbRules.paidQuotaDays = Math.max(0, parseFloat(document.getElementById('lbPaidQuota').value) || 0);
+  lbRules.carryOver = document.getElementById('lbCarryOver').checked;
+  lbRules.carryMaxDays = Math.max(0, parseFloat(document.getElementById('lbCarryMax').value) || 0);
+  lbRules.carryFromYear = parseInt(document.getElementById('lbCarryFrom').value, 10) || new Date().getFullYear();
   saveLbRules();
+  scheduleLbSync();
 }
 function initLbControls() {
   document.getElementById('lbQuotaDays').value = lbRules.annualQuotaDays;
   document.getElementById('lbProrate').checked = lbRules.prorate;
+  document.getElementById('lbPaidQuota').value = lbRules.paidQuotaDays;
+  document.getElementById('lbCarryOver').checked = !!lbRules.carryOver;
+  document.getElementById('lbCarryMax').value = lbRules.carryMaxDays;
+  document.getElementById('lbCarryFrom').value = lbRules.carryFromYear;
   document.getElementById('lbYear').value = todayStr().slice(0, 4);
 }
 
@@ -1262,11 +1295,11 @@ function annualLeaveMonthsInYear(emp, year) {
   return 13 - startMonth;
 }
 
-// ចំនួនថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលបានអនុម័ត ហើយស្ថិតក្នុងឆ្នាំដែលបានជ្រើសរើស
-function usedAnnualLeaveDays(empId, year) {
+// ចំនួនថ្ងៃច្បាប់ (តាមប្រភេទ) ដែលបានអនុម័ត ហើយស្ថិតក្នុងឆ្នាំដែលបានជ្រើសរើស
+function usedLeaveDays(empId, year, type) {
   const yearStart = `${year}-01-01`, yearEnd = `${year}-12-31`;
   return leaveRequests
-    .filter(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === 'annual')
+    .filter(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === type)
     .reduce((sum, r) => {
       const s = r.start_date < yearStart ? yearStart : r.start_date;
       const e = r.end_date > yearEnd ? yearEnd : r.end_date;
@@ -1274,14 +1307,47 @@ function usedAnnualLeaveDays(empId, year) {
       return sum + datesInRange(s, e).length;
     }, 0);
 }
+function usedAnnualLeaveDays(empId, year) { return usedLeaveDays(empId, year, 'annual'); }
+
+function annualBaseQuota(emp, year, rules) {
+  const months = annualLeaveMonthsInYear(emp, year);
+  if (months <= 0) return 0;
+  return rules.prorate ? round2(rules.annualQuotaDays * months / 12) : rules.annualQuotaDays;
+}
+
+// ថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលផ្ទេរមកពីឆ្នាំមុន (កំណត់ត្រឹម carryMaxDays; ចាប់ពីឆ្នាំ carryFromYear តែប៉ុណ្ណោះ)
+function annualCarryIn(emp, year, rules, depth) {
+  depth = depth || 0;
+  if (!rules.carryOver || depth > 10) return 0;
+  const prev = year - 1;
+  if (prev < rules.carryFromYear) return 0;
+  const startYear = parseInt((emp.startDate || '').slice(0, 4), 10);
+  if (isNaN(startYear) || prev < startYear) return 0;
+  const pool = annualBaseQuota(emp, prev, rules) + annualCarryIn(emp, prev, rules, depth + 1) - usedLeaveDays(emp.id, prev, 'annual');
+  return Math.min(rules.carryMaxDays, Math.max(0, round2(pool)));
+}
 
 function calcLeaveBalanceRow(emp, year, rules) {
   const months = annualLeaveMonthsInYear(emp, year);
-  const quota = months > 0 ? (rules.prorate ? round2(rules.annualQuotaDays * months / 12) : rules.annualQuotaDays) : 0;
-  const used = usedAnnualLeaveDays(emp.id, year);
-  const remaining = round2(quota - used);
-  return { months, quota: round2(quota), used, remaining };
+  const quota = annualBaseQuota(emp, year, rules);
+  const carry = annualCarryIn(emp, year, rules);
+  const used = usedLeaveDays(emp.id, year, 'annual');
+  const remaining = round2(quota + carry - used);
+  // នៅសល់ → ផ្ទេរទៅឆ្នាំក្រោយ (ក្នុងកំណត់) ឯលើសពីនោះ = បើកលុយជំនួស
+  const carryOut = rules.carryOver ? Math.min(rules.carryMaxDays, Math.max(0, remaining)) : 0;
+  const cashDays = round2(Math.max(0, remaining) - carryOut);
+  const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
+  const cashAmount = round2(cashDays * dailyRate);
+  // ច្បាប់មានប្រាក់ខែ (ពិសេស) — កូតាផ្ទាល់ខ្លួន មិនកាត់សមាមាត្រ
+  const paidQuota = months > 0 ? rules.paidQuotaDays : 0;
+  const paidUsed = usedLeaveDays(emp.id, year, 'paid');
+  return {
+    months, quota: round2(quota), carry, used, remaining, carryOut, cashDays, cashAmount,
+    paidQuota, paidUsed, paidRemaining: round2(paidQuota - paidUsed),
+  };
 }
+
+function leaveCashItemId(empId, year) { return `auto_leavecash_${empId}_${year}`; }
 
 function renderLeaveBalanceTab() {
   const body = document.getElementById('lbBody');
@@ -1294,28 +1360,90 @@ function renderLeaveBalanceTab() {
     .map(emp => ({ emp, r: calcLeaveBalanceRow(emp, year, lbRules) }));
 
   const sum = rows.reduce((a, { r }) => ({
-    quota: a.quota + r.quota, used: a.used + r.used, remaining: a.remaining + r.remaining,
-  }), { quota: 0, used: 0, remaining: 0 });
+    quota: a.quota + r.quota + r.carry, used: a.used + r.used, remaining: a.remaining + r.remaining,
+    cash: a.cash + r.cashAmount, paidUsed: a.paidUsed + r.paidUsed,
+  }), { quota: 0, used: 0, remaining: 0, cash: 0, paidUsed: 0 });
 
   document.getElementById('lbStats').innerHTML = `
     <div class="stat-card"><div class="num">${rows.length}</div><div class="label">បុគ្គលិកសកម្ម</div></div>
-    <div class="stat-card"><div class="num">${sum.quota.toFixed(1)}</div><div class="label">កូតាសរុប (ថ្ងៃ)</div></div>
+    <div class="stat-card"><div class="num">${sum.quota.toFixed(1)}</div><div class="label">កូតាសរុប + ផ្ទេរមក (ថ្ងៃ)</div></div>
     <div class="stat-card"><div class="num">${sum.used.toFixed(1)}</div><div class="label">ប្រើអស់សរុប (ថ្ងៃ)</div></div>
-    <div class="stat-card"><div class="num">${sum.remaining.toFixed(1)}</div><div class="label">នៅសល់សរុប (ថ្ងៃ)</div></div>`;
+    <div class="stat-card"><div class="num">${sum.remaining.toFixed(1)}</div><div class="label">នៅសល់សរុប (ថ្ងៃ)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(sum.cash)}</div><div class="label">ត្រូវបើកជំនួសសរុប ($)</div></div>
+    <div class="stat-card"><div class="num">${sum.paidUsed.toFixed(1)}</div><div class="label">ច្បាប់មានប្រាក់ខែ ប្រើសរុប (ថ្ងៃ)</div></div>`;
 
   const empty = document.getElementById('lbEmpty');
   if (rows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  body.innerHTML = rows.map(({ emp, r }) => `
+  const badge = v => v < 0 ? `<span class="badge inactive">${v.toFixed(1)}</span>` : `<strong>${v.toFixed(1)}</strong>`;
+  body.innerHTML = rows.map(({ emp, r }) => {
+    const existing = payrollItems.find(p => p.id === leaveCashItemId(emp.id, year));
+    let action = '-';
+    if (r.cashAmount > 0 || existing) {
+      if (existing && Math.abs(existing.amount - r.cashAmount) < 0.005) {
+        action = `<span class="badge active">✓ បានបន្ថែមហើយ</span> <button class="danger" onclick="removeLeaveCashItem('${emp.id}')">🗑</button>`;
+      } else if (r.cashAmount > 0) {
+        action = `<button onclick="applyLeaveCashItem('${emp.id}')">${existing ? '🔄 អាប់ដេត' : '💵 បើកជំនួស'}</button>`;
+      } else {
+        action = `<button class="danger" onclick="removeLeaveCashItem('${emp.id}')">🗑 ដកចេញ</button>`;
+      }
+    }
+    return `
     <tr>
       <td>${escapeHtml(emp.username || '-')}</td>
       <td>${escapeHtml(emp.name)}</td>
       <td>${emp.startDate || '-'}</td>
       <td>${r.quota.toFixed(1)}</td>
+      <td>${r.carry ? r.carry.toFixed(1) : '-'}</td>
       <td>${r.used.toFixed(1)}</td>
-      <td>${r.remaining < 0 ? `<span class="badge inactive">${r.remaining.toFixed(1)}</span>` : `<strong>${r.remaining.toFixed(1)}</strong>`}</td>
-    </tr>`).join('');
+      <td>${badge(r.remaining)}</td>
+      <td>${r.carryOut ? r.carryOut.toFixed(1) : '-'}</td>
+      <td>${r.cashDays ? r.cashDays.toFixed(1) : '-'}</td>
+      <td>${r.cashAmount ? '$' + fmtUSD(r.cashAmount) : '-'}</td>
+      <td>${r.paidQuota.toFixed(1)}</td>
+      <td>${r.paidUsed.toFixed(1)}</td>
+      <td>${badge(r.paidRemaining)}</td>
+      <td><div class="row-actions" style="justify-content:center;">${action}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+// បន្ថែមប្រាក់បើកជំនួសថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលនៅសល់ ទៅ "អត្ថប្រយោជន៍" ក្នុងខែធ្នូ
+async function applyLeaveCashItem(empId) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const year = parseInt(document.getElementById('lbYear').value, 10) || parseInt(todayStr().slice(0, 4), 10);
+  const month = `${year}-12`;
+  if (guardLocked(month, 'បញ្ចូលប្រាក់បើកជំនួសថ្ងៃច្បាប់')) return;
+  const r = calcLeaveBalanceRow(emp, year, lbRules);
+  if (r.cashAmount <= 0) { customAlert('មិនមានថ្ងៃច្បាប់ត្រូវបើកជំនួសទេ'); return; }
+  if (!(await customConfirm(`បន្ថែមប្រាក់បើកជំនួស ${r.cashDays} ថ្ងៃ ($${fmtUSD(r.cashAmount)}) ឲ្យ ${emp.name} ក្នុងខែ ${month}?`))) return;
+  const item = {
+    id: leaveCashItemId(empId, year), employeeId: empId, type: 'benefit',
+    name: `បើកជំនួសថ្ងៃច្បាប់ ${year} (${r.cashDays} ថ្ងៃ)`,
+    recurrence: 'variable', month, currency: 'USD', amount: r.cashAmount,
+  };
+  const idx = payrollItems.findIndex(x => x.id === item.id);
+  const prevAmt = idx !== -1 ? payrollItems[idx].amount : null;
+  if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
+  await upsertPayrollItemRow(item);
+  logAudit('leave_cash_apply', { entity: 'payroll_item', ref: item.id, month, employeeId: empId, old: prevAmt === null ? null : { name: item.name, type: 'benefit', currency: 'USD', amount: prevAmt }, new: { name: item.name, type: 'benefit', currency: 'USD', amount: item.amount } });
+  renderLeaveBalanceTab();
+  renderPayrollTab();
+}
+
+async function removeLeaveCashItem(empId) {
+  const year = parseInt(document.getElementById('lbYear').value, 10) || parseInt(todayStr().slice(0, 4), 10);
+  const month = `${year}-12`;
+  if (guardLocked(month, 'ដកប្រាក់បើកជំនួសថ្ងៃច្បាប់')) return;
+  const id = leaveCashItemId(empId, year);
+  const prevItem = payrollItems.find(x => x.id === id);
+  payrollItems = payrollItems.filter(x => x.id !== id);
+  await deletePayrollItemRow(id);
+  if (prevItem) logAudit('leave_cash_remove', { entity: 'payroll_item', ref: id, month, employeeId: empId, old: { name: prevItem.name, type: 'benefit', currency: 'USD', amount: prevItem.amount } });
+  renderLeaveBalanceTab();
+  renderPayrollTab();
 }
 
 async function approveOTRequest(id) {
@@ -2528,7 +2656,7 @@ document.getElementById('sidebarBackdrop').addEventListener('click', closeSideba
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
 initLbControls();
 ['lbYear', 'lbSearch'].forEach(id => document.getElementById(id).addEventListener('input', renderLeaveBalanceTab));
-['lbQuotaDays', 'lbProrate'].forEach(id => document.getElementById(id).addEventListener('input', () => { readLbControls(); renderLeaveBalanceTab(); }));
+['lbQuotaDays', 'lbProrate', 'lbPaidQuota', 'lbCarryOver', 'lbCarryMax', 'lbCarryFrom'].forEach(id => document.getElementById(id).addEventListener('input', () => { readLbControls(); renderLeaveBalanceTab(); }));
 initDeductControls();
 ['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
 document.getElementById('dedSearch').addEventListener('input', renderDeductTab);

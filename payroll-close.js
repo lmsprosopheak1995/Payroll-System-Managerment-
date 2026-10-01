@@ -93,6 +93,7 @@ const AUDIT_LABELS = {
   item_add: 'បន្ថែមធាតុ', item_edit: 'កែធាតុ', item_delete: 'លុបធាតុ',
   deduction_apply: 'កាត់យឺត/ច្បាប់', deduction_remove: 'ដកការកាត់យឺត/ច្បាប់',
   bonus_apply: 'បំណាច់ឆ្នាំ', bonus_remove: 'ដកបំណាច់ឆ្នាំ',
+  leave_cash_apply: 'បើកជំនួសថ្ងៃច្បាប់', leave_cash_remove: 'ដកការបើកជំនួសថ្ងៃច្បាប់',
   lock_month: '🔒 បិទខែ', unlock_month: '🔓 បើកខែឡើងវិញ',
   salary_change: '💲 ប្តូរប្រាក់ខែមូលដ្ឋាន', employee_delete_blocked: 'រារាំងការលុបបុគ្គលិក',
   adjustment_add: '⚖️ កែតម្រូវ', dispute_approved: 'អនុម័តពាក្យតវ៉ា', dispute_rejected: 'បដិសេធពាក្យតវ៉ា',

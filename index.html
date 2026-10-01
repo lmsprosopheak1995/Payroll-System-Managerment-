@@ -58,7 +58,7 @@
       </div>
     </div>
     <button class="nav-item" data-tab="requests"><span class="ico">📝</span><span class="lbl">Leave / Overtime <span id="pendingReqBadge"></span></span></button>
-    <button class="nav-item" data-tab="leavebalance"><span class="ico">🌴</span><span class="lbl">ច្បាប់ប្រចាំឆ្នាំ</span></button>
+    <button class="nav-item" data-tab="leavebalance"><span class="ico">🌴</span><span class="lbl">ច្បាប់ប្រចាំឆ្នាំ / មានប្រាក់ខែ</span></button>
     <button class="nav-item" data-tab="notify"><span class="ico">🔔</span><span class="lbl">Push Notifications</span></button>
     <button class="nav-item" data-tab="feedback"><span class="ico">💬</span><span class="lbl">Feedback <span id="fbNewBadge"></span></span></button>
     <button class="nav-item" data-tab="shift"><span class="ico">🕒</span><span class="lbl">Shift</span></button>
@@ -255,17 +255,34 @@
     </div>
 
     <div class="scan-result-card" style="margin-bottom:16px;">
-      <h3 style="font-size:0.85rem;margin:0 0 10px;">⚙️ លក្ខខណ្ឌកូតាច្បាប់ប្រចាំឆ្នាំ</h3>
+      <h3 style="font-size:0.85rem;margin:0 0 10px;">⚙️ លក្ខខណ្ឌកូតាច្បាប់</h3>
       <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="form-group" style="margin:0;">
-          <label>ចំនួនថ្ងៃច្បាប់ប្រចាំឆ្នាំ ក្នុងមួយឆ្នាំ (ថ្ងៃ)</label>
+          <label>ច្បាប់ប្រចាំឆ្នាំ ក្នុងមួយឆ្នាំ (ថ្ងៃ)</label>
           <input type="number" id="lbQuotaDays" min="0" step="0.5" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>ច្បាប់មានប្រាក់ខែ (ពិសេស) ក្នុងមួយឆ្នាំ (ថ្ងៃ)</label>
+          <input type="number" id="lbPaidQuota" min="0" step="0.5" style="width:150px;">
         </div>
         <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;">
           <input type="checkbox" id="lbProrate"> កាត់សមាមាត្រតាមខែចូលធ្វើការ (សម្រាប់អ្នកចូលថ្មីក្នុងឆ្នាំនេះ)
         </label>
       </div>
-      <p class="scan-hint">*"ប្រើអស់" រាប់ចំនួនថ្ងៃប្រតិទិនសរុបនៃសំណើច្បាប់ប្រភេទ "ច្បាប់ប្រចាំឆ្នាំ" ដែលបានអនុម័តរួច ហើយស្ថិតក្នុងឆ្នាំដែលបានជ្រើសរើស។ បើបើក "កាត់សមាមាត្រ" កូតានឹងថយចុះទៅតាមចំនួនខែដែលបុគ្គលិកបានចូលធ្វើការក្នុងឆ្នាំនោះ (ឧ. ចូលធ្វើការខែកក្កដា = ទទួលបានកូតា ៦/១២ នៃចំនួនថ្ងៃដែលបានកំណត់)។</p>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:12px;">
+        <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;">
+          <input type="checkbox" id="lbCarryOver"> អនុញ្ញាតផ្ទេរថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលនៅសល់ទៅឆ្នាំក្រោយ
+        </label>
+        <div class="form-group" style="margin:0;">
+          <label>ផ្ទេរបានអតិបរមា (ថ្ងៃ)</label>
+          <input type="number" id="lbCarryMax" min="0" step="0.5" style="width:130px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>ចាប់ផ្តើមផ្ទេរពីឆ្នាំ</label>
+          <input type="number" id="lbCarryFrom" min="2000" max="2100" style="width:110px;">
+        </div>
+      </div>
+      <p class="scan-hint">*"ប្រើអស់" រាប់ចំនួនថ្ងៃប្រតិទិនសរុបនៃសំណើច្បាប់ដែលបានអនុម័តរួច ក្នុងឆ្នាំដែលបានជ្រើសរើស។ <strong>ច្បាប់ប្រចាំឆ្នាំ</strong>៖ បើបើក "កាត់សមាមាត្រ" កូតាថយចុះតាមខែចូលធ្វើការ (ឧ. ចូលខែកក្កដា = ៦/១២)។ ថ្ងៃដែលនៅសល់ត្រូវ <em>ផ្ទេរទៅឆ្នាំក្រោយ</em> (មិនលើសកំណត់) ឯថ្ងៃលើសនោះ <em>បើកលុយជំនួស</em> = ថ្ងៃ × (ប្រាក់ខែ ÷ ថ្ងៃធ្វើការ) ហើយចុច "💵 បើកជំនួស" ដើម្បីបន្ថែមទៅ "អត្ថប្រយោជន៍" ខែធ្នូ។ បើមិនបើកការផ្ទេរ ថ្ងៃនៅសល់ទាំងអស់ត្រូវបើកជំនួស។ ការផ្ទេរគិតចាប់ពីឆ្នាំដែលបានកំណត់ខាងលើ (កុំឲ្យរាប់ឆ្នាំមុនដែលគ្មានទិន្នន័យ)។ <strong>ច្បាប់មានប្រាក់ខែ (ពិសេស)</strong>៖ សម្រាប់ឧប្បត្តិហេតុពិសេស (រៀបការ, ពិធីបុណ្យ, សម្រាលកូន...) មានកូតាដាច់ដោយឡែក មិនកាត់សមាមាត្រ មិនផ្ទេរ ហើយបង់ប្រាក់ពេញថ្ងៃ។</p>
     </div>
 
     <div class="attendance-stats" id="lbStats"></div>
@@ -273,7 +290,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃចូលធ្វើការ</th><th>កូតា (ថ្ងៃ)</th><th>ប្រើអស់ (ថ្ងៃ)</th><th>នៅសល់ (ថ្ងៃ)</th></tr>
+          <tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃចូលធ្វើការ</th><th>កូតាប្រចាំឆ្នាំ (ថ្ងៃ)</th><th>ផ្ទេរមកពីឆ្នាំមុន</th><th>ប្រើអស់ (ថ្ងៃ)</th><th>នៅសល់ (ថ្ងៃ)</th><th>ផ្ទេរទៅឆ្នាំក្រោយ</th><th>បើកជំនួស (ថ្ងៃ)</th><th>បើកជំនួស ($)</th><th>មានប្រាក់ខែ៖ កូតា</th><th>មានប្រាក់ខែ៖ ប្រើ</th><th>មានប្រាក់ខែ៖ នៅសល់</th><th>សកម្មភាព</th></tr>
         </thead>
         <tbody id="lbBody"></tbody>
       </table>
@@ -315,6 +332,7 @@
           <label>ប្រភេទច្បាប់ដែលត្រូវកាត់ប្រាក់ខែ (១ថ្ងៃ = ប្រាក់ខែ ÷ ថ្ងៃធ្វើការ)</label>
           <div style="display:flex; gap:10px; flex-wrap:wrap; font-size:0.75rem;">
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="annual"> ប្រចាំឆ្នាំ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="paid"> មានប្រាក់ខែ (ពិសេស)</label>
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="sick"> ឈឺ</label>
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="unpaid"> គ្មានប្រាក់ខែ</label>
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="other"> ផ្សេងៗ / កត់ដោយដៃ</label>

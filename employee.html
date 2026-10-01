@@ -251,12 +251,14 @@
         <p class="error-msg" id="leaveError"></p>
         <div class="form-group">
           <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ប្រភេទច្បាប់</label>
-          <select id="leaveType">
+          <select id="leaveType" onchange="updateLeaveTypeHint()">
             <option value="annual">ច្បាប់ប្រចាំឆ្នាំ</option>
+            <option value="paid">ច្បាប់មានប្រាក់ខែ (ពិសេស)</option>
             <option value="sick">ច្បាប់ឈឺ</option>
             <option value="unpaid">ច្បាប់គ្មានប្រាក់ខែ</option>
             <option value="other">ផ្សេងៗ</option>
           </select>
+          <div id="leaveTypeHint" style="display:none;margin-top:6px;font-size:0.72rem;color:var(--text-muted);"></div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -401,7 +403,7 @@ const SESSION_KEY = 'emp_portal_session';
 const KHMER_WEEKDAYS = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
@@ -632,6 +634,11 @@ async function loadSettings() {
     workplaceLng: data.workplace_lng ?? null,
     workplaceRadius: data.workplace_radius ?? 100,
     annualQuotaDays: parseFloat(data.annual_quota_days) > 0 ? parseFloat(data.annual_quota_days) : 18, // លំនាំដើម 18 ថ្ងៃ (ដូច admin)
+    annualProrate: data.annual_prorate !== false,
+    paidQuotaDays: data.paid_quota_days != null && parseFloat(data.paid_quota_days) >= 0 ? parseFloat(data.paid_quota_days) : 7,
+    carryOver: data.annual_carry_enabled === true,
+    carryMaxDays: data.annual_carry_max != null && parseFloat(data.annual_carry_max) >= 0 ? parseFloat(data.annual_carry_max) : 5,
+    carryFromYear: parseInt(data.annual_carry_from, 10) || new Date().getFullYear(),
   };
 }
 
@@ -699,24 +706,71 @@ async function renderProfileExtras() {
   }
 
   const body = document.getElementById('pfLeaveBody');
-  const { data, error } = await supabaseClient.from('leave_requests')
-    .select('start_date,end_date').eq('employee_id', currentEmployee.id).eq('status', 'approved').eq('leave_type', 'annual');
-  if (error) { body.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
-  const yStart = `${year}-01-01`, yEnd = `${year}-12-31`;
-  const used = (data || []).reduce((sum, r) => {
-    const s = r.start_date < yStart ? yStart : r.start_date;
-    const e = r.end_date > yEnd ? yEnd : r.end_date;
-    return s > e ? sum : sum + datesInRange(s, e).length;
-  }, 0);
-  const months = annualMonthsInYearEmp(currentEmployee.startDate, year);
-  const base = settings.annualQuotaDays || 18;
-  const quota = months > 0 ? Math.round(base * months / 12 * 100) / 100 : 0;
-  const remaining = Math.round((quota - used) * 100) / 100;
-  const pct = quota > 0 ? Math.max(0, Math.min(100, remaining / quota * 100)) : 0;
+  let bal;
+  try { bal = await fetchLeaveBalances(year); }
+  catch (err) { body.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
+  const a = bal.annual, p = bal.paid;
+  const pct = a.total > 0 ? Math.max(0, Math.min(100, a.remaining / a.total * 100)) : 0;
+  const pPct = p.quota > 0 ? Math.max(0, Math.min(100, p.remaining / p.quota * 100)) : 0;
   body.innerHTML = `
-    <div class="pf-leave-num">${remaining}<small>ថ្ងៃ នៅសល់</small></div>
+    <div class="pf-leave-num">${a.remaining}<small>ថ្ងៃ នៅសល់ (ប្រចាំឆ្នាំ)</small></div>
     <div class="pf-bar${pct <= 15 ? ' low' : ''}"><div style="width:${pct}%"></div></div>
-    <div class="pf-meta"><span>ប្រើរួច ${used} ថ្ងៃ</span><span>សរុប ${quota} ថ្ងៃ</span></div>`;
+    <div class="pf-meta"><span>ប្រើរួច ${a.used} ថ្ងៃ</span><span>សរុប ${a.total} ថ្ងៃ${a.carry ? ` (រួមទាំងផ្ទេរមក ${a.carry})` : ''}</span></div>
+    <div style="border-top:1px dashed var(--border, #e5e7eb);margin:12px 0 10px;"></div>
+    <div class="pf-leave-num" style="font-size:1.4rem;">${p.remaining}<small>ថ្ងៃ នៅសល់ (មានប្រាក់ខែ — ពិសេស)</small></div>
+    <div class="pf-bar${pPct <= 15 ? ' low' : ''}"><div style="width:${pPct}%"></div></div>
+    <div class="pf-meta"><span>ប្រើរួច ${p.used} ថ្ងៃ</span><span>សរុប ${p.quota} ថ្ងៃ</span></div>`;
+}
+
+// គណនាសមតុល្យច្បាប់ប្រចាំឆ្នាំ (រួមទាំងផ្ទេរពីឆ្នាំមុន) និងច្បាប់មានប្រាក់ខែ សម្រាប់ឆ្នាំដែលបានជ្រើសរើស
+async function fetchLeaveBalances(year) {
+  const { data, error } = await supabaseClient.from('leave_requests')
+    .select('start_date,end_date,leave_type').eq('employee_id', currentEmployee.id).eq('status', 'approved').in('leave_type', ['annual', 'paid']);
+  if (error) throw error;
+  const rows = data || [];
+  const r2 = n => Math.round(n * 100) / 100;
+  const usedIn = (type, y) => {
+    const ys = `${y}-01-01`, ye = `${y}-12-31`;
+    return rows.filter(r => r.leave_type === type).reduce((sum, r) => {
+      const s = r.start_date < ys ? ys : r.start_date;
+      const e = r.end_date > ye ? ye : r.end_date;
+      return s > e ? sum : sum + datesInRange(s, e).length;
+    }, 0);
+  };
+  const base = settings.annualQuotaDays || 18;
+  const prorate = settings.annualProrate !== false;
+  const paidBase = settings.paidQuotaDays != null ? settings.paidQuotaDays : 7;
+  const maxCarry = settings.carryMaxDays != null ? settings.carryMaxDays : 5;
+  const startYear = parseInt((currentEmployee.startDate || '').slice(0, 4), 10);
+  const quotaFor = y => {
+    const m = annualMonthsInYearEmp(currentEmployee.startDate, y);
+    return m <= 0 ? 0 : (prorate ? r2(base * m / 12) : base);
+  };
+  const carryIn = (y, depth) => {
+    if (!settings.carryOver || depth > 10) return 0;
+    const prev = y - 1;
+    if (prev < (settings.carryFromYear || 0) || isNaN(startYear) || prev < startYear) return 0;
+    const pool = quotaFor(prev) + carryIn(prev, depth + 1) - usedIn('annual', prev);
+    return Math.min(maxCarry, Math.max(0, r2(pool)));
+  };
+  const quota = quotaFor(year), carry = carryIn(year, 0), used = usedIn('annual', year);
+  const months = annualMonthsInYearEmp(currentEmployee.startDate, year);
+  const pQuota = months > 0 ? paidBase : 0, pUsed = usedIn('paid', year);
+  return {
+    annual: { quota, carry, total: r2(quota + carry), used, remaining: r2(quota + carry - used) },
+    paid: { quota: pQuota, used: pUsed, remaining: r2(pQuota - pUsed) },
+  };
+}
+
+function updateLeaveTypeHint() {
+  const t = document.getElementById('leaveType').value;
+  const el = document.getElementById('leaveTypeHint');
+  if (t === 'paid') {
+    el.style.display = 'block';
+    el.textContent = 'សម្រាប់ឧប្បត្តិហេតុពិសេស (រៀបការ, ពិធីបុណ្យ, សម្រាលកូន...) — បង់ប្រាក់ពេញ មានកូតាដាច់ដោយឡែក។ សូមបញ្ជាក់មូលហេតុ និងភ្ជាប់រូបភាពបញ្ជាក់។';
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 async function showMain() {
@@ -1352,6 +1406,18 @@ async function submitLeaveRequest() {
   err.style.display = 'none';
   if (!start || !end) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
   if (end < start) { err.textContent = 'ថ្ងៃបញ្ចប់ត្រូវនៅក្រោយថ្ងៃចាប់ផ្តើម'; err.style.display = 'block'; return; }
+  if (leaveType === 'paid') {
+    if (!reason) { err.textContent = 'សូមបញ្ជាក់មូលហេតុ សម្រាប់ច្បាប់មានប្រាក់ខែ'; err.style.display = 'block'; return; }
+    try {
+      const bal = await fetchLeaveBalances(parseInt(start.slice(0, 4), 10));
+      const days = datesInRange(start, end).length;
+      if (days > bal.paid.remaining) {
+        err.textContent = `ច្បាប់មានប្រាក់ខែនៅសល់ ${bal.paid.remaining} ថ្ងៃ ប៉ុន្តែអ្នកសុំ ${days} ថ្ងៃ`;
+        err.style.display = 'block';
+        return;
+      }
+    } catch (ex) { /* មិនអាចពិនិត្យបាន → ទុកឲ្យ admin សម្រេច */ }
+  }
 
   let attachmentUrl = null;
   submitBtn.disabled = true;
