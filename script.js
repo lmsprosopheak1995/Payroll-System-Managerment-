@@ -587,8 +587,9 @@ function renderAttendanceTab() {
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
     totals.otHours += r.otHours;
-    const statusOptions = ['', 'present', 'absent', 'leave'].map(s =>
-      `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`
+    const selVal = attStatusSelectValue(date, emp.id, r.status);
+    const statusOptions = ['', 'present', 'absent', 'leave', 'leave_annual', 'leave_paid'].map(s =>
+      `<option value="${s}" ${selVal === s ? 'selected' : ''}>${ATT_OPTION_LABELS[s]}</option>`
     ).join('');
     return `<tr>
       <td>${date}</td>
@@ -627,8 +628,64 @@ function renderAttendanceTab() {
   `;
 }
 
+// ==== ជម្រើសច្បាប់ក្នុង dropdown ស្ថានភាពវត្តមាន ====
+const ATT_PAID_TAG = '[ជ្រើសពីវត្តមាន]';
+const ATT_OPTION_LABELS = { ...STATUS_LABELS, leave_annual: 'ច្បាប់ប្រចាំឆ្នាំ (បំណាច់ឆ្នាំ)', leave_paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)' };
+
+function attStatusSelectValue(date, empId, status) {
+  if (status !== 'leave') return status;
+  const req = leaveRequests.find(r => r.employee_id === empId && r.status === 'approved' && r.start_date <= date && date <= r.end_date);
+  if (req && req.leave_type === 'annual') return 'leave_annual';
+  if (req && req.leave_type === 'paid') return 'leave_paid';
+  return 'leave';
+}
+
+// សំណើច្បាប់ ១ថ្ងៃ ដែលបង្កើតពីការជ្រើសក្នុង dropdown (ឬពី "ជំនួសថ្ងៃឈប់") — អាចដកវិញបាន
+function findDropdownLeaveReq(date, empId) {
+  return leaveRequests.find(r => r.employee_id === empId && r.start_date === date && r.end_date === date
+    && ((r.reason || '').startsWith(SUBST_TAG) || (r.reason || '').startsWith(ATT_PAID_TAG)));
+}
+async function removeDropdownLeaveReq(date, empId) {
+  const req = findDropdownLeaveReq(date, empId);
+  if (!req) return;
+  leaveRequests = leaveRequests.filter(r => r !== req);
+  if (req.id && !String(req.id).startsWith('local_')) {
+    const { error } = await supabaseClient.from('leave_requests').delete().eq('id', req.id);
+    if (error) console.error('Remove leave request failed', error);
+  }
+}
+
+async function setAttendanceLeaveType(date, empId, value) {
+  const type = value === 'leave_paid' ? 'paid' : 'annual';
+  const emp = employees.find(e => e.id === empId);
+  const year = parseInt(date.slice(0, 4), 10);
+  if (emp) {
+    const b = calcLeaveBalanceRow(emp, year, lbRules);
+    const needLeft = type === 'paid' ? b.paidRemaining : b.remaining;
+    const covered = leaveRequests.some(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === type && r.start_date <= date && date <= r.end_date);
+    if (!covered && needLeft < 1 && !(await customConfirm(`${LEAVE_TYPE_LABELS[type]}នៅសល់ ${needLeft} ថ្ងៃ។ នៅតែបន្ត (សមតុល្យនឹងអវិជ្ជមាន)?`))) { renderAttendanceTab(); return; }
+  }
+  await removeDropdownLeaveReq(date, empId);
+  const reason = type === 'annual' ? `${SUBST_TAG} ជ្រើសពីតារាងវត្តមាន` : `${ATT_PAID_TAG} ច្បាប់មានប្រាក់ខែ`;
+  const { data, error } = await supabaseClient.from('leave_requests').insert({
+    employee_id: empId, leave_type: type, start_date: date, end_date: date, reason, status: 'approved', decided_at: new Date().toISOString(),
+  }).select().maybeSingle();
+  if (error) { customAlert('រក្សាទុកច្បាប់មិនជោគជ័យ៖ ' + error.message); renderAttendanceTab(); return; }
+  leaveRequests.unshift(data || { id: 'local_' + date + empId, employee_id: empId, leave_type: type, start_date: date, end_date: date, reason, status: 'approved' });
+  const oldStatus = attendance[date] && attendance[date][empId] ? attendance[date][empId].status : '';
+  const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
+  if (!attendance[date]) attendance[date] = {};
+  attendance[date][empId] = rec;
+  renderAttendanceTab();
+  await upsertAttendanceRecord(date, empId, rec);
+  logAudit('attendance_edit', { entity: 'attendance', ref: date, month: date.slice(0, 7), employeeId: empId, old: { field: 'status', value: oldStatus || '' }, new: { field: 'status', value: 'leave:' + type } });
+  if (typeof renderLeaveBalanceTab === 'function') renderLeaveBalanceTab();
+}
+
 function updateAttRecord(date, empId, field, value) {
   if (guardLocked(date, 'កែវត្តមាន')) { renderAttendanceTab(); return; }
+  if (field === 'status' && (value === 'leave_annual' || value === 'leave_paid')) { setAttendanceLeaveType(date, empId, value); return; }
+  if (field === 'status' && findDropdownLeaveReq(date, empId)) { removeDropdownLeaveReq(date, empId).then(() => renderLeaveBalanceTab()); }
   const oldVal = attendance[date] && attendance[date][empId] ? attendance[date][empId][field] : '';
   if (!attendance[date]) attendance[date] = {};
   if (!attendance[date][empId]) attendance[date][empId] = { status: '', checkin: '', checkout: '', breakOut: '', breakIn: '' };
