@@ -992,8 +992,15 @@ async function upsertPayrollItemRow(item) {
 }
 
 async function deletePayrollItemRow(id) {
-  const { error } = await supabaseClient.from('payroll_items').delete().eq('id', id);
-  if (error) { console.error('Delete payroll item failed', error); customAlert('លុបមិនជោគជ័យ៖ ' + error.message); }
+  // .select() ដើម្បីដឹងថាមានជួរត្រូវបានលុបពិតប្រាកដ (RLS អាចលុប 0 ជួរដោយគ្មាន error)
+  const { data, error } = await supabaseClient.from('payroll_items').delete().eq('id', id).select();
+  if (error) { console.error('Delete payroll item failed', error); customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return false; }
+  if (!data || data.length === 0) {
+    console.warn('Delete payroll item: 0 rows deleted', id);
+    customAlert('⚠️ លុបមិនបានក្នុង Database (0 ជួរត្រូវបានលុប) — ទំនងជាគ្មានសិទ្ធិលុប (RLS) ឬធាតុនេះលែងមាន។ ធាតុនឹងលេចឡើងវិញពេលបើក app ម្តងទៀត។');
+    return false;
+  }
+  return true;
 }
 
 // Amounts applicable to a given employee+month, converted to both currencies for display/summing.
@@ -1332,7 +1339,9 @@ async function deletePayrollItem(id) {
   logAudit('item_delete', { entity: 'payroll_item', ref: p.id, month: p.month || null, employeeId: p.employeeId, old: { name: p.name, type: p.type, currency: p.currency, amount: p.amount } });
   renderPayrollTab();
   renderDeductTab();
-  deletePayrollItemRow(id);
+  const ok = await deletePayrollItemRow(id);
+  if (!ok) { payrollItems.unshift(p); renderPayrollTab(); renderDeductTab(); renderAttendanceTab(); return; }
+  renderAttendanceTab();
 }
 
 function empName(id) {
