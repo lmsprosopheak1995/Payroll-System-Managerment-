@@ -1347,6 +1347,83 @@ function calcLeaveBalanceRow(emp, year, rules) {
   };
 }
 
+// ==== ប្រើបំណាច់ឆ្នាំ (ច្បាប់ប្រចាំឆ្នាំ) ជំនួសថ្ងៃឈប់ ដើម្បីកុំឱ្យដាច់លុយ ====
+const SUBST_TAG = '[ជំនួសថ្ងៃឈប់]';
+
+function absentDatesOf(empId, year) {
+  return Object.keys(attendance)
+    .filter(d => d.startsWith(String(year)) && attendance[d] && attendance[d][empId] && attendance[d][empId].status === 'absent')
+    .sort();
+}
+
+let substCtx = null;
+function closeSubstituteModal() {
+  const el = document.getElementById('substOverlay');
+  if (el) el.remove();
+  substCtx = null;
+}
+
+function openSubstituteModal(empId) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const year = parseInt(document.getElementById('lbYear').value, 10) || parseInt(todayStr().slice(0, 4), 10);
+  const dates = absentDatesOf(empId, year);
+  if (dates.length === 0) { customAlert('មិនមានថ្ងៃអវត្តមានក្នុងឆ្នាំនេះទេ'); return; }
+  const r = calcLeaveBalanceRow(emp, year, lbRules);
+  substCtx = { empId, year, remaining: r.remaining };
+  closeSubstituteModal();
+  substCtx = { empId, year, remaining: r.remaining };
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-overlay open';
+  wrap.id = 'substOverlay';
+  wrap.innerHTML = `
+    <div class="modal">
+      <h2>🔁 ប្រើបំណាច់ឆ្នាំជំនួសថ្ងៃឈប់ — ${escapeHtml(emp.name)}</h2>
+      <p class="scan-hint" style="margin-top:0;">ថ្ងៃអវត្តមានដែលបានជ្រើស នឹងប្តូរទៅជា "ច្បាប់ប្រចាំឆ្នាំ" (បង់ប្រាក់ពេញថ្ងៃ មិនដាច់លុយ) ហើយដកពីថ្ងៃច្បាប់ប្រចាំឆ្នាំដែលនៅសល់។ ថ្ងៃទាំងនេះមិនត្រូវកាត់ក្នុងផ្ទាំង "យឺត/ច្បាប់ → កាត់លុយ" ទេ។</p>
+      <p style="margin:6px 0 10px;font-size:0.85rem;">ឆ្នាំ ${year} — ច្បាប់ប្រចាំឆ្នាំនៅសល់៖ <strong>${r.remaining.toFixed(1)} ថ្ងៃ</strong> · បានជ្រើស៖ <strong id="substCount">0</strong> ថ្ងៃ</p>
+      <div style="max-height:260px;overflow:auto;border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:8px;">
+        ${dates.map(d => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:0.85rem;"><input type="checkbox" class="subst-date" value="${d}"> ${d} <span style="color:var(--text-muted);">(${weekdayLabel(d)})</span></label>`).join('')}
+      </div>
+      <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="secondary" onclick="closeSubstituteModal()">បោះបង់</button>
+        <button onclick="applySubstituteLeave()">✓ ប្រើជំនួស</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelectorAll('.subst-date').forEach(c => c.addEventListener('change', () => {
+    document.getElementById('substCount').textContent = wrap.querySelectorAll('.subst-date:checked').length;
+  }));
+}
+
+async function applySubstituteLeave() {
+  if (!substCtx) return;
+  const { empId, remaining } = substCtx;
+  const dates = [...document.querySelectorAll('#substOverlay .subst-date:checked')].map(c => c.value);
+  if (dates.length === 0) { customAlert('សូមជ្រើសរើសថ្ងៃយ៉ាងហោចណាស់មួយ'); return; }
+  const lockedMonth = [...new Set(dates.map(d => d.slice(0, 7)))].find(isMonthLocked);
+  if (lockedMonth) { guardLocked(lockedMonth, 'ប្រើបំណាច់ជំនួសថ្ងៃឈប់'); return; }
+  if (dates.length > remaining && !(await customConfirm(`ច្បាប់ប្រចាំឆ្នាំនៅសល់ ${remaining} ថ្ងៃ ប៉ុន្តែអ្នកជ្រើស ${dates.length} ថ្ងៃ។ នៅតែបន្ត (សមតុល្យនឹងអវិជ្ជមាន)?`))) return;
+  let done = 0;
+  for (const date of dates) {
+    const { data, error } = await supabaseClient.from('leave_requests').insert({
+      employee_id: empId, leave_type: 'annual', start_date: date, end_date: date,
+      reason: `${SUBST_TAG} ប្រើបំណាច់ឆ្នាំជំនួសថ្ងៃអវត្តមាន`, status: 'approved', decided_at: new Date().toISOString(),
+    }).select().maybeSingle();
+    if (error) { customAlert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message); break; }
+    leaveRequests.unshift(data || { id: 'local_' + date, employee_id: empId, leave_type: 'annual', start_date: date, end_date: date, reason: `${SUBST_TAG} ប្រើបំណាច់ឆ្នាំជំនួសថ្ងៃអវត្តមាន`, status: 'approved' });
+    const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
+    if (!attendance[date]) attendance[date] = {};
+    attendance[date][empId] = rec;
+    await upsertAttendanceRecord(date, empId, rec);
+    logAudit('leave_approve', { entity: 'leave_request', ref: data ? data.id : date, month: date.slice(0, 7), employeeId: empId, new: { from: date, to: date, days: 1, note: 'substitute_absent' } });
+    done++;
+  }
+  closeSubstituteModal();
+  if (done) customAlert(`បានប្រើច្បាប់ប្រចាំឆ្នាំជំនួសថ្ងៃឈប់ ${done} ថ្ងៃ`);
+  renderLeaveBalanceTab();
+  renderAttendanceTab();
+}
+
 function leaveCashItemId(empId, year) { return `auto_leavecash_${empId}_${year}`; }
 
 function renderLeaveBalanceTab() {
@@ -1379,6 +1456,7 @@ function renderLeaveBalanceTab() {
   const badge = v => v < 0 ? `<span class="badge inactive">${v.toFixed(1)}</span>` : `<strong>${v.toFixed(1)}</strong>`;
   body.innerHTML = rows.map(({ emp, r }) => {
     const existing = payrollItems.find(p => p.id === leaveCashItemId(emp.id, year));
+    const absentCount = absentDatesOf(emp.id, year).length;
     let action = '-';
     if (r.cashAmount > 0 || existing) {
       if (existing && Math.abs(existing.amount - r.cashAmount) < 0.005) {
@@ -1404,7 +1482,8 @@ function renderLeaveBalanceTab() {
       <td>${r.paidQuota.toFixed(1)}</td>
       <td>${r.paidUsed.toFixed(1)}</td>
       <td>${badge(r.paidRemaining)}</td>
-      <td><div class="row-actions" style="justify-content:center;">${action}</div></td>
+      <td>${absentCount ? `<span class="badge pending">${absentCount}</span>` : '-'}</td>
+      <td><div class="row-actions" style="justify-content:center;flex-wrap:wrap;">${action}${absentCount ? ` <button class="secondary" onclick="openSubstituteModal('${emp.id}')">🔁 ជំនួសថ្ងៃឈប់</button>` : ''}</div></td>
     </tr>`;
   }).join('');
 }
@@ -2067,7 +2146,8 @@ function calcDeductionRow(emp, month) {
       const req = approved.find(r => r.start_date <= date && date <= r.end_date);
       const type = req && LEAVE_TYPE_LABELS[req.leave_type] ? req.leave_type : 'other';
       leaveDays++;
-      if (deductRules.leaveTypes.includes(type)) deductibleLeaveDays++;
+      const isSubst = !!(req && (req.reason || '').startsWith(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
+      if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }
   });
