@@ -581,13 +581,15 @@ function renderAttendanceTab() {
   const month = currentAttendanceMonth();
   const dates = daysInMonth(month);
 
-  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0 };
+  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodRiel: 0, normalHours: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, record, date);
     totals.total += r.total;
     totals.riel += r.riel;
+    totals.normalPay += r.normalPay; totals.otPay += r.otPay; totals.foodPay += r.foodPay + r.foodOtPay;
+    totals.foodRiel += r.foodPayRiel + r.foodOtPayRiel; totals.normalHours += r.normalHours;
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
     totals.otHours += r.otHours;
@@ -641,7 +643,11 @@ function renderAttendanceTab() {
   }
   bd.style.cssText = 'width:100%;max-width:440px;margin:10px 0 14px;font-size:0.84rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:12px;padding:12px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.04);';
   bd.innerHTML = `
-    ${line('សរុបតាមវត្តមាន', '$' + fmtUSD(totals.total))}
+    ${line(`ប្រាក់ឈ្នួលថ្ងៃធម្មតា <small style="color:var(--text-muted);">(${fmtHours(totals.normalHours)} ម៉ោង)</small>`, '$' + fmtUSD(totals.normalPay))}
+    ${line(`ប្រាក់ថែមម៉ោង <small style="color:var(--text-muted);">(${fmtHours(totals.otHours)} ម៉ោង)</small>`, '$' + fmtUSD(totals.otPay))}
+    ${line(`ប្រាក់បាយ <small style="color:var(--text-muted);">(${fmtRiel(totals.foodRiel)} ៛)</small>`, '$' + fmtUSD(totals.foodPay))}
+    <div style="border-top:1px dashed #d1d5db;margin:4px 0;"></div>
+    ${line('<strong>សរុបតាមវត្តមាន</strong>', '<strong>$' + fmtUSD(totals.total) + '</strong>')}
     ${itemLines(sumT.benefitItems, '+', '#16a34a')}
     ${itemLines(sumT.deductionItems, '−', '#dc2626')}
     <div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:8px;display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-weight:700;">
