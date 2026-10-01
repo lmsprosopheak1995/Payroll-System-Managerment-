@@ -215,10 +215,12 @@ function attendancePrintPage(emp, month) {
       </tr></tfoot>
     </table>
     <div class="sum">
-      សរុបតាមវត្តមាន <strong>$${fmtUSD(t.total)}</strong> ·
-      អត្ថប្រយោជន៍ <strong>+$${fmtUSD(t.benefitsUSD)}</strong> ·
-      ប្រាក់កាត់ <strong>−$${fmtUSD(t.deductionsUSD)}</strong> ·
-      ប្រាក់ខែសុទ្ធ <strong>$${fmtUSD(t.net)}</strong> (${fmtRiel(t.netRiel)} ៛)
+      <table style="width:60%;margin-left:auto;">
+        <tr><td>សរុបតាមវត្តមាន</td><td class="r">$${fmtUSD(t.total)}</td></tr>
+        ${(t.benefitItems || []).map(p => `<tr><td>+ ${printEsc(p.name)}</td><td class="r">+$${fmtUSD(payrollItemToUSD(p))}</td></tr>`).join('')}
+        ${(t.deductionItems || []).map(p => `<tr><td>− ${printEsc(p.name)}</td><td class="r">−$${fmtUSD(payrollItemToUSD(p))}</td></tr>`).join('')}
+        <tr class="total"><td>ប្រាក់ខែសុទ្ធ</td><td class="r"><strong>$${fmtUSD(t.net)}</strong> (${fmtRiel(t.netRiel)} ៛)</td></tr>
+      </table>
     </div>
     <div class="sign"><div>បុគ្គលិក</div><div>អ្នកគ្រប់គ្រង</div><div>អ្នកទទួលបន្ទុកបុគ្គលិក</div></div>
     <div style="margin-top:10px;font-size:10px;color:#6b7280;">បោះពុម្ពនៅថ្ងៃទី ${todayStr()}</div>

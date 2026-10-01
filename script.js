@@ -619,16 +619,27 @@ function renderAttendanceTab() {
   const netUSD = totals.total + adj.net;
   const netRiel = netUSD * (settings.exchangeRate || 0);
 
+  // បំបែក "តាមវត្តមាន" និង "អត្ថប្រយោជន៍/ប្រាក់កាត់" ឱ្យច្បាស់ + បង្ហាញឈ្មោះធាតុនីមួយៗ (ឧ. ថ្លៃធ្វើដំណើរ)
+  const sumT = summarizeEmpMonth(emp, month);
+  const itemLines = (list, sign, color) => (list || []).map(p =>
+    `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${sign} ${escapeHtml(p.name)}</span><span style="color:${color};">${sign}$${fmtUSD(payrollItemToUSD(p))}</span></div>`).join('');
+  const itemsHtml = itemLines(sumT.benefitItems, '+', '#16a34a') + itemLines(sumT.deductionItems, '−', '#dc2626');
+
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ចំណាយសរុប ($)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ចំណាយសរុប (រៀល)</div></div>
-    <div class="stat-card"><div class="num">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
-    <div class="stat-card"><div class="num">-$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">① សរុបតាមវត្តមាន ($) <br>(មិនទាន់បូកអត្ថប្រយោជន៍)</div></div>
+    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">សរុបតាមវត្តមាន (រៀល)</div></div>
+    <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">② អត្ថប្រយោជន៍</div></div>
+    <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">③ ប្រាក់កាត់</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($) <br>(① + ② − ③)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
+    <div style="flex:1 1 100%;font-size:0.78rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:8px 14px;">
+      <div style="display:flex;justify-content:space-between;gap:16px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(totals.total)}</span></div>
+      ${itemsHtml || '<div style="color:#9ca3af;">គ្មានអត្ថប្រយោជន៍/ប្រាក់កាត់ក្នុងខែនេះ</div>'}
+      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(netUSD)}</span></div>
+    </div>
   `;
 }
 
