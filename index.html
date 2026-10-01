@@ -235,6 +235,15 @@
       </table>
       <div class="empty-state" id="otReqEmpty" style="display:none;">មិនមានសំណើថែមម៉ោងទេ</div>
     </div>
+
+    <h3 style="font-size:0.9rem;margin:24px 0 10px;">⚖️ ពាក្យតវ៉ាប្រាក់ខែ</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>បុគ្គលិក</th><th>ខែ</th><th>ថ្ងៃ</th><th>មូលហេតុ</th><th>ស្ថានភាព</th><th>សកម្មភាព</th></tr></thead>
+        <tbody id="disputeReqBody"></tbody>
+      </table>
+      <div class="empty-state" id="disputeReqEmpty" style="display:none;">មិនមានពាក្យតវ៉ាទេ</div>
+    </div>
   </div>
 
   <div id="leavebalanceTab" class="tab-content">
@@ -407,12 +416,27 @@
         <button id="monthlyRunBtn">⚡ គណនាប្រាក់កាត់យឺត/ច្បាប់ ទាំងអស់</button>
         <button class="secondary" id="monthlyPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
         <button class="secondary" id="monthlyPrintAllBtn">🖨 Payslip ទាំងអស់</button>
+        <button class="secondary" id="monthlyXlsxBtn">📊 Export Excel</button>
         <button class="secondary" id="monthlyCsvBtn">⬇️ Export CSV</button>
+        <button class="secondary" id="monthlyAuditBtn">📜 ប្រវត្តិកែប្រែ</button>
       </div>
     </div>
     <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">
       ជំហាន៖ ① ពិនិត្យ ⚠️ ថ្ងៃដែលមិនទាន់កត់វត្តមាន → ② ចុច "គណនាប្រាក់កាត់" → ③ ពិនិត្យតារាង → ④ ព្រីនតារាង / Payslip។ ចុចលើជួរបុគ្គលិកដើម្បីមើលលម្អិត។
     </p>
+    <div class="scan-result-card" id="monthlyLockBar" style="margin-bottom:16px;">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <div id="monthlyLockText" style="font-size:0.82rem;"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <label id="lockDaysWrap" style="font-size:0.74rem;display:flex;gap:6px;align-items:center;margin:0;">
+            រយៈពេលតវ៉ា (ថ្ងៃ)
+            <input type="number" id="lockDisputeDays" min="0" max="60" step="1" style="width:70px;">
+          </label>
+          <button id="monthlyLockBtn">🔒 បិទខែ</button>
+          <button class="danger" id="monthlyUnlockBtn" style="display:none;">🔓 បើកខែឡើងវិញ</button>
+        </div>
+      </div>
+    </div>
     <div class="scan-result-card" style="margin-bottom:16px;">
       <h3 style="font-size:0.85rem;margin:0 0 10px;">💵 ប្រាក់ខែទី១ (បុរេប្រទាន) — ទូទាត់ថ្ងៃទី២៥ · ដកពីប្រាក់ខែចុងខែ</h3>
       <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
@@ -439,7 +463,7 @@
       <table>
         <thead><tr>
           <th>#</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ផ្នែក</th><th>ថ្ងៃធ្វើការ</th><th>ច្បាប់</th><th>OT (ម៉ោង)</th>
-          <th>តាមវត្តមាន ($)</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>ប្រាក់ខែទី១ (ទី២៥)</th><th>ត្រូវពិនិត្យ</th><th></th>
+          <th>តាមវត្តមាន ($)</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>ប្រាក់ខែទី១ (ទី២៥)</th><th>Payslip</th><th>ត្រូវពិនិត្យ</th><th></th>
         </tr></thead>
         <tbody id="monthlyBody"></tbody>
       </table>
@@ -722,6 +746,64 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="adjOverlay">
+  <div class="modal">
+    <h2>⚖️ កែតម្រូវប្រាក់ខែ</h2>
+    <input type="hidden" id="adjEmpId">
+    <input type="hidden" id="adjDisputeId">
+    <p id="adjEmpLabel" style="font-weight:700;margin:0 0 12px;"></p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>កែតម្រូវសម្រាប់ខែ (ខែដែលមានបញ្ហា)</label>
+        <input type="month" id="adjSrcMonth">
+      </div>
+      <div class="form-group">
+        <label>បញ្ចូលក្នុងខែ (ខែដែលមិនទាន់បិទ)</label>
+        <input type="month" id="adjTargetMonth">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ប្រភេទ</label>
+        <select id="adjType">
+          <option value="benefit">បូកឲ្យបុគ្គលិក (បុគ្គលិកទទួលបានបន្ថែម)</option>
+          <option value="deduction">ដកពីបុគ្គលិក (បុគ្គលិកបានលើស)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>ទឹកប្រាក់ ($) *</label>
+        <input type="number" id="adjAmount" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>មូលហេតុ *</label>
+      <input type="text" id="adjReason" placeholder="ឧ. ភ្លេចកត់ OT ថ្ងៃទី ១២">
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" id="adjCancelBtn">បោះបង់</button>
+      <button id="adjSaveBtn">រក្សាទុក</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="auditOverlay">
+  <div class="modal" style="max-width:980px;width:96%;">
+    <h2>📜 ប្រវត្តិកែប្រែ (Audit log)</h2>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <input type="month" id="auditMonth">
+      <label style="display:flex;gap:6px;align-items:center;font-size:0.8rem;margin:0;"><input type="checkbox" id="auditAll"> គ្រប់ខែ (ចុងក្រោយ ៣០០)</label>
+    </div>
+    <div class="table-wrap" style="max-height:60vh;overflow:auto;">
+      <table>
+        <thead><tr><th>ពេលវេលា</th><th>សកម្មភាព</th><th>បុគ្គលិក</th><th>ខែ/ថ្ងៃ</th><th>ការផ្លាស់ប្តូរ</th><th>ចំណាំ</th></tr></thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+      <div class="empty-state" id="auditEmpty" style="display:none;"></div>
+    </div>
+    <div class="modal-actions"><button class="secondary" id="auditCloseBtn">បិទ</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="payrollItemOverlay">
   <div class="modal">
     <h2 id="payrollItemModalTitle">បន្ថែមអត្ថប្រយោជន៍</h2>
@@ -863,6 +945,8 @@
   </div>
 </div>
 
+<script src="xlsx-lite.js"></script>
+<script src="payroll-close.js"></script>
 <script src="features.js"></script>
 <script src="ai.js"></script>
 <script src="print.js"></script>

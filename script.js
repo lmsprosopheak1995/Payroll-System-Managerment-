@@ -42,7 +42,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null)]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null)]);
     renderAll();
     return;
   }
@@ -620,6 +620,8 @@ function renderAttendanceTab() {
 }
 
 function updateAttRecord(date, empId, field, value) {
+  if (guardLocked(date, 'កែវត្តមាន')) { renderAttendanceTab(); return; }
+  const oldVal = attendance[date] && attendance[date][empId] ? attendance[date][empId][field] : '';
   if (!attendance[date]) attendance[date] = {};
   if (!attendance[date][empId]) attendance[date][empId] = { status: '', checkin: '', checkout: '', breakOut: '', breakIn: '' };
   attendance[date][empId][field] = value;
@@ -631,6 +633,7 @@ function updateAttRecord(date, empId, field, value) {
   }
   renderAttendanceTab();
   upsertAttendanceRecord(date, empId, attendance[date][empId]);
+  if ((oldVal || '') !== (value || '')) logAudit('attendance_edit', { entity: 'attendance', ref: date, month: date.slice(0, 7), employeeId: empId, old: { field, value: oldVal || '' }, new: { field, value: value || '' } });
 }
 
 function openSettingsModal() {
@@ -780,6 +783,8 @@ function payrollItemToRiel(item) {
 }
 
 function getPayrollAdjustmentUSD(empId, month) {
+  const snap = (typeof getLockedSnapshot === 'function') ? getLockedSnapshot(empId, month) : null;
+  if (snap) return { benefits: snap.benefitsUSD, deductions: snap.deductionsUSD, net: snap.benefitsUSD - snap.deductionsUSD };
   const items = getPayrollItemsForEmpMonth(empId, month);
   const benefits = items.filter(p => p.type === 'benefit').reduce((s, p) => s + payrollItemToUSD(p), 0);
   const deductions = items.filter(p => p.type === 'deduction').reduce((s, p) => s + payrollItemToUSD(p), 0);
@@ -1062,6 +1067,9 @@ async function savePayrollItem() {
   }
 
   const id = document.getElementById('piId').value;
+  if (recurrence === 'variable' && guardLocked(month, 'កែធាតុប្រាក់ខែ')) return;
+  const prevItem = id ? payrollItems.find(x => x.id === id) : null;
+  if (prevItem && prevItem.recurrence === 'variable' && guardLocked(prevItem.month, 'កែធាតុប្រាក់ខែ')) return;
   const item = {
     id: id || uid(),
     employeeId: currentPayrollEmployeeId(),
@@ -1083,13 +1091,17 @@ async function savePayrollItem() {
   renderPayrollTab();
   renderDeductTab();
   await upsertPayrollItemRow(item);
+  const snapItem = x => x && ({ name: x.name, type: x.type, currency: x.currency, amount: x.amount });
+  logAudit(prevItem ? 'item_edit' : 'item_add', { entity: 'payroll_item', ref: item.id, month: item.month || null, employeeId: item.employeeId, old: snapItem(prevItem), new: snapItem(item) });
 }
 
 async function deletePayrollItem(id) {
   const p = payrollItems.find(x => x.id === id);
   if (!p) return;
+  if (p.recurrence === 'variable' && guardLocked(p.month, 'លុបធាតុប្រាក់ខែ')) return;
   if (!(await customConfirm(`តើអ្នកប្រាកដជាចង់លុប "${p.name}" មែនទេ?`))) return;
   payrollItems = payrollItems.filter(x => x.id !== id);
+  logAudit('item_delete', { entity: 'payroll_item', ref: p.id, month: p.month || null, employeeId: p.employeeId, old: { name: p.name, type: p.type, currency: p.currency, amount: p.amount } });
   renderPayrollTab();
   renderDeductTab();
   deletePayrollItemRow(id);
@@ -1115,10 +1127,11 @@ function renderRequestsTab() {
   const filter = document.getElementById('reqStatusFilter').value;
   const leaveRows = leaveRequests.filter(r => !filter || r.status === filter);
   const otRows = overtimeRequests.filter(r => !filter || r.status === filter);
-  const pendingCount = leaveRequests.filter(r => r.status === 'pending').length + overtimeRequests.filter(r => r.status === 'pending').length;
+  const pendingCount = leaveRequests.filter(r => r.status === 'pending').length + overtimeRequests.filter(r => r.status === 'pending').length + pendingDisputeCount();
   const badge = document.getElementById('pendingReqBadge');
   if (badge) badge.textContent = pendingCount > 0 ? `(${pendingCount})` : '';
 
+  renderDisputeSection();
   const leaveBody = document.getElementById('leaveReqBody');
   const leaveEmpty = document.getElementById('leaveReqEmpty');
   if (leaveRows.length === 0) {
@@ -1173,6 +1186,8 @@ function renderRequestsTab() {
 async function approveLeaveRequest(id) {
   const req = leaveRequests.find(r => r.id === id);
   if (!req) return;
+  const lockedMonth = [...new Set(datesInRange(req.start_date, req.end_date).map(d => d.slice(0, 7)))].find(isMonthLocked);
+  if (lockedMonth) { guardLocked(lockedMonth, 'អនុម័តច្បាប់ដែលប៉ះពាល់'); return; }
   const { error } = await supabaseClient.from('leave_requests')
     .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
   if (error) { customAlert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
@@ -1185,6 +1200,7 @@ async function approveLeaveRequest(id) {
     await upsertAttendanceRecord(date, req.employee_id, rec);
   }
   req.status = 'approved';
+  logAudit('leave_approve', { entity: 'leave_request', ref: id, month: req.start_date.slice(0, 7), employeeId: req.employee_id, new: { from: req.start_date, to: req.end_date, days: dates.length } });
   renderAttendanceTab();
   renderRequestsTab();
   renderLeaveBalanceTab();
@@ -1717,6 +1733,7 @@ function closeScanDeleteModal() {
 // ធ្វើការលុបម៉ោងស្កេនជាក់លាក់ណាមួយដែលអ្នកគ្រប់គ្រងបានជ្រើសរើស
 async function performScanDelete(empId, field) {
   const date = todayStr();
+  if (guardLocked(date, 'លុបការស្កេន')) { closeScanDeleteModal(); return; }
   const dayRec = attendance[date] && attendance[date][empId];
   if (!dayRec || !dayRec[field]) { closeScanDeleteModal(); return; }
 
@@ -1747,6 +1764,7 @@ function handleScanResult(decodedText) {
   }
 
   const date = todayStr();
+  if (isMonthLocked(date)) { setScanResult('error', `✕ ខែ ${date.slice(0, 7)} ត្រូវបានបិទហើយ — មិនអាចកត់ត្រាបានទេ`); return; }
   const time = nowTimeStr();
   if (!attendance[date]) attendance[date] = {};
   if (!attendance[date][empId]) attendance[date][empId] = { status: '', checkin: '', checkout: '', breakOut: '', breakIn: '' };
@@ -1955,6 +1973,7 @@ async function applyDeductionItem(empId, silent) {
   const emp = employees.find(e => e.id === empId);
   if (!emp) return;
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  if (isMonthLocked(month)) { if (!silent) guardLocked(month, 'បញ្ចូលប្រាក់កាត់'); return; }
   const r = calcDeductionRow(emp, month);
   if (r.total <= 0) return;
   const item = {
@@ -1968,22 +1987,28 @@ async function applyDeductionItem(empId, silent) {
     amount: r.total,
   };
   const idx = payrollItems.findIndex(x => x.id === item.id);
+  const prevAmt = idx !== -1 ? payrollItems[idx].amount : null;
   if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
   await upsertPayrollItemRow(item);
+  if (prevAmt === null || Math.abs(prevAmt - item.amount) > 0.0001) logAudit('deduction_apply', { entity: 'payroll_item', ref: item.id, month, employeeId: empId, old: prevAmt === null ? null : { name: item.name, type: 'deduction', currency: 'USD', amount: prevAmt }, new: { name: item.name, type: 'deduction', currency: 'USD', amount: item.amount } });
   if (!silent) { renderDeductTab(); renderPayrollTab(); }
 }
 
 async function removeDeductionItem(empId) {
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  if (guardLocked(month, 'ដកប្រាក់កាត់')) return;
   const id = dedItemId(empId, month);
+  const prevItem = payrollItems.find(x => x.id === id);
   payrollItems = payrollItems.filter(x => x.id !== id);
   await deletePayrollItemRow(id);
+  if (prevItem) logAudit('deduction_remove', { entity: 'payroll_item', ref: id, month, employeeId: empId, old: { name: prevItem.name, type: 'deduction', currency: 'USD', amount: prevItem.amount } });
   renderDeductTab();
   renderPayrollTab();
 }
 
 async function applyAllDeductions() {
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
+  if (guardLocked(month, 'បញ្ចូលប្រាក់កាត់')) return;
   const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
   if (targets.length === 0) { customAlert('មិនមានប្រាក់ត្រូវកាត់ទេ (សូមពិនិត្យលក្ខខណ្ឌកាត់លុយ)'); return; }
   if (!(await customConfirm(`បន្ថែមប្រាក់កាត់សម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`))) return;
@@ -2125,6 +2150,7 @@ async function applyBonusItem(empId, silent) {
   const emp = employees.find(e => e.id === empId);
   if (!emp) return;
   const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  if (isMonthLocked(month)) { if (!silent) guardLocked(month, 'បញ្ចូលបំណាច់'); return; }
   const r = calcBonusRow(emp, month, bonusRules);
   if (!r.eligible) return;
   let amount = r.amount;
@@ -2144,22 +2170,28 @@ async function applyBonusItem(empId, silent) {
     amount,
   };
   const idx = payrollItems.findIndex(x => x.id === item.id);
+  const prevAmt = idx !== -1 ? payrollItems[idx].amount : null;
   if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
   await upsertPayrollItemRow(item);
+  if (prevAmt === null || Math.abs(prevAmt - item.amount) > 0.0001) logAudit('bonus_apply', { entity: 'payroll_item', ref: item.id, month, employeeId: empId, old: prevAmt === null ? null : { name: item.name, type: 'benefit', currency: 'USD', amount: prevAmt }, new: { name: item.name, type: 'benefit', currency: 'USD', amount: item.amount } });
   if (!silent) { renderBonusTab(); renderPayrollTab(); }
 }
 
 async function removeBonusItem(empId) {
   const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  if (guardLocked(month, 'ដកបំណាច់')) return;
   const id = bonusItemId(empId, month);
+  const prevItem = payrollItems.find(x => x.id === id);
   payrollItems = payrollItems.filter(x => x.id !== id);
   await deletePayrollItemRow(id);
+  if (prevItem) logAudit('bonus_remove', { entity: 'payroll_item', ref: id, month, employeeId: empId, old: { name: prevItem.name, type: 'benefit', currency: 'USD', amount: prevItem.amount } });
   renderBonusTab();
   renderPayrollTab();
 }
 
 async function applyAllBonus() {
   const month = document.getElementById('bonusMonth').value || `${todayStr().slice(0, 4)}-12`;
+  if (guardLocked(month, 'បញ្ចូលបំណាច់')) return;
   const targets = employees.filter(e => e.status === 'active').filter(e => calcBonusRow(e, month, bonusRules).eligible);
   if (targets.length === 0) { customAlert('មិនមានបុគ្គលិកមានសិទ្ធិទទួលបំណាច់ឆ្នាំទេ (សូមពិនិត្យលក្ខខណ្ឌ)'); return; }
   if (bonusRules.mode === 'manual') {
@@ -2325,6 +2357,8 @@ function monthlyRows(month) {
       const dedAuto = calcDeductionRow(e, month).total;
       const applied = payrollItems.find(p => p.id === dedItemId(e.id, month));
       const pendingDed = dedAuto > 0 && (!applied || Math.abs(payrollItemToUSD(applied) - dedAuto) > 0.0001);
+      const snap = getLockedSnapshot(e.id, month);
+      if (snap) return { e, t, unmarked: 0, pendingDed: false, dedAuto: 0, adv: snap.advance || calcAdvanceRow(e, month) };
       return { e, t, unmarked: countUnmarkedDays(e, month), pendingDed, dedAuto, adv: calcAdvanceRow(e, month) };
     });
 }
@@ -2334,6 +2368,7 @@ function renderMonthlyTab() {
   if (!body) return;
   const month = currentMonthlyMonth();
   const rows = monthlyRows(month);
+  renderMonthlyLockBar(month);
   document.getElementById('monthlyEmpty').style.display = rows.length ? 'none' : 'block';
 
   const g = { total: 0, ben: 0, ded: 0, net: 0, netRiel: 0, warn: 0, adv: 0 };
@@ -2350,10 +2385,12 @@ function renderMonthlyTab() {
       <td>$${fmtUSD(t.total)}</td><td>+$${fmtUSD(t.benefitsUSD)}</td><td>−$${fmtUSD(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD(t.net)}</strong></td><td>${fmtRiel(t.netRiel)} ៛</td>
       <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
+      <td style="font-size:0.74rem;">${pcPayslipCell(e.id, month)}</td>
       <td style="font-size:0.72rem;color:#b45309;">${warns.join('<br>') || '<span style="color:#16a34a;">✓</span>'}</td>
       <td style="white-space:nowrap;">
         <button class="secondary" onclick="monthlyOpenEmployee('${e.id}')">📄 លម្អិត</button>
         <button class="secondary" onclick="adminPrintPayslipMonth('${e.id}','${month}')">🖨</button>
+        <button class="secondary" title="កែតម្រូវ" onclick="openAdjustModal({empId:'${e.id}',srcMonth:'${month}'})">⚖️</button>
       </td>
     </tr>`;
   }).join('');
@@ -2381,6 +2418,7 @@ function monthlyOpenEmployee(empId) {
 
 async function runMonthlyPayroll() {
   const month = currentMonthlyMonth();
+  if (guardLocked(month, 'គណនាប្រាក់កាត់')) return;
   const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
   const stale = payrollItems.filter(p => p.id.startsWith('auto_ded_') && p.month === month &&
     !targets.some(e => dedItemId(e.id, month) === p.id));
@@ -2468,6 +2506,7 @@ document.getElementById('monthlySearch').addEventListener('input', renderMonthly
 document.getElementById('monthlyPrev').addEventListener('click', () => shiftMonthlyMonth(-1));
 document.getElementById('monthlyNext').addEventListener('click', () => shiftMonthlyMonth(1));
 document.getElementById('monthlyRunBtn').addEventListener('click', runMonthlyPayroll);
+if (typeof initPayrollClose === 'function') initPayrollClose();
 document.getElementById('advAmount').value = advRules.amount;
 document.getElementById('advCountLeave').checked = !!advRules.countLeave;
 document.getElementById('advEndDay').value = advRules.endDay;

@@ -136,6 +136,9 @@ window.addEventListener('load', function () {
 // Admin: សង្ខេបប្រចាំខែរបស់បុគ្គលិកម្នាក់ (ដូចទំព័របុគ្គលិក)
 // ---------------------------------------------------------------------------
 function summarizeEmpMonth(emp, month) {
+  // ខែដែលបានបិទ៖ ប្រើលេខ Snapshot ដែលបានរក្សាទុកពេលបិទខែ (មិនប្តូរតាមប្រាក់ខែ/អត្រា/វត្តមានថ្មី)
+  const snap = (typeof getLockedSnapshot === 'function') ? getLockedSnapshot(emp.id, month) : null;
+  if (snap) return snap;
   const t = { workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, doubleDays: 0,
     normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodRiel: 0, foodOtRiel: 0, total: 0, riel: 0 };
   daysInMonth(month).forEach(date => {
@@ -275,6 +278,7 @@ function printPayrollSheet() {
 // ---------------------------------------------------------------------------
 function payslipPageHtml(emp, month) {
   const t = summarizeEmpMonth(emp, month);
+  const I = t.info || { name: emp.name, username: emp.username, position: emp.position, salary: emp.salary };
   const R = 'style="text-align:right;"';
   return `<div class="page ps-wrap">
     <div class="ps-header">
@@ -282,10 +286,10 @@ function payslipPageHtml(emp, month) {
       <div style="font-size:12px;color:#6b7280;margin-top:4px;">ខែ ${printEsc(month)}</div>
     </div>
     <table>
-      <tr><td style="width:35%;"><strong>ឈ្មោះបុគ្គលិក</strong></td><td>${printEsc(emp.name)}</td></tr>
-      <tr><td><strong>អត្តលេខ</strong></td><td>${printEsc(emp.username || '-')}</td></tr>
-      <tr><td><strong>តួនាទី</strong></td><td>${printEsc(emp.position || '-')}</td></tr>
-      <tr><td><strong>ប្រាក់ខែមូលដ្ឋាន</strong></td><td>$${fmtUSD(parseFloat(emp.salary) || 0)}</td></tr>
+      <tr><td style="width:35%;"><strong>ឈ្មោះបុគ្គលិក</strong></td><td>${printEsc(I.name)}</td></tr>
+      <tr><td><strong>អត្តលេខ</strong></td><td>${printEsc(I.username || '-')}</td></tr>
+      <tr><td><strong>តួនាទី</strong></td><td>${printEsc(I.position || '-')}</td></tr>
+      <tr><td><strong>ប្រាក់ខែមូលដ្ឋាន</strong></td><td>$${fmtUSD(parseFloat(I.salary) || 0)}</td></tr>
     </table>
     <table>
       <tr><th>ព័ត៌មាន</th><th ${R}>ចំនួន</th></tr>

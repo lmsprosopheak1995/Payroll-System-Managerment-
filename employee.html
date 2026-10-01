@@ -362,6 +362,10 @@
         <button class="secondary" id="payrollPrintBtn" style="margin-top:8px;width:100%;">🖨 ព្រីន Payslip</button>
       </div>
 
+      <div class="portal-card" id="payrollDisputeCard" style="margin-top:12px;">
+        <div id="payrollDisputeBox"></div>
+      </div>
+
       <div class="portal-card" style="margin-top:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
           <h2 style="margin:0;font-size:0.9rem;">🧾 ប្រវត្តិបើកប្រាក់ខែ</h2>
@@ -1229,7 +1233,27 @@ function fmtItemAmountEmp(item) {
   return item.currency === 'USD' ? `$${fmtUSD(item.amount)}` : `${fmtRiel(item.amount)} ៛`;
 }
 
+// ---- ខែដែលបានបិទ (Lock) + Snapshot ----
+const periodCache = {}, snapCache = {};
+async function getMyPeriod(month) {
+  if (month in periodCache) return periodCache[month];
+  const { data, error } = await supabaseClient.from('payroll_periods').select('*').eq('month', month).maybeSingle();
+  periodCache[month] = error ? null : (data || null); // តារាងមិនទាន់មាន ឬមិនទាន់បិទ → ប្រើការគណនាផ្ទាល់
+  return periodCache[month];
+}
+async function getMySnapshot(month) {
+  const p = await getMyPeriod(month);
+  if (!p || !p.locked || !currentEmployee) return null;
+  if (month in snapCache) return snapCache[month];
+  const { data, error } = await supabaseClient.from('payroll_snapshots').select('data').eq('month', month).eq('employee_id', currentEmployee.id).maybeSingle();
+  snapCache[month] = (error || !data) ? null : data.data;
+  return snapCache[month];
+}
+function clearPayrollCaches() { Object.keys(periodCache).forEach(k => delete periodCache[k]); Object.keys(snapCache).forEach(k => delete snapCache[k]); }
+
 async function summarizeMonth(month) {
+  const lockedSnap = await getMySnapshot(month);
+  if (lockedSnap) return lockedSnap;
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
@@ -1424,6 +1448,7 @@ async function renderOTHist() {
 
 // ==== ប្រាក់ខែ (Payroll) ====
 async function renderPayrollSummary() {
+  clearPayrollCaches();
   const month = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
   const box = document.getElementById('payrollSummary');
   box.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
@@ -1433,7 +1458,7 @@ async function renderPayrollSummary() {
     <div class="payroll-line"><span>ថ្ងៃច្បាប់</span><span>${t.leaveDays} ថ្ងៃ</span></div>
     <div class="payroll-line"><span>ម៉ោងធម្មតា</span><span>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</span></div>
     <div class="payroll-line"><span>ម៉ោងថែម</span><span>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</span></div>
-    <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * settings.exchangeRate)} ៛</span></div>
+    <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * (t.exchangeRate || settings.exchangeRate))} ៛</span></div>
     ${t.doubleDays ? `<div class="payroll-line"><span>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</span><span>${t.doubleDays} ថ្ងៃ</span></div>` : ''}
     <div class="payroll-line total" style="padding-bottom:8px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(t.total)} (${fmtRiel(t.riel)} ៛)</span></div>
     <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--success);">🟢 អត្ថប្រយោជន៍</div>
@@ -1442,6 +1467,68 @@ async function renderPayrollSummary() {
     ${t.deductionItems.length ? t.deductionItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--danger);">− ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
     <div class="payroll-line total"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(t.net)} (${fmtRiel(t.netRiel)} ៛)</span></div>
   `;
+  renderDisputeBox(month);
+}
+
+// ==== ពាក្យតវ៉ា / បញ្ជាក់ "បានពិនិត្យ Payslip" (ខែដែលបានបិទ) ====
+const DISPUTE_STATUS = { pending: ['កំពុងរង់ចាំ', 'pending'], approved: ['អនុម័ត', 'approved'], rejected: ['បដិសេធ', 'rejected'] };
+
+async function renderDisputeBox(month) {
+  const box = document.getElementById('payrollDisputeBox');
+  if (!box || !currentEmployee) return;
+  const p = await getMyPeriod(month);
+  if (!p || !p.locked) {
+    box.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);">ខែ ${escapeHtml(month)} មិនទាន់បិទ — ប្រាក់ខែនៅអាចផ្លាស់ប្តូរ។ អ្នកអាចបញ្ជាក់ ឬតវ៉ាបាន ក្រោយពេលក្រុមហ៊ុនបិទខែ។</div>`;
+    return;
+  }
+  const deadline = new Date(new Date(p.locked_at).getTime() + (p.dispute_days || 0) * 86400000);
+  const expired = Date.now() > deadline.getTime();
+  const { data, error } = await supabaseClient.from('payroll_disputes').select('*').eq('employee_id', currentEmployee.id).eq('month', month).order('created_at', { ascending: false });
+  const rows = error ? [] : (data || []);
+  const ack = rows.find(r => r.kind === 'ack');
+  const disputes = rows.filter(r => r.kind === 'dispute');
+  const dl = `${deadline.getFullYear()}-${String(deadline.getMonth() + 1).padStart(2, '0')}-${String(deadline.getDate()).padStart(2, '0')}`;
+  box.innerHTML = `
+    <div class="pf-title"><span>🔒 ខែ ${escapeHtml(month)} បានបិទ — លេខចុងក្រោយ</span></div>
+    ${ack ? '<div style="color:var(--success);font-size:0.8rem;margin-bottom:8px;">✓ អ្នកបានបញ្ជាក់ថាបានពិនិត្យ Payslip នេះរួចហើយ</div>'
+          : `<button class="primary-btn" id="ackBtn" style="margin-bottom:8px;">✓ ខ្ញុំបានពិនិត្យ Payslip ហើយ ត្រឹមត្រូវ</button>`}
+    ${expired ? '<div style="font-size:0.76rem;color:var(--text-muted);">ផុតរយៈពេលតវ៉ាសម្រាប់ខែនេះហើយ។</div>' : `
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:8px;">បើលេខមិនត្រឹមត្រូវ អ្នកអាចតវ៉ាបានដល់ថ្ងៃទី ${dl}។</div>
+      <div class="form-group"><label>ថ្ងៃដែលមានបញ្ហា (មិនចាំបាច់)</label><input type="date" id="dispDate"></div>
+      <div class="form-group"><label>មូលហេតុតវ៉ា *</label><textarea id="dispReason" rows="3" placeholder="ឧ. ថ្ងៃទី ១២ ខ្ញុំធ្វើ OT ២ម៉ោង តែមិនបានបូក"></textarea></div>
+      <button class="secondary" id="dispBtn" style="width:100%;">⚖️ ដាក់ពាក្យតវ៉ា</button>`}
+    ${disputes.length ? `<div style="margin-top:14px;font-weight:700;font-size:0.82rem;">ពាក្យតវ៉ារបស់ខ្ញុំ</div>` + disputes.map(d => {
+      const st = DISPUTE_STATUS[d.status] || [d.status, d.status];
+      return `<div class="req-row"><div>
+        <div class="rmeta">${d.work_date ? escapeHtml(d.work_date) + ' · ' : ''}${escapeHtml(d.reason || '')}</div>
+        ${d.status !== 'pending' && d.admin_note ? `<div class="rmeta">ចម្លើយ៖ ${escapeHtml(d.admin_note)}</div>` : ''}
+        ${d.adjustment_usd ? `<div class="rmeta">ការកែតម្រូវ៖ ${d.adjustment_usd > 0 ? '+' : '−'}$${fmtUSD(Math.abs(d.adjustment_usd))} (បូកក្នុងប្រាក់ខែខែក្រោយ)</div>` : ''}
+      </div><div class="rright"><span class="badge ${st[1]}">${st[0]}</span></div></div>`;
+    }).join('') : ''}`;
+  const ackBtn = document.getElementById('ackBtn');
+  if (ackBtn) ackBtn.addEventListener('click', () => acknowledgePayslip(month));
+  const dispBtn = document.getElementById('dispBtn');
+  if (dispBtn) dispBtn.addEventListener('click', () => submitDispute(month));
+}
+
+async function acknowledgePayslip(month) {
+  const { error } = await supabaseClient.from('payroll_disputes').insert({
+    id: empUid('ack'), employee_id: currentEmployee.id, month, kind: 'ack', status: 'acknowledged', created_at: new Date().toISOString(),
+  });
+  if (error) { customAlert('មិនអាចបញ្ជាក់បានទេ៖ ' + error.message); return; }
+  renderDisputeBox(month);
+}
+
+async function submitDispute(month) {
+  const reason = document.getElementById('dispReason').value.trim();
+  const workDate = document.getElementById('dispDate').value || null;
+  if (!reason) { customAlert('សូមបំពេញមូលហេតុតវ៉ា'); return; }
+  const { error } = await supabaseClient.from('payroll_disputes').insert({
+    id: empUid('dsp'), employee_id: currentEmployee.id, month, kind: 'dispute', work_date: workDate, reason, status: 'pending', created_at: new Date().toISOString(),
+  });
+  if (error) { customAlert('មិនអាចដាក់ពាក្យតវ៉ាបានទេ៖ ' + error.message); return; }
+  customAlert('បានដាក់ពាក្យតវ៉ាហើយ — សូមរង់ចាំការឆ្លើយតបពីអ្នកគ្រប់គ្រង');
+  renderDisputeBox(month);
 }
 
 function buildPayslipHtml(t, month) {
@@ -1451,9 +1538,9 @@ function buildPayslipHtml(t, month) {
       <div style="font-size:12px; color:#6b7280; margin-top:4px;">ខែ ${month}</div>
     </div>
     <table>
-      <tr><td style="width:35%;"><strong>ឈ្មោះបុគ្គលិក</strong></td><td>${escapeHtml(currentEmployee.name)}</td></tr>
-      <tr><td><strong>តួនាទី</strong></td><td>${escapeHtml(currentEmployee.position || '-')}</td></tr>
-      <tr><td><strong>ប្រាក់ខែមូលដ្ឋាន</strong></td><td>$${fmtUSD(currentEmployee.salary)}</td></tr>
+      <tr><td style="width:35%;"><strong>ឈ្មោះបុគ្គលិក</strong></td><td>${escapeHtml((t.info || currentEmployee).name)}</td></tr>
+      <tr><td><strong>តួនាទី</strong></td><td>${escapeHtml((t.info || currentEmployee).position || '-')}</td></tr>
+      <tr><td><strong>ប្រាក់ខែមូលដ្ឋាន</strong></td><td>$${fmtUSD((t.info || currentEmployee).salary)}</td></tr>
     </table>
     <table>
       <tr><th>ព័ត៌មាន</th><th style="text-align:right;">ចំនួន</th></tr>
@@ -1463,8 +1550,8 @@ function buildPayslipHtml(t, month) {
       <tr><td>ថ្ងៃមកយឺត</td><td style="text-align:right;">${t.lateDays} ថ្ងៃ</td></tr>
       <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</td></tr>
       <tr><td>ម៉ោងថែម / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</td></tr>
-      <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td style="text-align:right;">${fmtRiel(t.foodPay * settings.exchangeRate)} ៛</td></tr>
-      <tr><td>ប្រាក់បាយថែមម៉ោង</td><td style="text-align:right;">${fmtRiel(t.foodOtPay * settings.exchangeRate)} ៛</td></tr>
+      <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td style="text-align:right;">${fmtRiel(t.foodPay * (t.exchangeRate || settings.exchangeRate))} ៛</td></tr>
+      <tr><td>ប្រាក់បាយថែមម៉ោង</td><td style="text-align:right;">${fmtRiel(t.foodOtPay * (t.exchangeRate || settings.exchangeRate))} ៛</td></tr>
       ${t.doubleDays ? `<tr><td>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</td><td style="text-align:right;">${t.doubleDays} ថ្ងៃ</td></tr>` : ''}
       <tr class="ps-total-row"><td>សរុបតាមវត្តមាន</td><td style="text-align:right;">$${fmtUSD(t.total)} &nbsp;/&nbsp; ${fmtRiel(t.riel)} ៛</td></tr>
     </table>
