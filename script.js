@@ -634,6 +634,7 @@ function renderAttendanceTab() {
     ? `<div style="margin-bottom:6px;padding:4px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:0.76rem;">🔒 ខែ ${month} បិទរួច — លេខមកពី Snapshot (ការលុប/កែធាតុមិនប៉ះពាល់ទេ លុះត្រាតែបើកខែឡើងវិញ)</div>`
     : '';
 
+  const net2 = v => (Math.round((v || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // ប្រាក់ខែសុទ្ធ បង្ហាញត្រឹម 2 ខ្ទង់
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
@@ -643,7 +644,7 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num">$${fmtUSD(totals.foodPay)}</div><div class="label">ប្រាក់បាយ ($)<br>(${fmtRiel(totals.foodRiel)} ៛)</div></div>
     <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
     <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
+    <div class="stat-card"><div class="num">$${net2(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
   `;
 
@@ -663,7 +664,7 @@ function renderAttendanceTab() {
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
-      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(netUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${net2(netUSD)}</span></div>
     `;
 }
 
