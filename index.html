@@ -65,6 +65,7 @@
     <div class="nav-group open">
       <button class="nav-item nav-parent"><span class="ico">💰</span><span class="lbl">Payrolls</span><span class="chev">‹</span></button>
       <div class="nav-sub">
+        <button class="nav-item" data-tab="monthly"><span class="dot"></span><span class="lbl">⭐ ប្រាក់ខែប្រចាំខែ (ទាំងអស់)</span></button>
         <button class="nav-item" data-tab="payroll"><span class="dot"></span><span class="lbl">អត្ថប្រយោជន៍ & ប្រាក់កាត់</span></button>
         <button class="nav-item" data-tab="deduct"><span class="dot"></span><span class="lbl">យឺត/ច្បាប់ → កាត់លុយ</span></button>
         <button class="nav-item" data-tab="bonus"><span class="dot"></span><span class="lbl">បំណាច់ឆ្នាំ</span></button>
@@ -391,6 +392,38 @@
         <tbody id="bonusBody"></tbody>
       </table>
       <div class="empty-state" id="bonusEmpty" style="display:none;">មិនមានបុគ្គលិកទេ</div>
+    </div>
+  </div>
+
+  <div id="monthlyTab" class="tab-content">
+    <div class="attendance-controls">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button class="secondary" id="monthlyPrev" title="ខែមុន">◀</button>
+        <input type="month" id="monthlyMonth">
+        <button class="secondary" id="monthlyNext" title="ខែក្រោយ">▶</button>
+        <input type="text" id="monthlySearch" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button id="monthlyRunBtn">⚡ គណនាប្រាក់កាត់យឺត/ច្បាប់ ទាំងអស់</button>
+        <button class="secondary" id="monthlyPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
+        <button class="secondary" id="monthlyPrintAllBtn">🖨 Payslip ទាំងអស់</button>
+        <button class="secondary" id="monthlyCsvBtn">⬇️ Export CSV</button>
+      </div>
+    </div>
+    <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">
+      ជំហាន៖ ① ពិនិត្យ ⚠️ ថ្ងៃដែលមិនទាន់កត់វត្តមាន → ② ចុច "គណនាប្រាក់កាត់" → ③ ពិនិត្យតារាង → ④ ព្រីនតារាង / Payslip។ ចុចលើជួរបុគ្គលិកដើម្បីមើលលម្អិត។
+    </p>
+    <div class="attendance-stats" id="monthlyStats"></div>
+    <br>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ផ្នែក</th><th>ថ្ងៃធ្វើការ</th><th>ច្បាប់</th><th>OT (ម៉ោង)</th>
+          <th>តាមវត្តមាន ($)</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>ត្រូវពិនិត្យ</th><th></th>
+        </tr></thead>
+        <tbody id="monthlyBody"></tbody>
+      </table>
+      <div id="monthlyEmpty" class="empty-state" style="display:none;">មិនមានបុគ្គលិកសកម្ម</div>
     </div>
   </div>
 
