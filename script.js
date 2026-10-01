@@ -631,16 +631,16 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.otPay)}</div><div class="label">ប្រាក់ថែមម៉ោង ($)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">① សរុបតាមវត្តមាន ($) <br>(មិនទាន់បូកអត្ថប្រយោជន៍)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">សរុបតាមវត្តមាន (រៀល)</div></div>
-    <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">② អត្ថប្រយោជន៍</div></div>
-    <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">③ ប្រាក់កាត់</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($) <br>(① + ② − ③)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.normalPay)}</div><div class="label">ប្រាក់ឈ្នួលថ្ងៃធម្មតា ($)<br>(${fmtHours(totals.normalHours)} ម៉ោង)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.otPay)}</div><div class="label">ប្រាក់ថែមម៉ោង ($)<br>(${fmtHours(totals.otHours)} ម៉ោង)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.foodPay)}</div><div class="label">ប្រាក់បាយ ($)<br>(${fmtRiel(totals.foodRiel)} ៛)</div></div>
+    <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
+    <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
   `;
 
-  // ប្រអប់បំបែកលម្អិត៖ element ដាច់ដោយឡែកនៅក្រោមកាតស្ថិតិ
+  // ប្រអប់បំបែកលម្អិត៖ ចែកដាច់ពីគ្នា (ឈ្នួលធម្មតា / ថែមម៉ោង / ប្រាក់បាយ) មិនបូករួមជាលេខតែមួយ
   const statsEl = document.getElementById('attendanceStats');
   let bd = document.getElementById('attendanceBreakdown');
   if (!bd) {
@@ -648,10 +648,13 @@ function renderAttendanceTab() {
     bd.id = 'attendanceBreakdown';
     statsEl.insertAdjacentElement('afterend', bd);
   }
+  const row = (label, val, color) => `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${label}</span><span style="color:${color || 'inherit'};">${val}</span></div>`;
   bd.style.cssText = 'width:100%;max-width:520px;margin:10px 0;font-size:0.82rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;';
   bd.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:16px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(totals.total)}</span></div>
-      ${itemsHtml || '<div style="color:#9ca3af;">គ្មានអត្ថប្រយោជន៍/ប្រាក់កាត់ក្នុងខែនេះ</div>'}
+      ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.normalPay))}
+      ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
+      ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
+      ${itemsHtml}
       <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(netUSD)}</span></div>
     `;
 }
