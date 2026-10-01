@@ -66,19 +66,42 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function setupAutoUpdate() {
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;          // សួរអ្នកប្រើសិន មុន Download
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('update-available', (info) => {
-    dialog.showMessageBox(win, {
-      type: 'info',
+  let downloading = false;
+  let askedVersion = null;                   // កុំសួរម្តងទៀតសម្រាប់ version ដដែលក្នុង session នេះ
+
+  autoUpdater.on('update-available', async (info) => {
+    if (downloading || askedVersion === info.version) return;
+    askedVersion = info.version;
+    const r = await dialog.showMessageBox(win, {
+      type: 'question',
       title: 'មាន Version ថ្មី',
-      message: `កំពុង Download version ${info.version} នៅផ្ទៃខាងក្រោយ...`,
-      buttons: ['យល់ព្រម'],
+      message: `មាន Version ${info.version} ថ្មី។ ចង់ Download ឥឡូវទេ?`,
+      buttons: ['Download ឥឡូវនេះ', 'ពេលក្រោយ'],
+      defaultId: 0,
+      cancelId: 1,
     });
+    if (r.response === 0) {
+      downloading = true;
+      autoUpdater.downloadUpdate().catch((err) => {
+        downloading = false;
+        askedVersion = null;
+        console.error('Download update failed:', err);
+        dialog.showMessageBox(win, { type: 'error', title: 'Download មិនជោគជ័យ', message: 'សូមពិនិត្យអ៊ីនធឺណិត ហើយព្យាយាមម្តងទៀត', buttons: ['យល់ព្រម'] });
+      });
+    }
+  });
+
+  // បង្ហាញវឌ្ឍនភាពលើ taskbar
+  autoUpdater.on('download-progress', (p) => {
+    if (win && !win.isDestroyed()) win.setProgressBar(p.percent / 100);
   });
 
   autoUpdater.on('update-downloaded', () => {
+    downloading = false;
+    if (win && !win.isDestroyed()) win.setProgressBar(-1);
     dialog.showMessageBox(win, {
       type: 'question',
       title: 'ត្រៀមធ្វើបច្ចុប្បន្នភាព',
@@ -91,10 +114,13 @@ function setupAutoUpdate() {
   });
 
   autoUpdater.on('error', (err) => {
+    downloading = false;
+    if (win && !win.isDestroyed()) win.setProgressBar(-1);
     console.error('Auto-update error:', err);
   });
 
   // ពិនិត្យរក update ពេលបើកកម្មវិធី + ពិនិត្យម្តងទៀតរៀងរាល់ 4 ម៉ោង
-  autoUpdater.checkForUpdatesAndNotify();
-  setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 4 * 60 * 60 * 1000);
+  const check = () => autoUpdater.checkForUpdates().catch((e) => console.error('Update check failed:', e));
+  check();
+  setInterval(check, 4 * 60 * 60 * 1000);
 }
