@@ -711,3 +711,25 @@ body:has(> #mainContainer) { padding: 12px 16px; }
 @media (min-width: 901px) {
   #mainContainer .sidebar { height: calc(100vh - 24px); }
 }
+
+
+/* ===== ទម្រង់ បន្ថែម/កែ បុគ្គលិក (employee modal) ===== */
+.emp-modal { max-width: 720px; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.emp-modal-head { padding: 16px 20px 10px; flex: 0 0 auto; }
+.emp-modal-head h2 { margin: 0; }
+.emp-modal-body { padding: 0 20px 6px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.emp-modal-foot { flex: 0 0 auto; margin: 0; padding: 12px 20px; border-top: 1px solid var(--border, #e5e7eb); background: var(--card-bg); }
+.emp-top { display: flex; gap: 18px; align-items: flex-start; margin-bottom: 4px; }
+.emp-photo { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 130px; }
+.emp-photo button { width: 100%; padding: 5px 8px; font-size: 0.76rem; }
+.emp-top-fields { flex: 1 1 auto; min-width: 0; }
+.emp-section { font-size: 0.74rem; font-weight: 700; color: var(--primary, #4f46e5); margin: 8px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border, #e5e7eb); }
+.emp-section small { font-weight: 400; color: var(--text-muted); }
+.emp-row3 .form-group { min-width: 0; }
+@media (max-width: 560px) {
+  .emp-top { flex-direction: column; align-items: stretch; }
+  .emp-photo { flex-direction: row; flex-basis: auto; flex-wrap: wrap; justify-content: center; }
+  .emp-photo button { width: auto; }
+  .emp-modal .form-row { flex-wrap: wrap; }
+  .emp-modal .form-row .form-group { flex: 1 1 100%; }
+}
