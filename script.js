@@ -619,25 +619,19 @@ function renderAttendanceTab() {
   const netUSD = totals.total + adj.net;
   const netRiel = netUSD * (settings.exchangeRate || 0);
 
-  // បំបែក "តាមវត្តមាន" និង "អត្ថប្រយោជន៍/ប្រាក់កាត់" ឱ្យច្បាស់ + បង្ហាញឈ្មោះធាតុនីមួយៗ (ឧ. ថ្លៃធ្វើដំណើរ)
+  // សង្ខេបឱ្យស្អាត៖ កាតតូច ៣ + ប្រអប់ប្រាក់ខែតែមួយ (មិនស្ទួនព័ត៌មាន)
   const sumT = summarizeEmpMonth(emp, month);
+  const line = (label, usd, color, extra) =>
+    `<div style="display:flex;justify-content:space-between;gap:16px;padding:3px 0;"><span>${label}</span><span style="color:${color || 'inherit'};font-variant-numeric:tabular-nums;">${usd}${extra || ''}</span></div>`;
   const itemLines = (list, sign, color) => (list || []).map(p =>
-    `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${sign} ${escapeHtml(p.name)}</span><span style="color:${color};">${sign}$${fmtUSD(payrollItemToUSD(p))}</span></div>`).join('');
-  const itemsHtml = itemLines(sumT.benefitItems, '+', '#16a34a') + itemLines(sumT.deductionItems, '−', '#dc2626');
+    line(`<span style="color:var(--text-muted);">${sign} ${escapeHtml(p.name)}</span>`, `${sign}$${fmtUSD(payrollItemToUSD(p))}`, color)).join('');
 
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
-    <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">① សរុបតាមវត្តមាន ($) <br>(មិនទាន់បូកអត្ថប្រយោជន៍)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">សរុបតាមវត្តមាន (រៀល)</div></div>
-    <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">② អត្ថប្រយោជន៍</div></div>
-    <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">③ ប្រាក់កាត់</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($) <br>(① + ② − ③)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(netRiel)} ៛</div><div class="label">ប្រាក់ខែសុទ្ធ (រៀល)</div></div>
+    <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែម (OT)</div></div>
   `;
 
-  // ប្រអប់បំបែកលម្អិត៖ element ដាច់ដោយឡែកនៅក្រោមកាតស្ថិតិ (មិនដាក់ក្នុង flex container)
   const statsEl = document.getElementById('attendanceStats');
   let bd = document.getElementById('attendanceBreakdown');
   if (!bd) {
@@ -645,12 +639,15 @@ function renderAttendanceTab() {
     bd.id = 'attendanceBreakdown';
     statsEl.insertAdjacentElement('afterend', bd);
   }
-  bd.style.cssText = 'width:100%;max-width:520px;margin:10px 0;font-size:0.82rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;';
+  bd.style.cssText = 'width:100%;max-width:440px;margin:10px 0 14px;font-size:0.84rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:12px;padding:12px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.04);';
   bd.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:16px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(totals.total)}</span></div>
-      ${itemsHtml || '<div style="color:#9ca3af;">គ្មានអត្ថប្រយោជន៍/ប្រាក់កាត់ក្នុងខែនេះ</div>'}
-      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(netUSD)}</span></div>
-    `;
+    ${line('សរុបតាមវត្តមាន', '$' + fmtUSD(totals.total))}
+    ${itemLines(sumT.benefitItems, '+', '#16a34a')}
+    ${itemLines(sumT.deductionItems, '−', '#dc2626')}
+    <div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:8px;display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-weight:700;">
+      <span>ប្រាក់ខែសុទ្ធ</span>
+      <span style="text-align:right;"><span style="font-size:1.05rem;color:var(--primary,#4f46e5);">$${fmtUSD(netUSD)}</span><br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${fmtRiel(netRiel)} ៛</span></span>
+    </div>`;
 }
 
 // ==== ជម្រើសច្បាប់ក្នុង dropdown ស្ថានភាពវត្តមាន ====
