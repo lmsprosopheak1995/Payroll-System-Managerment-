@@ -552,6 +552,17 @@ function fmtUSD(n) {
   return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
+// ប្រាក់ខែសុទ្ធ៖ បង្ហាញ 2 ខ្ទង់ ($281.06) និងបំបែកជា ដុល្លារពេញ + រៀលសល់ ($281 + 240 ៛)
+function fmtUSD2(n) {
+  return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtUSDplusRiel(usd) {
+  const r = Math.round((usd || 0) * 100) / 100;
+  const dollars = Math.floor(r + 1e-9);
+  const rem = Math.round((r - dollars) * (settings.exchangeRate || 0));
+  return `$${dollars.toLocaleString()} + ${Math.round(rem).toLocaleString()} ៛`;
+}
+
 // Riel amounts are whole numbers with thousands separators (e.g. 48,423).
 function fmtRiel(n) {
   return Math.round(n || 0).toLocaleString();
@@ -2975,9 +2986,9 @@ function renderMonthlyTab() {
   renderMonthlyLockBar(month);
   document.getElementById('monthlyEmpty').style.display = rows.length ? 'none' : 'block';
 
-  const g = { total: 0, ben: 0, ded: 0, net: 0, netRiel: 0, warn: 0, adv: 0 };
+  const g = { total: 0, ben: 0, ded: 0, net: 0, netRiel: 0, netR2: 0, warn: 0, adv: 0 };
   body.innerHTML = rows.map(({ e, t, unmarked, pendingDed, dedAuto, adv }, i) => {
-    g.adv += adv.amount; g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel;
+    g.adv += adv.amount; g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel; g.netR2 += Math.round(t.net * 100) / 100;
     const warns = [];
     if (unmarked > 0) warns.push(`⚠️ មិនទាន់កត់វត្តមាន ${unmarked} ថ្ងៃ`);
     if (pendingDed) warns.push(`⚠️ មានប្រាក់កាត់ $${fmtUSD(dedAuto)} មិនទាន់បញ្ចូល`);
@@ -2986,8 +2997,8 @@ function renderMonthlyTab() {
     return `<tr>
       <td>${i + 1}</td><td>${escapeHtml(e.username || '-')}</td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept || '-')}</td>
       <td>${t.workDays}</td><td>${t.leaveDays}</td><td>${t.otHours ? fmtHours(t.otHours) : '-'}</td>
-      <td>$${fmtUSD(t.total)}</td><td>+$${fmtUSD(t.benefitsUSD)}</td><td>−$${fmtUSD(t.deductionsUSD)}</td>
-      <td><strong>$${fmtUSD(t.net)}</strong></td><td>${fmtRiel(t.netRiel)} ៛</td>
+      <td>$${fmtUSD(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD(t.normalPay)}<br>OT $${fmtUSD(t.otPay)}<br>បាយ $${fmtUSD(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD(t.benefitsUSD)}</td><td>−$${fmtUSD(t.deductionsUSD)}</td>
+      <td><strong>$${fmtUSD2(t.net)}</strong></td><td>${fmtUSDplusRiel(t.net)}</td>
       <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
       <td style="font-size:0.74rem;">${pcPayslipCell(e.id, month)}</td>
       <td style="font-size:0.72rem;color:#b45309;">${warns.join('<br>') || '<span style="color:#16a34a;">✓</span>'}</td>
@@ -3004,8 +3015,8 @@ function renderMonthlyTab() {
     <div class="stat-card"><div class="num">$${fmtUSD(g.total)}</div><div class="label">តាមវត្តមានសរុប</div></div>
     <div class="stat-card"><div class="num">+$${fmtUSD(g.ben)}</div><div class="label">អត្ថប្រយោជន៍សរុប</div></div>
     <div class="stat-card"><div class="num">-$${fmtUSD(g.ded)}</div><div class="label">ប្រាក់កាត់សរុប</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(g.net)}</div><div class="label">ត្រូវបើកសរុប ($)</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(g.netRiel)} ៛</div><div class="label">ត្រូវបើកសរុប (រៀល)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD2(g.netR2)}</div><div class="label">ត្រូវបើកសរុប ($)</div></div>
+    <div class="stat-card"><div class="num">${fmtUSDplusRiel(g.netR2)}</div><div class="label">ត្រូវបើកសរុប (ដុល្លារ + រៀល)</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(g.adv)}</div><div class="label">ប្រាក់ខែទី១សរុប (ទី២៥)</div></div>
     <div class="stat-card"><div class="num" style="color:${g.warn ? '#b45309' : '#16a34a'};">${g.warn}</div><div class="label">ត្រូវពិនិត្យ</div></div>
   `;
