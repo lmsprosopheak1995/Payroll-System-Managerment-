@@ -520,7 +520,11 @@ function computeRow(emp, record, date) {
 
   const round4 = n => Math.round(n * 10000) / 10000;
   const mult = dayMultiplier(date); // អាទិត្យ/បុណ្យ = ×2
-  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours);
+  // ម៉ោងច្បាប់ (កន្លះថ្ងៃ/តាមម៉ោង) ដែលបង់ប្រាក់ — បូកជាមួយម៉ោងធ្វើការ មិនឱ្យលើសម៉ោងស្តង់ដារ
+  const pl = emp && emp.id ? partialLeaveInfo(emp.id, date) : { paidHours: 0 };
+  const leavePayHours = status === 'leave' ? 0 : Math.min(pl.paidHours, Math.max(0, settings.standardHours - normalHours));
+  if (status === 'present' && leavePayHours > 0 && normalHours + leavePayHours >= settings.standardHours - 1e-9) fullDay = true;
+  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours + hourlyRate * leavePayHours);
   const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
   // Food allowances are set and displayed in Riel; convert to USD only for the USD total.
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
@@ -534,7 +538,7 @@ function computeRow(emp, record, date) {
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
 
-  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leavePayHours };
 }
 
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
@@ -588,7 +592,7 @@ function renderAttendanceTab() {
     if (r.late) totals.lateDays++;
     totals.otHours += r.otHours;
     const selVal = attStatusSelectValue(date, emp.id, r.status);
-    const statusOptions = ['', 'present', 'absent', 'leave', 'leave_annual', 'leave_paid'].map(s =>
+    const statusOptions = ['', 'present', 'absent', 'leave', 'leave_annual', 'leave_paid', 'leave_custom'].map(s =>
       `<option value="${s}" ${selVal === s ? 'selected' : ''}>${ATT_OPTION_LABELS[s]}</option>`
     ).join('');
     return `<tr>
@@ -630,7 +634,7 @@ function renderAttendanceTab() {
 
 // ==== ជម្រើសច្បាប់ក្នុង dropdown ស្ថានភាពវត្តមាន ====
 const ATT_PAID_TAG = '[ជ្រើសពីវត្តមាន]';
-const ATT_OPTION_LABELS = { ...STATUS_LABELS, leave_annual: 'ច្បាប់ប្រចាំឆ្នាំ (បំណាច់ឆ្នាំ)', leave_paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)' };
+const ATT_OPTION_LABELS = { ...STATUS_LABELS, leave_annual: 'ច្បាប់ប្រចាំឆ្នាំ (បំណាច់ឆ្នាំ)', leave_paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', leave_custom: '➕ កន្លះថ្ងៃ / តាមម៉ោង / ប្រភេទផ្សេង…' };
 
 function attStatusSelectValue(date, empId, status) {
   if (status !== 'leave') return status;
@@ -643,7 +647,8 @@ function attStatusSelectValue(date, empId, status) {
 // សំណើច្បាប់ ១ថ្ងៃ ដែលបង្កើតពីការជ្រើសក្នុង dropdown (ឬពី "ជំនួសថ្ងៃឈប់") — អាចដកវិញបាន
 function findDropdownLeaveReq(date, empId) {
   return leaveRequests.find(r => r.employee_id === empId && r.start_date === date && r.end_date === date
-    && ((r.reason || '').startsWith(SUBST_TAG) || (r.reason || '').startsWith(ATT_PAID_TAG)));
+    && leaveUnitOf(r).unit === 'day'
+    && ((r.reason || '').includes(SUBST_TAG) || (r.reason || '').includes(ATT_PAID_TAG)));
 }
 async function removeDropdownLeaveReq(date, empId) {
   const req = findDropdownLeaveReq(date, empId);
@@ -656,34 +661,120 @@ async function removeDropdownLeaveReq(date, empId) {
 }
 
 async function setAttendanceLeaveType(date, empId, value) {
-  const type = value === 'leave_paid' ? 'paid' : 'annual';
+  await createDayLeave(date, empId, { type: value === 'leave_paid' ? 'paid' : 'annual', unit: 'day' });
+}
+
+// បង្កើតច្បាប់ក្នុងថ្ងៃមួយ៖ ប្រភេទ (annual/paid/sick/unpaid/other) × រយៈពេល (day/half/hour)
+async function createDayLeave(date, empId, { type, unit, period, hours }) {
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  const weight = unit === 'day' ? 1 : unit === 'half' ? 0.5 : hours / std;
   const emp = employees.find(e => e.id === empId);
   const year = parseInt(date.slice(0, 4), 10);
-  if (emp) {
+  if (emp && (type === 'annual' || type === 'paid')) {
     const b = calcLeaveBalanceRow(emp, year, lbRules);
-    const needLeft = type === 'paid' ? b.paidRemaining : b.remaining;
-    const covered = leaveRequests.some(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === type && r.start_date <= date && date <= r.end_date);
-    if (!covered && needLeft < 1 && !(await customConfirm(`${LEAVE_TYPE_LABELS[type]}នៅសល់ ${needLeft} ថ្ងៃ។ នៅតែបន្ត (សមតុល្យនឹងអវិជ្ជមាន)?`))) { renderAttendanceTab(); return; }
+    const left = type === 'paid' ? b.paidRemaining : b.remaining;
+    const covered = unit === 'day' && leaveRequests.some(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === type && r.start_date <= date && date <= r.end_date && leaveUnitOf(r).unit === 'day');
+    if (!covered && left < weight - 1e-9 && !(await customConfirm(`${LEAVE_TYPE_LABELS[type]}នៅសល់ ${left} ថ្ងៃ ប៉ុន្តែត្រូវការ ${round2(weight)} ថ្ងៃ។ នៅតែបន្ត (សមតុល្យនឹងអវិជ្ជមាន)?`))) { renderAttendanceTab(); return false; }
   }
-  await removeDropdownLeaveReq(date, empId);
-  const reason = type === 'annual' ? `${SUBST_TAG} ជ្រើសពីតារាងវត្តមាន` : `${ATT_PAID_TAG} ច្បាប់មានប្រាក់ខែ`;
+  if (unit === 'day') await removeDropdownLeaveReq(date, empId);
+  const tag = type === 'annual' ? SUBST_TAG : ATT_PAID_TAG;
+  const reason = `${tag} ${LEAVE_TYPE_LABELS[type]} ${buildUnitTag(unit, period, hours)}`.trim();
   const { data, error } = await supabaseClient.from('leave_requests').insert({
     employee_id: empId, leave_type: type, start_date: date, end_date: date, reason, status: 'approved', decided_at: new Date().toISOString(),
   }).select().maybeSingle();
-  if (error) { customAlert('រក្សាទុកច្បាប់មិនជោគជ័យ៖ ' + error.message); renderAttendanceTab(); return; }
-  leaveRequests.unshift(data || { id: 'local_' + date + empId, employee_id: empId, leave_type: type, start_date: date, end_date: date, reason, status: 'approved' });
+  if (error) { customAlert('រក្សាទុកច្បាប់មិនជោគជ័យ៖ ' + error.message); renderAttendanceTab(); return false; }
+  leaveRequests.unshift(data || { id: 'local_' + date + empId + Date.now(), employee_id: empId, leave_type: type, start_date: date, end_date: date, reason, status: 'approved' });
   const oldStatus = attendance[date] && attendance[date][empId] ? attendance[date][empId].status : '';
-  const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
-  if (!attendance[date]) attendance[date] = {};
-  attendance[date][empId] = rec;
-  renderAttendanceTab();
-  await upsertAttendanceRecord(date, empId, rec);
-  logAudit('attendance_edit', { entity: 'attendance', ref: date, month: date.slice(0, 7), employeeId: empId, old: { field: 'status', value: oldStatus || '' }, new: { field: 'status', value: 'leave:' + type } });
+  if (unit === 'day') {
+    const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
+    if (!attendance[date]) attendance[date] = {};
+    attendance[date][empId] = rec;
+    renderAttendanceTab();
+    await upsertAttendanceRecord(date, empId, rec);
+  } else {
+    renderAttendanceTab();
+  }
+  logAudit('attendance_edit', { entity: 'attendance', ref: date, month: date.slice(0, 7), employeeId: empId, old: { field: 'status', value: oldStatus || '' }, new: { field: 'status', value: `leave:${type}:${unit}${unit === 'hour' ? hours : ''}` } });
   if (typeof renderLeaveBalanceTab === 'function') renderLeaveBalanceTab();
+  return true;
+}
+
+let leCtx = null;
+function closeLeaveEntryModal() { const el = document.getElementById('leaveEntryOverlay'); if (el) el.remove(); leCtx = null; }
+
+function openLeaveEntryModal(date, empId) {
+  closeLeaveEntryModal();
+  leCtx = { date, empId };
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  const existing = leaveRequests.filter(r => r.employee_id === empId && r.status === 'approved' && r.start_date === date && r.end_date === date
+    && leaveUnitOf(r).unit !== 'day' && ((r.reason || '').includes(SUBST_TAG) || (r.reason || '').includes(ATT_PAID_TAG)));
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-overlay open';
+  wrap.id = 'leaveEntryOverlay';
+  wrap.innerHTML = `
+    <div class="modal">
+      <h2>📝 កត់ច្បាប់ — ${date}</h2>
+      <div class="form-group">
+        <label>ប្រភេទច្បាប់</label>
+        <select id="leType">
+          ${Object.keys(LEAVE_TYPE_LABELS).map(k => `<option value="${k}">${escapeHtml(LEAVE_TYPE_LABELS[k])}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>រយៈពេល</label>
+        <select id="leUnit" onchange="document.getElementById('leHoursWrap').style.display = this.value === 'hour' ? '' : 'none'">
+          <option value="day">ពេញមួយថ្ងៃ</option>
+          <option value="half_am">កន្លះថ្ងៃ — ព្រឹក</option>
+          <option value="half_pm">កន្លះថ្ងៃ — រសៀល</option>
+          <option value="hour">តាមម៉ោង</option>
+        </select>
+      </div>
+      <div class="form-group" id="leHoursWrap" style="display:none;">
+        <label>ចំនួនម៉ោង (១ – ${std})</label>
+        <input type="number" id="leHours" min="0.5" max="${std}" step="0.5" value="1" style="width:120px;">
+      </div>
+      <p class="scan-hint" style="margin-top:0;">ពេញថ្ងៃ៖ ប្តូរស្ថានភាពជា "ច្បាប់" ។ កន្លះថ្ងៃ/តាមម៉ោង៖ ទុកវត្តមានដដែល ហើយបូកម៉ោងច្បាប់ (${std / 2} ម៉ោង = កន្លះថ្ងៃ) ជាម៉ោងបង់ប្រាក់ លើកលែងប្រភេទ "គ្មានប្រាក់ខែ" ។ ច្បាប់ប្រចាំឆ្នាំដកតាមប្រភាគថ្ងៃ។</p>
+      ${existing.length ? `<div style="margin:8px 0;font-size:0.8rem;"><strong>ច្បាប់មិនពេញថ្ងៃដែលបានកត់រួចក្នុងថ្ងៃនេះ៖</strong>${existing.map(r => `<div style="display:flex;gap:8px;align-items:center;padding:3px 0;">${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)} — ${escapeHtml(leaveUnitLabel(r))} <button class="danger" onclick="removeLeaveEntry('${r.id}')">🗑</button></div>`).join('')}</div>` : ''}
+      <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="secondary" onclick="closeLeaveEntryModal()">បោះបង់</button>
+        <button onclick="applyLeaveEntry()">✓ កត់ច្បាប់</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+}
+
+async function applyLeaveEntry() {
+  if (!leCtx) return;
+  const { date, empId } = leCtx;
+  const type = document.getElementById('leType').value;
+  const sel = document.getElementById('leUnit').value;
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  let unit = 'day', period = 'am', hours = 0;
+  if (sel === 'half_am' || sel === 'half_pm') { unit = 'half'; period = sel === 'half_pm' ? 'pm' : 'am'; }
+  if (sel === 'hour') {
+    unit = 'hour'; hours = parseFloat(document.getElementById('leHours').value);
+    if (!(hours > 0) || hours > std) { customAlert(`ចំនួនម៉ោងត្រូវនៅចន្លោះ 0 – ${std}`); return; }
+  }
+  if (guardLocked(date, 'កត់ច្បាប់')) return;
+  closeLeaveEntryModal();
+  await createDayLeave(date, empId, { type, unit, period, hours });
+}
+
+async function removeLeaveEntry(id) {
+  const req = leaveRequests.find(r => String(r.id) === String(id));
+  if (!req || guardLocked(req.start_date, 'ដកច្បាប់')) return;
+  leaveRequests = leaveRequests.filter(r => r !== req);
+  if (!String(req.id).startsWith('local_')) await supabaseClient.from('leave_requests').delete().eq('id', req.id);
+  const { date, empId } = leCtx || {};
+  closeLeaveEntryModal();
+  if (date) openLeaveEntryModal(date, empId);
+  renderAttendanceTab();
+  renderLeaveBalanceTab();
 }
 
 function updateAttRecord(date, empId, field, value) {
   if (guardLocked(date, 'កែវត្តមាន')) { renderAttendanceTab(); return; }
+  if (field === 'status' && value === 'leave_custom') { renderAttendanceTab(); openLeaveEntryModal(date, empId); return; }
   if (field === 'status' && (value === 'leave_annual' || value === 'leave_paid')) { setAttendanceLeaveType(date, empId, value); return; }
   if (field === 'status' && findDropdownLeaveReq(date, empId)) { removeDropdownLeaveReq(date, empId).then(() => renderLeaveBalanceTab()); }
   const oldVal = attendance[date] && attendance[date][empId] ? attendance[date][empId][field] : '';
@@ -777,6 +868,51 @@ function generateEmployeeCode() {
 }
 
 // ==== Leave / Overtime requests (admin approval) ====
+
+// ==== ឯកតាច្បាប់៖ ពេញថ្ងៃ / កន្លះថ្ងៃ (ព្រឹក|រសៀល) / តាមម៉ោង — កូដក្នុង reason ជា [#half:am] [#half:pm] [#hour:2] ====
+function leaveUnitOf(req) {
+  const m = ((req && req.reason) || '').match(/\[#(half|hour):([^\]]+)\]/);
+  if (!m) return { unit: 'day' };
+  if (m[1] === 'half') return { unit: 'half', period: m[2] === 'pm' ? 'pm' : 'am' };
+  const h = parseFloat(m[2]);
+  return { unit: 'hour', hours: h > 0 ? h : 0 };
+}
+function buildUnitTag(unit, period, hours) {
+  if (unit === 'half') return `[#half:${period === 'pm' ? 'pm' : 'am'}]`;
+  if (unit === 'hour') return `[#hour:${hours}]`;
+  return '';
+}
+function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour):[^\]]+\]\s*/g, ' ').trim(); }
+function leaveUnitLabel(req) {
+  const u = leaveUnitOf(req);
+  if (u.unit === 'half') return u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)';
+  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)`;
+  return 'ពេញថ្ងៃ';
+}
+function leaveWeightDays(req) {
+  const u = leaveUnitOf(req);
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  if (u.unit === 'half') return 0.5;
+  if (u.unit === 'hour') return Math.min(1, u.hours / std);
+  return datesInRange(req.start_date, req.end_date).length;
+}
+// ច្បាប់មិនពេញថ្ងៃ (កន្លះថ្ងៃ/ម៉ោង) ដែលបានអនុម័ត ក្នុងថ្ងៃមួយ — ម៉ោងច្បាប់ត្រូវបង់ប្រាក់ លើកលែងប្រភេទ "គ្មានប្រាក់ខែ"
+function partialLeaveInfo(empId, date) {
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  const out = { hours: 0, paidHours: 0, am: false, pm: false, hourly: false, items: [] };
+  leaveRequests.forEach(r => {
+    if (r.employee_id !== empId || r.status !== 'approved' || r.start_date > date || r.end_date < date) return;
+    const u = leaveUnitOf(r);
+    if (u.unit === 'day') return;
+    const h = u.unit === 'half' ? std / 2 : Math.min(u.hours, std);
+    out.hours += h;
+    if (r.leave_type !== 'unpaid') out.paidHours += h;
+    if (u.unit === 'half') { if (u.period === 'pm') out.pm = true; else out.am = true; } else out.hourly = true;
+    out.items.push({ r, h });
+  });
+  return out;
+}
+
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
 const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 
@@ -1207,10 +1343,10 @@ function renderRequestsTab() {
     leaveBody.innerHTML = leaveRows.map(r => `
       <tr>
         <td>${escapeHtml(empName(r.employee_id))}</td>
-        <td>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</td>
+        <td>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}<div style="font-size:0.68rem;color:var(--text-muted);">${escapeHtml(leaveUnitLabel(r))}</div></td>
         <td>${r.start_date}</td>
         <td>${r.end_date}</td>
-        <td style="max-width:220px;white-space:normal;">${escapeHtml(r.reason || '-')}</td>
+        <td style="max-width:220px;white-space:normal;">${escapeHtml(stripUnitTag(r.reason) || '-')}</td>
         <td>${r.attachment_url ? `<a href="${r.attachment_url}" target="_blank" rel="noopener">🖼 មើល</a>` : '-'}</td>
         <td><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
         <td>
@@ -1256,7 +1392,7 @@ async function approveLeaveRequest(id) {
   if (req.leave_type === 'paid') {
     const emp = employees.find(e => e.id === req.employee_id);
     const year = parseInt(req.start_date.slice(0, 4), 10);
-    const days = datesInRange(req.start_date, req.end_date).length;
+    const days = leaveWeightDays(req);
     const remaining = emp ? calcLeaveBalanceRow(emp, year, lbRules).paidRemaining : 0;
     if (days > remaining && !(await customConfirm(`ច្បាប់មានប្រាក់ខែនៅសល់ ${remaining} ថ្ងៃ ប៉ុន្តែសំណើនេះសុំ ${days} ថ្ងៃ។ នៅតែអនុម័ត?`))) return;
   }
@@ -1265,7 +1401,8 @@ async function approveLeaveRequest(id) {
   if (error) { customAlert('អនុម័តមិនជោគជ័យ៖ ' + error.message); return; }
   // Mark each day in the approved range as 'leave' on the attendance sheet.
   const dates = datesInRange(req.start_date, req.end_date);
-  for (const date of dates) {
+  const partial = leaveUnitOf(req).unit !== 'day'; // កន្លះថ្ងៃ/តាមម៉ោង៖ មិនកត់ជាថ្ងៃច្បាប់ពេញ ទុកវត្តមានដដែល
+  for (const date of partial ? [] : dates) {
     const rec = { status: 'leave', checkin: '', checkout: '', breakOut: '', breakIn: '' };
     if (!attendance[date]) attendance[date] = {};
     attendance[date][req.employee_id] = rec;
@@ -1358,6 +1495,7 @@ function usedLeaveDays(empId, year, type) {
   return leaveRequests
     .filter(r => r.employee_id === empId && r.status === 'approved' && r.leave_type === type)
     .reduce((sum, r) => {
+      if (leaveUnitOf(r).unit !== 'day') return (r.start_date >= yearStart && r.start_date <= yearEnd) ? sum + leaveWeightDays(r) : sum;
       const s = r.start_date < yearStart ? yearStart : r.start_date;
       const e = r.end_date > yearEnd ? yearEnd : r.end_date;
       if (s > e) return sum;
@@ -2182,13 +2320,23 @@ function calcDeductionRow(emp, month) {
   let lateDays = 0, lateMinutes = 0, earlyDays = 0, earlyMinutes = 0, violDays = 0, leaveDays = 0, deductibleLeaveDays = 0;
   const lateDates = [], leaveDates = [];
 
+  const stdH = settings.standardHours > 0 ? settings.standardHours : 8;
   daysInMonth(month).forEach(date => {
+    // ច្បាប់កន្លះថ្ងៃ/តាមម៉ោង៖ រាប់ជាថ្ងៃច្បាប់ប្រភាគ ហើយមិនចាត់ទុកជាយឺត/ចេញមុនក្នុងពេលច្បាប់
+    const pl = partialLeaveInfo(emp.id, date);
+    pl.items.forEach(({ r: rq, h }) => {
+      const w = h / stdH;
+      leaveDays += w;
+      const isSubstP = (rq.reason || '').includes(SUBST_TAG);
+      if (rq.leave_type !== 'unpaid' && deductRules.leaveTypes.includes(rq.leave_type) && !isSubstP) deductibleLeaveDays += w;
+      leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[rq.leave_type] || rq.leave_type} ${leaveUnitLabel(rq)})`);
+    });
     const rec = attendance[date] && attendance[date][emp.id];
     if (!rec) return;
     if (rec.status === 'present') {
       let flagged = false;
       const inMin = timeToMinutes(rec.checkin);
-      if (inMin !== null && startMin !== null) {
+      if (inMin !== null && startMin !== null && !(pl.am || pl.hourly)) {
         const m = inMin - startMin;
         if (m > 0) { lateDays++; lateMinutes += m; flagged = true; lateDates.push(`${date.slice(8)} (យឺត ${m}′)`); }
       }
@@ -2196,14 +2344,14 @@ function calcDeductionRow(emp, month) {
       const outMin = timeToMinutes(rec.checkout);
       if (outMin !== null && (inMin === null || outMin > inMin)) {
         const em = shift.end - outMin;
-        if (em > SHIFT.outGraceMinutes) { earlyDays++; earlyMinutes += em; flagged = true; lateDates.push(`${date.slice(8)} (ចេញមុន ${em}′)`); }
+        if (em > SHIFT.outGraceMinutes && !(pl.pm || pl.hourly)) { earlyDays++; earlyMinutes += em; flagged = true; lateDates.push(`${date.slice(8)} (ចេញមុន ${em}′)`); }
       }
       if (flagged) violDays++;
     } else if (rec.status === 'leave') {
       const req = approved.find(r => r.start_date <= date && date <= r.end_date);
       const type = req && LEAVE_TYPE_LABELS[req.leave_type] ? req.leave_type : 'other';
       leaveDays++;
-      const isSubst = !!(req && (req.reason || '').startsWith(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
+      const isSubst = !!(req && (req.reason || '').includes(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
       if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }

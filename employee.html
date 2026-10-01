@@ -260,6 +260,19 @@
           </select>
           <div id="leaveTypeHint" style="display:none;margin-top:6px;font-size:0.72rem;color:var(--text-muted);"></div>
         </div>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">រយៈពេល</label>
+          <select id="leaveUnit" onchange="updateLeaveUnit()">
+            <option value="day">ពេញថ្ងៃ (មួយថ្ងៃ ឬច្រើនថ្ងៃ)</option>
+            <option value="half_am">កន្លះថ្ងៃ — ព្រឹក</option>
+            <option value="half_pm">កន្លះថ្ងៃ — រសៀល</option>
+            <option value="hour">តាមម៉ោង</option>
+          </select>
+        </div>
+        <div class="form-group" id="leaveHoursWrap" style="display:none;">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ចំនួនម៉ោង</label>
+          <input type="number" id="leaveHours" min="0.5" max="8" step="0.5" value="1">
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពីថ្ងៃ</label>
@@ -403,6 +416,47 @@ const SESSION_KEY = 'emp_portal_session';
 const KHMER_WEEKDAYS = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
+
+// ==== ឯកតាច្បាប់៖ ពេញថ្ងៃ / កន្លះថ្ងៃ / តាមម៉ោង (កូដក្នុង reason) ====
+function leaveUnitOf(req) {
+  const m = ((req && req.reason) || '').match(/\[#(half|hour):([^\]]+)\]/);
+  if (!m) return { unit: 'day' };
+  if (m[1] === 'half') return { unit: 'half', period: m[2] === 'pm' ? 'pm' : 'am' };
+  const h = parseFloat(m[2]);
+  return { unit: 'hour', hours: h > 0 ? h : 0 };
+}
+function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour):[^\]]+\]\s*/g, ' ').trim(); }
+function leaveUnitLabel(req) {
+  const u = leaveUnitOf(req);
+  if (u.unit === 'half') return u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)';
+  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)`;
+  return 'ពេញថ្ងៃ';
+}
+function leaveWeightDays(req) {
+  const u = leaveUnitOf(req);
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  if (u.unit === 'half') return 0.5;
+  if (u.unit === 'hour') return Math.min(1, u.hours / std);
+  return datesInRange(req.start_date, req.end_date).length;
+}
+// ម៉ោងច្បាប់មិនពេញថ្ងៃ (បង់ប្រាក់) តាមថ្ងៃ សម្រាប់គណនាប្រាក់ខែប៉ាន់ស្មាន
+let partialLeaveByDate = {};
+async function loadMyPartialLeaves() {
+  partialLeaveByDate = {};
+  const session = getSession();
+  if (!session) return;
+  const { data, error } = await supabaseClient.from('leave_requests')
+    .select('start_date,end_date,leave_type,reason').eq('employee_id', session.id).eq('status', 'approved');
+  if (error) return;
+  const std = settings.standardHours > 0 ? settings.standardHours : 8;
+  (data || []).forEach(r => {
+    const u = leaveUnitOf(r);
+    if (u.unit === 'day' || r.leave_type === 'unpaid') return;
+    const h = u.unit === 'half' ? std / 2 : Math.min(u.hours, std);
+    partialLeaveByDate[r.start_date] = (partialLeaveByDate[r.start_date] || 0) + h;
+  });
+}
+
 const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
@@ -554,7 +608,9 @@ function computeRow(salary, record, date) {
 
   const round4 = n => Math.round(n * 10000) / 10000;
   const mult = dayMultiplier(date); // អាទិត្យ/បុណ្យ = ×2
-  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours);
+  const leavePayHours = status === 'leave' ? 0 : Math.min(partialLeaveByDate[date] || 0, Math.max(0, settings.standardHours - normalHours));
+  if (status === 'present' && leavePayHours > 0 && normalHours + leavePayHours >= settings.standardHours - 1e-9) fullDay = true;
+  const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours + hourlyRate * leavePayHours);
   const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
   const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
@@ -725,13 +781,14 @@ async function renderProfileExtras() {
 // គណនាសមតុល្យច្បាប់ប្រចាំឆ្នាំ (រួមទាំងផ្ទេរពីឆ្នាំមុន) និងច្បាប់មានប្រាក់ខែ សម្រាប់ឆ្នាំដែលបានជ្រើសរើស
 async function fetchLeaveBalances(year) {
   const { data, error } = await supabaseClient.from('leave_requests')
-    .select('start_date,end_date,leave_type').eq('employee_id', currentEmployee.id).eq('status', 'approved').in('leave_type', ['annual', 'paid']);
+    .select('start_date,end_date,leave_type,reason').eq('employee_id', currentEmployee.id).eq('status', 'approved').in('leave_type', ['annual', 'paid']);
   if (error) throw error;
   const rows = data || [];
   const r2 = n => Math.round(n * 100) / 100;
   const usedIn = (type, y) => {
     const ys = `${y}-01-01`, ye = `${y}-12-31`;
     return rows.filter(r => r.leave_type === type).reduce((sum, r) => {
+      if (leaveUnitOf(r).unit !== 'day') return (r.start_date >= ys && r.start_date <= ye) ? sum + leaveWeightDays(r) : sum;
       const s = r.start_date < ys ? ys : r.start_date;
       const e = r.end_date > ye ? ye : r.end_date;
       return s > e ? sum : sum + datesInRange(s, e).length;
@@ -762,6 +819,13 @@ async function fetchLeaveBalances(year) {
   };
 }
 
+function updateLeaveUnit() {
+  const u = document.getElementById('leaveUnit').value;
+  document.getElementById('leaveHoursWrap').style.display = u === 'hour' ? '' : 'none';
+  const endGroup = document.getElementById('leaveEnd').closest('.form-group');
+  if (endGroup) endGroup.style.display = u === 'day' ? '' : 'none';
+}
+
 function updateLeaveTypeHint() {
   const t = document.getElementById('leaveType').value;
   const el = document.getElementById('leaveTypeHint');
@@ -781,6 +845,7 @@ async function showMain() {
   document.getElementById('mainCard').style.display = '';
   document.getElementById('empNameDisplay').textContent = session.name;
   await Promise.all([loadSettings(), loadEmployeeRecord(), loadHolidays(), loadMyShift()]);
+  await loadMyPartialLeaves();
   renderEmpInfo();
   document.getElementById('actEDate').value = todayStr();
   startAnnouncementPolling();
@@ -1398,19 +1463,29 @@ async function submitLeaveRequest() {
   const session = getSession();
   const leaveType = document.getElementById('leaveType').value;
   const start = document.getElementById('leaveStart').value;
-  const end = document.getElementById('leaveEnd').value;
+  let end = document.getElementById('leaveEnd').value;
   const reason = document.getElementById('leaveReason').value.trim();
   const fileInput = document.getElementById('leaveAttachment');
   const err = document.getElementById('leaveError');
   const submitBtn = document.getElementById('leaveSubmitBtn');
   err.style.display = 'none';
-  if (!start || !end) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
+  const unitSel = document.getElementById('leaveUnit').value;
+  let unitTag = '', daysReq = null;
+  if (unitSel === 'half_am' || unitSel === 'half_pm') { unitTag = unitSel === 'half_pm' ? '[#half:pm]' : '[#half:am]'; daysReq = 0.5; }
+  if (unitSel === 'hour') {
+    const hrs = parseFloat(document.getElementById('leaveHours').value);
+    const std = settings.standardHours > 0 ? settings.standardHours : 8;
+    if (!(hrs > 0) || hrs > std) { err.textContent = `ចំនួនម៉ោងត្រូវនៅចន្លោះ 0 – ${std}`; err.style.display = 'block'; return; }
+    unitTag = `[#hour:${hrs}]`; daysReq = hrs / std;
+  }
+  if (!start || (unitSel === 'day' && !end)) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
+  if (unitSel !== 'day') end = start; // កន្លះថ្ងៃ/តាមម៉ោង = ថ្ងៃតែមួយ
   if (end < start) { err.textContent = 'ថ្ងៃបញ្ចប់ត្រូវនៅក្រោយថ្ងៃចាប់ផ្តើម'; err.style.display = 'block'; return; }
   if (leaveType === 'paid') {
     if (!reason) { err.textContent = 'សូមបញ្ជាក់មូលហេតុ សម្រាប់ច្បាប់មានប្រាក់ខែ'; err.style.display = 'block'; return; }
     try {
       const bal = await fetchLeaveBalances(parseInt(start.slice(0, 4), 10));
-      const days = datesInRange(start, end).length;
+      const days = daysReq !== null ? daysReq : datesInRange(start, end).length;
       if (days > bal.paid.remaining) {
         err.textContent = `ច្បាប់មានប្រាក់ខែនៅសល់ ${bal.paid.remaining} ថ្ងៃ ប៉ុន្តែអ្នកសុំ ${days} ថ្ងៃ`;
         err.style.display = 'block';
@@ -1437,7 +1512,7 @@ async function submitLeaveRequest() {
   submitBtn.textContent = 'កំពុងដាក់ស្នើសុំ...';
 
   const { error } = await supabaseClient.from('leave_requests').insert({
-    employee_id: session.id, leave_type: leaveType, start_date: start, end_date: end, reason, status: 'pending', attachment_url: attachmentUrl,
+    employee_id: session.id, leave_type: leaveType, start_date: start, end_date: end, reason: (reason + ' ' + unitTag).trim(), status: 'pending', attachment_url: attachmentUrl,
   });
   submitBtn.disabled = false;
   submitBtn.textContent = 'ដាក់ស្នើសុំ';
@@ -1461,8 +1536,8 @@ async function renderLeaveHist() {
     <div class="req-row">
       <div>
         <div><strong>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</strong></div>
-        <div class="rmeta">${r.start_date} → ${r.end_date}</div>
-        ${r.reason ? `<div class="rmeta">${escapeHtml(r.reason)}</div>` : ''}
+        <div class="rmeta">${r.start_date} → ${r.end_date} · ${escapeHtml(leaveUnitLabel(r))}</div>
+        ${stripUnitTag(r.reason) ? `<div class="rmeta">${escapeHtml(stripUnitTag(r.reason))}</div>` : ''}
         ${r.attachment_url ? `<div class="rmeta"><a href="${r.attachment_url}" target="_blank" rel="noopener">🖼 រូបភាពបញ្ជាក់</a></div>` : ''}
         ${r.status === 'rejected' && r.admin_note ? `<div class="rmeta">មូលហេតុបដិសេធ៖ ${escapeHtml(r.admin_note)}</div>` : ''}
       </div>
