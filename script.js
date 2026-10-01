@@ -581,6 +581,7 @@ function renderAttendanceTab() {
   const month = currentAttendanceMonth();
   const dates = daysInMonth(month);
 
+  const daily = [];
   let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodRiel: 0, normalHours: 0 };
 
   tbody.innerHTML = dates.map(date => {
@@ -593,6 +594,7 @@ function renderAttendanceTab() {
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
     totals.otHours += r.otHours;
+    daily.push({ date, normal: r.normalHours, ot: r.otHours, status: r.status, late: r.late });
     const selVal = attStatusSelectValue(date, emp.id, r.status);
     const statusOptions = ['', 'present', 'absent', 'leave', 'leave_annual', 'leave_paid', 'leave_custom'].map(s =>
       `<option value="${s}" ${selVal === s ? 'selected' : ''}>${ATT_OPTION_LABELS[s]}</option>`
@@ -653,24 +655,94 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num">${netSplit}</div><div class="label">ប្រាក់ខែសុទ្ធ (ដុល្លារ + រៀល)</div></div>
   `;
 
-  // ប្រអប់បំបែកលម្អិត៖ ចែកដាច់ពីគ្នា (ឈ្នួលធម្មតា / ថែមម៉ោង / ប្រាក់បាយ) មិនបូករួមជាលេខតែមួយ
-  const statsEl = document.getElementById('attendanceStats');
-  let bd = document.getElementById('attendanceBreakdown');
-  if (!bd) {
-    bd = document.createElement('div');
-    bd.id = 'attendanceBreakdown';
-    statsEl.insertAdjacentElement('afterend', bd);
-  }
+  // ===== តំបន់ខាងស្តាំ/ក្រោមកាតស្ថិតិ៖ ប្រអប់បំបែក + មុខងារថ្មី 4 =====
+  const cardCss = 'flex:1 1 300px;max-width:520px;font-size:0.82rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;';
+  const cardTitle = t => `<div style="font-weight:700;margin-bottom:6px;">${t}</div>`;
   const row = (label, val, color) => `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${label}</span><span style="color:${color || 'inherit'};">${val}</span></div>`;
-  bd.style.cssText = 'width:100%;max-width:520px;margin:10px 0;font-size:0.82rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;';
-  bd.innerHTML = `
+
+  // (0) ប្រអប់បំបែកលម្អិត (ដើម)
+  const boxHtml = `<div style="${cardCss}">
       ${lockHtml}
       ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.normalPay))}
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
       <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span></span></div>
-    `;
+    </div>`;
+
+  // (1) ប្រៀបធៀបខែមុន
+  const prevMonth = monthsBack(month, 2)[1];
+  const prevT = summarizeEmpMonth(emp, prevMonth);
+  const cmpRow = (label, prev, cur, fmtFn, goodWhenUp) => {
+    const d = (cur || 0) - (prev || 0);
+    const color = Math.abs(d) < 1e-9 ? '#9ca3af' : ((d > 0) === goodWhenUp ? '#16a34a' : '#dc2626');
+    const sign = d > 0 ? '▲ +' : (d < 0 ? '▼ −' : '= ');
+    return `<tr><td>${label}</td><td style="text-align:right;">${fmtFn(prev || 0)}</td><td style="text-align:right;">${fmtFn(cur || 0)}</td><td style="text-align:right;color:${color};">${sign}${fmtFn(Math.abs(d))}</td></tr>`;
+  };
+  const cmpHtml = `<div style="${cardCss}">${cardTitle('📈 ប្រៀបធៀបខែមុន')}
+    <table style="width:100%;font-size:0.8rem;border-collapse:collapse;"><thead><tr style="color:var(--text-muted);"><th style="text-align:left;font-weight:500;"></th><th style="text-align:right;font-weight:500;">${prevMonth}</th><th style="text-align:right;font-weight:500;">${month}</th><th style="text-align:right;font-weight:500;">ផ្លាស់ប្តូរ</th></tr></thead><tbody>
+    ${cmpRow('ថ្ងៃធ្វើការ', prevT.workDays, sumT.workDays, v => String(v), true)}
+    ${cmpRow('ម៉ោង OT', prevT.otHours, sumT.otHours, fmtHours, true)}
+    ${cmpRow('ប្រាក់ OT ($)', prevT.otPay, sumT.otPay, v => '$' + fmtUSD(v), true)}
+    ${cmpRow('ប្រាក់ខែសុទ្ធ ($)', prevT.net, sumT.net, v => '$' + net2(v), true)}
+    </tbody></table></div>`;
+
+  // (2) សង្ខេបថ្ងៃ
+  const cnt = { present: 0, leave: 0, absent: 0, late: 0 };
+  daily.forEach(d => { if (d.status === 'present') cnt.present++; else if (d.status === 'leave') cnt.leave++; else if (d.status === 'absent') cnt.absent++; if (d.late) cnt.late++; });
+  const today = todayStr();
+  const unmarked = dates.filter(date => date <= today && date >= (emp.startDate || '0000-00-00') && dayMultiplier(date) <= 1 && !((attendance[date] && attendance[date][emp.id]) || {}).status);
+  const chip = (label, n, color) => `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 10px;border-radius:999px;background:${n ? color + '22' : '#f3f4f6'};color:${n ? color : '#9ca3af'};font-weight:600;">${label} ${n}</span>`;
+  const daysHtml = `<div style="${cardCss}">${cardTitle('🗓 សង្ខេបថ្ងៃ')}
+    ${chip('មកធ្វើការ', cnt.present, '#16a34a')}${chip('ច្បាប់', cnt.leave, '#d97706')}${chip('អវត្តមាន', cnt.absent, '#dc2626')}${chip('យឺត', cnt.late, '#d97706')}${chip('មិនទាន់កត់', unmarked.length, '#6b7280')}
+    ${unmarked.length ? `<div style="margin-top:6px;color:#b45309;">⚠️ ថ្ងៃមិនទាន់កត់៖ ${unmarked.slice(0, 12).map(d => d.slice(8)).join(', ')}${unmarked.length > 12 ? ' …' : ''}</div>` : '<div style="margin-top:6px;color:#16a34a;">✓ កត់វត្តមានគ្រប់ថ្ងៃ</div>'}</div>`;
+
+  // (3) ក្រាហ្វម៉ោងធ្វើការ/OT ប្រចាំថ្ងៃ
+  const maxH = Math.max(settings.standardHours || 8, ...daily.map(d => d.normal + d.ot), 1);
+  const chartHtml = `<div style="${cardCss}flex:1 1 100%;max-width:none;">${cardTitle('📊 ម៉ោងធ្វើការ / OT ប្រចាំថ្ងៃ <small style="font-weight:400;color:var(--text-muted);"><span style="color:#6366f1;">■</span> ធម្មតា &nbsp;<span style="color:#f59e0b;">■</span> OT</small>')}
+    <div style="display:flex;align-items:flex-end;gap:3px;height:90px;">${daily.map(d => `<div title="${d.date} · ធម្មតា ${fmtHours(d.normal)} ម៉ោង · OT ${fmtHours(d.ot)} ម៉ោង" style="flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column-reverse;">
+      <div style="height:${d.normal / maxH * 100}%;background:#6366f1;border-radius:0 0 2px 2px;"></div><div style="height:${d.ot / maxH * 100}%;background:#f59e0b;border-radius:2px 2px 0 0;"></div></div>`).join('')}</div>
+    <div style="display:flex;gap:3px;font-size:9px;color:var(--text-muted);">${daily.map(d => `<div style="flex:1 1 0;min-width:0;text-align:center;">${d.date.slice(8)}</div>`).join('')}</div></div>`;
+
+  // (4) បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់ លឿន (ធាតុប្រែប្រួល ក្នុងខែនេះ)
+  const qaIn = 'padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:0.8rem;';
+  const quickHtml = monthLocked
+    ? `<div style="${cardCss}">${cardTitle('➕ បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់')}<div style="color:#92400e;">🔒 ខែនេះបិទរួច — មិនអាចបន្ថែមបានទេ</div></div>`
+    : `<div style="${cardCss}">${cardTitle('➕ បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់ <small style="font-weight:400;color:var(--text-muted);">(ខែ ' + month + ')</small>')}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <select id="qaType" style="${qaIn}"><option value="benefit">+ អត្ថប្រយោជន៍</option><option value="deduction">− ប្រាក់កាត់</option></select>
+        <input id="qaName" placeholder="ឈ្មោះធាតុ" style="${qaIn}flex:1 1 120px;min-width:0;">
+        <input id="qaAmount" type="number" step="0.01" min="0" placeholder="ចំនួន" style="${qaIn}width:90px;">
+        <select id="qaCur" style="${qaIn}"><option value="USD">$</option><option value="KHR">៛</option></select>
+        <button class="secondary" onclick="quickAddItem()">បន្ថែម</button>
+      </div></div>`;
+
+  let wrap = document.getElementById('attendanceExtras');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'attendanceExtras';
+    const old = document.getElementById('attendanceBreakdown'); if (old) old.remove();
+    document.getElementById('attendanceStats').insertAdjacentElement('afterend', wrap);
+  }
+  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:10px 0 14px;';
+  wrap.innerHTML = boxHtml + cmpHtml + daysHtml + quickHtml + chartHtml;
+}
+
+// បន្ថែមធាតុ (ប្រែប្រួល) លឿនពីផ្ទាំងតារាងវត្តមាន — ប្រើដំណើរការដូច savePayrollItem
+async function quickAddItem() {
+  const empId = currentAttendanceEmployeeId();
+  const month = currentAttendanceMonth();
+  const name = (document.getElementById('qaName').value || '').trim();
+  const amount = parseFloat(document.getElementById('qaAmount').value);
+  if (!empId || !name || isNaN(amount) || amount < 0) { customAlert('សូមបំពេញឈ្មោះធាតុ និងទឹកប្រាក់ត្រឹមត្រូវ'); return; }
+  if (guardLocked(month, 'បន្ថែមធាតុប្រាក់ខែ')) return;
+  const item = { id: uid(), employeeId: empId, type: document.getElementById('qaType').value, name, recurrence: 'variable', month,
+    currency: document.getElementById('qaCur').value, amount };
+  payrollItems.push(item);
+  renderAttendanceTab(); renderPayrollTab(); renderDeductTab();
+  const saved = await upsertPayrollItemRow(item);
+  if (!saved) { payrollItems = payrollItems.filter(x => x.id !== item.id); renderAttendanceTab(); renderPayrollTab(); renderDeductTab(); return; }
+  logAudit('item_add', { entity: 'payroll_item', ref: item.id, month, employeeId: empId, old: null, new: { name: item.name, type: item.type, currency: item.currency, amount: item.amount } });
 }
 
 // ==== ជម្រើសច្បាប់ក្នុង dropdown ស្ថានភាពវត្តមាន ====
