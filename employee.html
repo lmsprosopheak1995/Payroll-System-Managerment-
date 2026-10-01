@@ -497,6 +497,14 @@ function datesInRange(startStr, endStr) {
 }
 function fmtUSD(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }); }
 function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
+// ប្រាក់ខែសុទ្ធ (ដូច admin)៖ $281.06 និង $281 + 240 ៛
+function fmtUSD2(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtUSDplusRiel(usd) {
+  const r = Math.round((usd || 0) * 100) / 100;
+  const dollars = Math.floor(r + 1e-9);
+  const rem = Math.round((r - dollars) * (settings.exchangeRate || 0));
+  return `$${dollars.toLocaleString()} + ${rem.toLocaleString()} ៛`;
+}
 function fmtHours(n) { return (Math.round((n || 0) * 100) / 100).toString(); }
 
 // ---- វេនការងារ (Shift) ----
@@ -1459,8 +1467,8 @@ async function renderPayrollHistoryEmp() {
         <div class="rmeta">ថ្ងៃធ្វើការ ${t.workDays} · អត្ថប្រយោជន៍ +$${fmtUSD(t.benefitsUSD)} · ប្រាក់កាត់ −$${fmtUSD(t.deductionsUSD)}</div>
       </div>
       <div class="rright">
-        <div><strong>$${fmtUSD(t.net)}</strong></div>
-        <div class="rmeta">${fmtRiel(t.netRiel)} ៛</div>
+        <div><strong>$${fmtUSD2(t.net)}</strong></div>
+        <div class="rmeta">${fmtUSDplusRiel(t.net)}</div>
         <button class="secondary" style="margin-top:4px;font-size:0.68rem;padding:4px 8px;" onclick="printPayslipEmp('${month}')">🖨 Payslip</button>
       </div>
     </div>
@@ -1635,7 +1643,7 @@ async function renderPayrollSummary() {
     ${t.benefitItems.length ? t.benefitItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--success);">+ ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
     <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--danger);">🔴 ប្រាក់កាត់</div>
     ${t.deductionItems.length ? t.deductionItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--danger);">− ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
-    <div class="payroll-line total"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD(t.net)} (${fmtRiel(t.netRiel)} ៛)</span></div>
+    <div class="payroll-line total"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${fmtUSD2(t.net)}<div style="font-size:0.78rem;font-weight:500;color:var(--text-muted);">${fmtUSDplusRiel(t.net)}</div></span></div>
   `;
   renderDisputeBox(month);
 }
@@ -1730,7 +1738,7 @@ function buildPayslipHtml(t, month) {
       ${t.benefitItems.map(p => `<tr><td>+ ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
       ${t.deductionItems.map(p => `<tr><td>− ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
       ${(t.benefitItems.length + t.deductionItems.length) === 0 ? '<tr><td colspan="2" style="text-align:center;">មិនមាន</td></tr>' : ''}
-      <tr class="ps-total-row"><td>ប្រាក់ខែសុទ្ធ</td><td style="text-align:right;">$${fmtUSD(t.net)} &nbsp;/&nbsp; ${fmtRiel(t.netRiel)} ៛</td></tr>
+      <tr class="ps-total-row"><td>ប្រាក់ខែសុទ្ធ</td><td style="text-align:right;">$${fmtUSD2(t.net)} &nbsp;/&nbsp; ${fmtUSDplusRiel(t.net)}</td></tr>
     </table>
     <div style="margin-top:18px; font-size:11px; color:#6b7280;">បង្កើតនៅថ្ងៃទី ${todayStr()}</div>
   `;
