@@ -1324,6 +1324,29 @@ function datesInRange(startStr, endStr) {
   return dates;
 }
 
+// សំណើពីបុគ្គលិក (ច្បាប់/OT/ពាក្យតវ៉ា) ត្រូវផ្ទុកឡើងវិញពី Supabase ព្រោះ admin ផ្ទុកតែម្តងពេលបើកកម្មវិធី
+function requestsSignature() {
+  const sig = a => a.map(r => `${r.id}:${r.status}`).join(',');
+  return sig(leaveRequests) + '|' + sig(overtimeRequests) + '|' + (typeof payrollDisputes !== 'undefined' ? sig(payrollDisputes) : '');
+}
+let refreshingRequests = false;
+async function refreshRequests(opts) {
+  if (refreshingRequests) return;
+  refreshingRequests = true;
+  const before = requestsSignature();
+  try {
+    await Promise.all([loadLeaveRequests(), loadOvertimeRequests(), (typeof loadDisputesOnly === 'function' ? loadDisputesOnly() : null)]);
+  } finally { refreshingRequests = false; }
+  const changed = before !== requestsSignature();
+  const active = document.getElementById('requestsTab') && document.getElementById('requestsTab').classList.contains('active');
+  if (!(opts && opts.silent) || changed) {
+    // ពេល polling: render ឡើងវិញតែបើមានអ្វីផ្លាស់ប្តូរ (កុំរំខានការងារ)
+    if (active || !(opts && opts.silent)) renderRequestsTab();
+    else { const b = document.getElementById('pendingReqBadge'); if (b) { const n = leaveRequests.filter(r => r.status === 'pending').length + overtimeRequests.filter(r => r.status === 'pending').length + pendingDisputeCount(); b.textContent = n > 0 ? `(${n})` : ''; } }
+  }
+}
+setInterval(() => { if (!document.hidden && employees.length > 0) refreshRequests({ silent: true }); }, 60000);
+
 function renderRequestsTab() {
   const filter = document.getElementById('reqStatusFilter').value;
   const leaveRows = leaveRequests.filter(r => !filter || r.status === filter);
@@ -2923,7 +2946,7 @@ function showTab(tab) {
   if (tab === 'monthly') renderMonthlyTab();
   if (tab === 'payroll') renderPayrollTab();
   if (tab === 'attendance') renderAttendanceTab();
-  if (tab === 'requests') renderRequestsTab();
+  if (tab === 'requests') { renderRequestsTab(); refreshRequests(); }
   if (tab === 'leavebalance') renderLeaveBalanceTab();
   if (typeof onFeatureTab === 'function') onFeatureTab(tab);
   if (tab === 'scan') {
@@ -2939,6 +2962,7 @@ document.querySelectorAll('.nav-parent').forEach(btn => btn.addEventListener('cl
 document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
 document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
 document.getElementById('reqStatusFilter').addEventListener('change', renderRequestsTab);
+document.getElementById('reqRefreshBtn').addEventListener('click', () => refreshRequests());
 initLbControls();
 ['lbYear', 'lbSearch'].forEach(id => document.getElementById(id).addEventListener('input', renderLeaveBalanceTab));
 ['lbQuotaDays', 'lbProrate', 'lbPaidQuota', 'lbCarryOver', 'lbCarryMax', 'lbCarryFrom'].forEach(id => document.getElementById(id).addEventListener('input', () => { readLbControls(); renderLeaveBalanceTab(); }));

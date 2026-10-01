@@ -75,6 +75,11 @@ async function loadPayrollClose() {
   payrollDisputes = disp;
 }
 
+// ផ្ទុកតែពាក្យតវ៉ាឡើងវិញ (ស្រាល) — ប្រើពេលបើកផ្ទាំងសំណើ ឬ polling
+async function loadDisputesOnly() {
+  payrollDisputes = await pcFetchAll('payroll_disputes', q => q.order('created_at', { ascending: false }));
+}
+
 // ---------------------------------------------------------------- audit log ----
 function logAudit(action, o) {
   o = o || {};
