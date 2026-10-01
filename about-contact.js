@@ -15,7 +15,9 @@
   const DEV = {
     name: 'Hem Sopheak',
     facebook: 'Hem Sopheak',
+    facebookUrl: 'https://www.facebook.com/me.sopheak168/',
     telegram: 'Hem Sopheak',
+    telegramUrl: 'https://t.me/Samross_Ph_Care',
     phones: ['0966667292', '0888876150'],
   };
 
@@ -90,11 +92,14 @@
   function row(icon, color, label, value, opts) {
     opts = opts || {};
     const tag = opts.href ? 'a' : 'div';
-    const href = opts.href ? ` href="${esc(opts.href)}"` : '';
+    // តំណ http(s) បើកក្នុង browser ក្រៅ (main.js: setWindowOpenHandler → shell.openExternal)
+    const ext = opts.href && /^https?:/.test(opts.href) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const href = opts.href ? ` href="${esc(opts.href)}"${ext}` : '';
+    const copyVal = opts.copy || value;
     return `<${tag} class="ac-row"${href}>
       <span class="ac-ic" style="--c:${color}">${svg(icon)}</span>
       <span class="ac-tx"><small>${esc(label)}</small><b>${esc(value)}</b></span>
-      <button type="button" class="ac-cp" data-copy="${esc(value)}" aria-label="Copy" title="Copy">${svg('copy')}</button>
+      <button type="button" class="ac-cp" data-copy="${esc(copyVal)}" aria-label="Copy" title="Copy">${svg('copy')}</button>
     </${tag}>`;
   }
 
@@ -113,8 +118,8 @@
         </div>
         <div class="ac-body">
           <p class="ac-title">ទាក់ទងខ្ញុំ (Contact Me)</p>
-          ${row('facebook', '#1877f2', 'Facebook', DEV.facebook)}
-          ${row('telegram', '#0284c7', 'Telegram', DEV.telegram)}
+          ${row('facebook', '#1877f2', 'Facebook', DEV.facebook, { href: DEV.facebookUrl, copy: DEV.facebookUrl })}
+          ${row('telegram', '#0284c7', 'Telegram', DEV.telegram, { href: DEV.telegramUrl, copy: DEV.telegramUrl })}
           ${DEV.phones.map(p => row('phone', '#059669', 'Tel', p, { href: 'tel:' + p })).join('')}
           <p class="ac-title" style="margin-top:12px">អំពីប្រព័ន្ធ (About System)</p>
           <div class="ac-meta">
