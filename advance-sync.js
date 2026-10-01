@@ -108,8 +108,8 @@ async function loadAdvRulesRemote() {
     if (error) {
       advRulesRemote = false;
       if (/adv_(amount|end_day|count_leave)/.test(error.message)) {
-        console.warn('app_settings មិនទាន់មាន column adv_* — ប្រើ localStorage បណ្តោះអាសន្ន (សូមដំណើរការ advance-rules.sql)');
-        advRulesReady = true;           // column មិនមាន៖ ប្រើតម្លៃក្នុង browser
+        console.warn('app_settings មិនទាន់មាន column adv_* — សូមដំណើរការ advance-rules.sql');
+        if (typeof pcLoadFail === 'function') pcLoadFail('ច្បាប់ប្រាក់ខែទី១', 'column adv_* មិនទាន់មាន'); // មិន sync ដើម្បីកុំប្រើតម្លៃ default ខុស
       } else {
         console.error('Load advance rules failed', error);   // បញ្ហាបណ្តាញ៖ មិនបើក sync ដើម្បីកុំប្រើតម្លៃចាស់
         if (typeof pcLoadFail === 'function') pcLoadFail('ច្បាប់ប្រាក់ខែទី១', error.message);
@@ -123,10 +123,9 @@ async function loadAdvRulesRemote() {
         endDay: Math.min(28, Math.max(1, parseInt(data.adv_end_day, 10) || 15)),
         countLeave: data.adv_count_leave === true,
       });
-      try { localStorage.setItem(ADV_RULES_KEY, JSON.stringify(advRules)); } catch (e) { /* cache */ }
       applyAdvRulesToControls();
     } else {
-      await saveAdvRulesRemote();       // ម្តងដំបូង៖ ផ្ញើតម្លៃក្នុង browser នេះឡើង Supabase
+      await saveAdvRulesRemote();       // ម្តងដំបូង៖ ផ្ញើតម្លៃ default ឡើង Supabase
     }
     advRulesReady = true;
   } catch (e) {

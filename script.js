@@ -44,7 +44,9 @@ async function checkAdminAuthAndInit() {
     document.getElementById('mainContainer').style.display = '';
     Object.keys(loadFailures).forEach(k => delete loadFailures[k]);
     await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null)]);
+    if (typeof loadAdvRulesRemote === 'function') await loadAdvRulesRemote();
     renderAll();
+    if (typeof requestAdvanceSync === 'function') requestAdvanceSync(currentMonthlyMonth());
     return;
   }
   document.getElementById('adminGateLoading').style.display = '';
@@ -2927,15 +2929,14 @@ function countUnmarkedDays(emp, month) {
 const ADV_RULES_KEY = 'advance_rules_v1';
 const ADV_DEFAULTS = { amount: 105, countLeave: false, endDay: 15 };
 function loadAdvRules() {
-  try { const raw = localStorage.getItem(ADV_RULES_KEY); if (raw) return { ...ADV_DEFAULTS, ...JSON.parse(raw) }; } catch (e) { /* ignore */ }
-  return { ...ADV_DEFAULTS };
+  return { ...ADV_DEFAULTS }; // តម្លៃពិតទាញពី Supabase (app_settings) តាម loadAdvRulesRemote()
 }
 let advRules = loadAdvRules();
 function readAdvControls() {
   advRules.amount = Math.max(0, parseFloat(document.getElementById('advAmount').value) || 0);
   advRules.countLeave = document.getElementById('advCountLeave').checked;
   advRules.endDay = Math.min(28, Math.max(1, parseInt(document.getElementById('advEndDay').value, 10) || 15));
-  try { localStorage.setItem(ADV_RULES_KEY, JSON.stringify(advRules)); } catch (e) { /* ignore */ }
+  if (typeof scheduleAdvRulesSave === 'function') scheduleAdvRulesSave(); // រក្សាទុកក្នុង Supabase
 }
 
 // ថ្ងៃកំណត់៖ ២៥ ប៉ុន្តែបើជាសៅរ៍ → ២៤, អាទិត្យ → ២៣ (ដូច IF(WEEKDAY(...)=7,24,IF(...=1,23,25)))
@@ -2969,6 +2970,7 @@ function advanceVirtualItems(empId, month) {
   try {
     const emp = employees.find(e => e.id === empId);
     if (!emp || advRules.amount <= 0) return [];
+    if (payrollItems.some(p => p.id === `auto_adv_${empId}_${month}`)) return []; // មានក្នុង DB រួច → កុំស្ទួន
     const a = calcAdvanceRow(emp, month);
     if (!a.eligible || !a.due) return [];
     return [{ id: `adv_${empId}_${month}`, employeeId: empId, type: 'deduction', name: `ប្រាក់ខែទី១ (បានទទួល ${a.dueDate})`,
@@ -2996,6 +2998,7 @@ function renderMonthlyTab() {
   const body = document.getElementById('monthlyBody');
   if (!body) return;
   const month = currentMonthlyMonth();
+  if (typeof requestAdvanceSync === 'function') requestAdvanceSync(month); // sync ទៅ DB (debounce, មិនរង្វិលជុំ)
   const rows = monthlyRows(month);
   renderMonthlyLockBar(month);
   document.getElementById('monthlyEmpty').style.display = rows.length ? 'none' : 'block';
