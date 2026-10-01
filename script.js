@@ -767,7 +767,8 @@ async function deletePayrollItemRow(id) {
 
 // Amounts applicable to a given employee+month, converted to both currencies for display/summing.
 function getPayrollItemsForEmpMonth(empId, month) {
-  return payrollItems.filter(p => p.employeeId === empId && (p.recurrence === 'fixed' || p.month === month));
+  return payrollItems.filter(p => p.employeeId === empId && (p.recurrence === 'fixed' || p.month === month))
+    .concat(advanceVirtualItems(empId, month));
 }
 
 function payrollItemToUSD(item) {
@@ -2260,6 +2261,59 @@ function countUnmarkedDays(emp, month) {
   return n;
 }
 
+// ---- ប្រាក់ទី១ (ថ្ងៃទី២៥) — ត្រូវនឹងរូបមន្ត Excel: IF(ថ្ងៃធ្វើការ >= NETWORKDAYS.INTL(ថ្ងៃទី១, ថ្ងៃកំណត់, 11), 105, 0) ----
+const ADV_RULES_KEY = 'advance_rules_v1';
+const ADV_DEFAULTS = { amount: 105, countLeave: false, endDay: 15 };
+function loadAdvRules() {
+  try { const raw = localStorage.getItem(ADV_RULES_KEY); if (raw) return { ...ADV_DEFAULTS, ...JSON.parse(raw) }; } catch (e) { /* ignore */ }
+  return { ...ADV_DEFAULTS };
+}
+let advRules = loadAdvRules();
+function readAdvControls() {
+  advRules.amount = Math.max(0, parseFloat(document.getElementById('advAmount').value) || 0);
+  advRules.countLeave = document.getElementById('advCountLeave').checked;
+  advRules.endDay = Math.min(28, Math.max(1, parseInt(document.getElementById('advEndDay').value, 10) || 15));
+  try { localStorage.setItem(ADV_RULES_KEY, JSON.stringify(advRules)); } catch (e) { /* ignore */ }
+}
+
+// ថ្ងៃកំណត់៖ ២៥ ប៉ុន្តែបើជាសៅរ៍ → ២៤, អាទិត្យ → ២៣ (ដូច IF(WEEKDAY(...)=7,24,IF(...=1,23,25)))
+function advanceDateOf(month) {
+  const [y, m] = month.split('-').map(Number);
+  const dow = new Date(y, m - 1, 25).getDay(); // 0=អាទិត្យ, 6=សៅរ៍
+  const day = dow === 6 ? 24 : dow === 0 ? 23 : 25;
+  return `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function calcAdvanceRow(emp, month) {
+  const dueDate = advanceDateOf(month); // ថ្ងៃទូទាត់ (២៥ / ២៤ / ២៣)
+  const [y, m] = month.split('-');
+  const endDate = `${y}-${m}-${String(advRules.endDay).padStart(2, '0')}`;
+  const upTo = daysInMonth(month).filter(d => d <= endDate);
+  // NETWORKDAYS.INTL(..., 11) = រាប់គ្រប់ថ្ងៃ លើកលែងថ្ងៃអាទិត្យ
+  const requiredDays = upTo.filter(d => new Date(d + 'T00:00:00').getDay() !== 0).length;
+  let workedDays = 0;
+  upTo.forEach(d => {
+    const st = ((attendance[d] && attendance[d][emp.id]) || {}).status;
+    if (st === 'present' || (advRules.countLeave && st === 'leave')) workedDays++;
+  });
+  const eligible = workedDays >= requiredDays && requiredDays > 0;
+  const amount = eligible ? advRules.amount : 0;
+  const due = todayStr() >= dueDate; // ដកពីប្រាក់ខែ តែនៅពេលដល់ថ្ងៃទូទាត់ប៉ុណ្ណោះ
+  return { advanceDate: dueDate, dueDate, endDate, requiredDays, workedDays, eligible, amount, due };
+}
+
+// ប្រាក់ខែទី១ ជាធាតុ "ប្រាក់កាត់" និម្មិត (មិនរក្សាទុកក្នុង DB) — ចូលទៅក្នុងប្រាក់ខែសុទ្ធ និង Payslip ដោយស្វ័យប្រវត្តិ
+function advanceVirtualItems(empId, month) {
+  try {
+    const emp = employees.find(e => e.id === empId);
+    if (!emp || advRules.amount <= 0) return [];
+    const a = calcAdvanceRow(emp, month);
+    if (!a.eligible || !a.due) return [];
+    return [{ id: `adv_${empId}_${month}`, employeeId: empId, type: 'deduction', name: `ប្រាក់ខែទី១ (បានទទួល ${a.dueDate})`,
+      recurrence: 'variable', month, currency: 'USD', amount: a.amount, virtual: true }];
+  } catch (e) { return []; }
+}
+
 function monthlyRows(month) {
   const q = (document.getElementById('monthlySearch')?.value || '').trim().toLowerCase();
   return employees
@@ -2271,7 +2325,7 @@ function monthlyRows(month) {
       const dedAuto = calcDeductionRow(e, month).total;
       const applied = payrollItems.find(p => p.id === dedItemId(e.id, month));
       const pendingDed = dedAuto > 0 && (!applied || Math.abs(payrollItemToUSD(applied) - dedAuto) > 0.0001);
-      return { e, t, unmarked: countUnmarkedDays(e, month), pendingDed, dedAuto };
+      return { e, t, unmarked: countUnmarkedDays(e, month), pendingDed, dedAuto, adv: calcAdvanceRow(e, month) };
     });
 }
 
@@ -2282,9 +2336,9 @@ function renderMonthlyTab() {
   const rows = monthlyRows(month);
   document.getElementById('monthlyEmpty').style.display = rows.length ? 'none' : 'block';
 
-  const g = { total: 0, ben: 0, ded: 0, net: 0, netRiel: 0, warn: 0 };
-  body.innerHTML = rows.map(({ e, t, unmarked, pendingDed, dedAuto }, i) => {
-    g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel;
+  const g = { total: 0, ben: 0, ded: 0, net: 0, netRiel: 0, warn: 0, adv: 0 };
+  body.innerHTML = rows.map(({ e, t, unmarked, pendingDed, dedAuto, adv }, i) => {
+    g.adv += adv.amount; g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel;
     const warns = [];
     if (unmarked > 0) warns.push(`⚠️ មិនទាន់កត់វត្តមាន ${unmarked} ថ្ងៃ`);
     if (pendingDed) warns.push(`⚠️ មានប្រាក់កាត់ $${fmtUSD(dedAuto)} មិនទាន់បញ្ចូល`);
@@ -2295,6 +2349,7 @@ function renderMonthlyTab() {
       <td>${t.workDays}</td><td>${t.leaveDays}</td><td>${t.otHours ? fmtHours(t.otHours) : '-'}</td>
       <td>$${fmtUSD(t.total)}</td><td>+$${fmtUSD(t.benefitsUSD)}</td><td>−$${fmtUSD(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD(t.net)}</strong></td><td>${fmtRiel(t.netRiel)} ៛</td>
+      <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
       <td style="font-size:0.72rem;color:#b45309;">${warns.join('<br>') || '<span style="color:#16a34a;">✓</span>'}</td>
       <td style="white-space:nowrap;">
         <button class="secondary" onclick="monthlyOpenEmployee('${e.id}')">📄 លម្អិត</button>
@@ -2310,6 +2365,7 @@ function renderMonthlyTab() {
     <div class="stat-card"><div class="num">-$${fmtUSD(g.ded)}</div><div class="label">ប្រាក់កាត់សរុប</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(g.net)}</div><div class="label">ត្រូវបើកសរុប ($)</div></div>
     <div class="stat-card"><div class="num">${fmtRiel(g.netRiel)} ៛</div><div class="label">ត្រូវបើកសរុប (រៀល)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(g.adv)}</div><div class="label">ប្រាក់ខែទី១សរុប (ទី២៥)</div></div>
     <div class="stat-card"><div class="num" style="color:${g.warn ? '#b45309' : '#16a34a'};">${g.warn}</div><div class="label">ត្រូវពិនិត្យ</div></div>
   `;
 }
@@ -2340,9 +2396,9 @@ function exportMonthlyCSV() {
   const month = currentMonthlyMonth();
   const rows = monthlyRows(month);
   if (!rows.length) { customAlert('មិនមានទិន្នន័យ'); return; }
-  const headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែមូលដ្ឋាន($)', 'ថ្ងៃធ្វើការ', 'ច្បាប់', 'OT(ម៉ោង)', 'តាមវត្តមាន($)', 'អត្ថប្រយោជន៍($)', 'ប្រាក់កាត់($)', 'ប្រាក់ខែសុទ្ធ($)', 'ប្រាក់ខែសុទ្ធ(៛)'];
-  const lines = rows.map(({ e, t }, i) => [i + 1, e.username || '', e.name, e.dept || '', (parseFloat(e.salary) || 0).toFixed(2),
-    t.workDays, t.leaveDays, t.otHours.toFixed(2), t.total.toFixed(2), t.benefitsUSD.toFixed(2), t.deductionsUSD.toFixed(2), t.net.toFixed(2), Math.round(t.netRiel)]);
+  const headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែមូលដ្ឋាន($)', 'ថ្ងៃធ្វើការ', 'ច្បាប់', 'OT(ម៉ោង)', 'តាមវត្តមាន($)', 'អត្ថប្រយោជន៍($)', 'ប្រាក់កាត់($)', 'ប្រាក់ខែសុទ្ធ($)', 'ប្រាក់ខែសុទ្ធ(៛)', 'ថ្ងៃធ្វើការ (ទី១-ថ្ងៃកំណត់)', 'ថ្ងៃត្រូវធ្វើការ', 'ប្រាក់ខែទី១($)'];
+  const lines = rows.map(({ e, t, adv }, i) => [i + 1, e.username || '', e.name, e.dept || '', (parseFloat(e.salary) || 0).toFixed(2),
+    t.workDays, t.leaveDays, t.otHours.toFixed(2), t.total.toFixed(2), t.benefitsUSD.toFixed(2), t.deductionsUSD.toFixed(2), t.net.toFixed(2), Math.round(t.netRiel), adv.workedDays, adv.requiredDays, adv.amount.toFixed(2)]);
   const csv = '\uFEFF' + headers.join(',') + '\n' + lines.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -2412,6 +2468,10 @@ document.getElementById('monthlySearch').addEventListener('input', renderMonthly
 document.getElementById('monthlyPrev').addEventListener('click', () => shiftMonthlyMonth(-1));
 document.getElementById('monthlyNext').addEventListener('click', () => shiftMonthlyMonth(1));
 document.getElementById('monthlyRunBtn').addEventListener('click', runMonthlyPayroll);
+document.getElementById('advAmount').value = advRules.amount;
+document.getElementById('advCountLeave').checked = !!advRules.countLeave;
+document.getElementById('advEndDay').value = advRules.endDay;
+['advAmount', 'advEndDay', 'advCountLeave'].forEach(id => document.getElementById(id).addEventListener('input', () => { readAdvControls(); renderMonthlyTab(); }));
 document.getElementById('monthlyCsvBtn').addEventListener('click', exportMonthlyCSV);
 document.getElementById('monthlyPrintSheetBtn').addEventListener('click', () => withMonthlyMonth(printPayrollSheet));
 document.getElementById('monthlyPrintAllBtn').addEventListener('click', () => withMonthlyMonth(printAllPayslips));

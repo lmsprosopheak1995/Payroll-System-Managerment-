@@ -413,13 +413,33 @@
     <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">
       ជំហាន៖ ① ពិនិត្យ ⚠️ ថ្ងៃដែលមិនទាន់កត់វត្តមាន → ② ចុច "គណនាប្រាក់កាត់" → ③ ពិនិត្យតារាង → ④ ព្រីនតារាង / Payslip។ ចុចលើជួរបុគ្គលិកដើម្បីមើលលម្អិត។
     </p>
+    <div class="scan-result-card" style="margin-bottom:16px;">
+      <h3 style="font-size:0.85rem;margin:0 0 10px;">💵 ប្រាក់ខែទី១ (បុរេប្រទាន) — ទូទាត់ថ្ងៃទី២៥ · ដកពីប្រាក់ខែចុងខែ</h3>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0;">
+          <label>ចំនួនទឹកប្រាក់ ($)</label>
+          <input type="number" id="advAmount" min="0" step="0.01" style="width:150px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>រាប់វត្តមានពីថ្ងៃទី១ ដល់ថ្ងៃទី</label>
+          <input type="number" id="advEndDay" min="1" max="28" step="1" style="width:150px;">
+        </div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:0.8rem;margin:0 0 8px;">
+          <input type="checkbox" id="advCountLeave"> រាប់ថ្ងៃច្បាប់ជាថ្ងៃធ្វើការ
+        </label>
+      </div>
+      <p style="font-size:0.7rem;color:var(--text-muted);margin:8px 0 0;">
+        ថ្ងៃធ្វើការ (ថ្ងៃទី១ ដល់ថ្ងៃកំណត់) ≥ ថ្ងៃត្រូវធ្វើការ (ដកថ្ងៃអាទិត្យ) → បានទឹកប្រាក់ខាងលើ បើមិនដូច្នោះ $0។
+        ថ្ងៃទូទាត់ = ២៥ (សៅរ៍ → ២៤, អាទិត្យ → ២៣)។ ប្រាក់នេះត្រូវដកពីប្រាក់ខែសុទ្ធ ចាប់ពីថ្ងៃទូទាត់មកដល់ ហើយបង្ហាញក្នុង Payslip។
+      </p>
+    </div>
     <div class="attendance-stats" id="monthlyStats"></div>
     <br>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>#</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ផ្នែក</th><th>ថ្ងៃធ្វើការ</th><th>ច្បាប់</th><th>OT (ម៉ោង)</th>
-          <th>តាមវត្តមាន ($)</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>ត្រូវពិនិត្យ</th><th></th>
+          <th>តាមវត្តមាន ($)</th><th>អត្ថប្រយោជន៍ ($)</th><th>ប្រាក់កាត់ ($)</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>ប្រាក់ខែទី១ (ទី២៥)</th><th>ត្រូវពិនិត្យ</th><th></th>
         </tr></thead>
         <tbody id="monthlyBody"></tbody>
       </table>
