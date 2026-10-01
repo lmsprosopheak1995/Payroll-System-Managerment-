@@ -669,6 +669,7 @@ async function doLogin() {
 }
 
 function doLogout() {
+  hideEmpLoadWarning();
   stopEmpScanner();
   clearSession();
   showLogin();
@@ -698,6 +699,26 @@ async function loadSettings() {
   };
 }
 
+// ---- សារព្រមាន៖ ទាញព័ត៌មានបុគ្គលិក (ប្រាក់ខែ...) មិនបាន → លេខប្រាក់ខែនឹងបង្ហាញ $0 មិនត្រឹមត្រូវ ----
+let empRecordFailed = false;
+function showEmpLoadWarning(detail) {
+  let el = document.getElementById('empLoadWarning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'empLoadWarning';
+    el.style.cssText = 'position:sticky;top:0;z-index:9999;background:#fef3c7;color:#92400e;border-bottom:2px solid #f59e0b;padding:10px 14px;font-size:14px;line-height:1.5;';
+    document.body.insertBefore(el, document.body.firstChild);
+  }
+  el.innerHTML = '⚠️ មិនអាចទាញព័ត៌មានបុគ្គលិកបានទេ — ប្រាក់ខែ និងលេខគណនាទាំងអស់អាចបង្ហាញ <b>មិនត្រឹមត្រូវ ($0)</b>។ សូមពិនិត្យអ៊ីនធឺណិត រួចព្យាយាមម្តងទៀត។'
+    + (detail ? '<div style="font-size:12px;opacity:.8;margin-top:2px;">' + escapeHtml(String(detail)) + '</div>' : '')
+    + '<button type="button" id="empLoadRetryBtn" style="margin-top:6px;padding:4px 12px;border:1px solid #b45309;background:#fff;color:#92400e;border-radius:6px;cursor:pointer;">ព្យាយាមម្តងទៀត</button>';
+  document.getElementById('empLoadRetryBtn').onclick = () => location.reload();
+}
+function hideEmpLoadWarning() {
+  const el = document.getElementById('empLoadWarning');
+  if (el) el.remove();
+}
+
 async function loadEmployeeRecord() {
   const session = getSession();
   const cols = 'id, name, position, dept, phone, email, start_date, salary, status, username';
@@ -707,7 +728,15 @@ async function loadEmployeeRecord() {
     if (!res.error) break;
   }
   const { data, error } = res;
-  if (error || !data) { currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '', username: '' }; return; }
+  if (error || !data) {
+    console.error('Load employee record failed', error);
+    currentEmployee = { id: session.id, name: session.name, position: '', dept: '', phone: '', email: '', startDate: '', salary: 0, status: '', username: '' };
+    empRecordFailed = true;
+    showEmpLoadWarning(error ? error.message : 'រកមិនឃើញព័ត៌មានបុគ្គលិក');
+    return;
+  }
+  empRecordFailed = false;
+  hideEmpLoadWarning();
   currentEmployee = {
     id: data.id, name: data.name, position: data.position || '', dept: data.dept || '',
     phone: data.phone || '', email: data.email || '', startDate: data.start_date || '',
