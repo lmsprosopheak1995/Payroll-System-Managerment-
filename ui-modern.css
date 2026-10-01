@@ -1,0 +1,240 @@
+/* ==========================================================================
+   ui-modern.css — UI ថ្មី៖ ពណ៌ទំនើប · Icon Frame · Grid Column
+   ដាក់ក្រោម style.css ក្នុង index.html៖
+     <link rel="stylesheet" href="style.css">
+     <link rel="stylesheet" href="ui-modern.css">
+   (ឯកសារនេះគ្រាន់តែជាន់លើ style.css — លុបវាចេញ ទើបត្រលប់ទៅរចនាចាស់វិញ)
+   ========================================================================== */
+
+/* ---------- 1) ពណ៌ (Design tokens) ----------
+   Teal + Sky លើ Slate ត្រជាក់ — Sidebar ពណ៌ Navy ខ្មៅជ្រៅ */
+:root {
+  --bg: #f3f6f9;
+  --card-bg: #ffffff;
+  --text: #0f1b2d;
+  --text-muted: #5b6b80;
+  --border: #e1e8ef;
+
+  --indigo: #0d9488;           /* ឈ្មោះចាស់ ប៉ុន្តែឥឡូវជា teal (style.css ប្រើអថេរនេះ) */
+  --violet: #0284c7;
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --grad: linear-gradient(135deg, #0d9488, #0284c7);
+  --grad-soft: linear-gradient(135deg, color-mix(in srgb, #0d9488 10%, transparent), color-mix(in srgb, #0284c7 10%, transparent));
+  --success: #059669;
+  --warn: #d97706;
+  --danger: #e11d48;
+  --danger-hover: #be123c;
+  --info: #0284c7;
+
+  --radius: 14px;
+  --frame: color-mix(in srgb, var(--accent) 12%, transparent);
+  --shadow: 0 1px 2px rgba(15, 27, 45, 0.05), 0 4px 14px rgba(15, 27, 45, 0.05);
+  --shadow-hover: 0 10px 28px rgba(13, 148, 136, 0.16);
+
+  --side-bg: linear-gradient(180deg, #0d1b2e 0%, #10243b 100%);
+  --side-text: #aebccd;
+  --side-frame: rgba(255, 255, 255, 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1320;
+    --card-bg: #121d2e;
+    --text: #e6edf6;
+    --text-muted: #94a3b8;
+    --border: #22314a;
+    --indigo: #2dd4bf;
+    --violet: #38bdf8;
+    --accent: #2dd4bf;
+    --accent-hover: #5eead4;
+    --grad: linear-gradient(135deg, #14b8a6, #0ea5e9);
+    --grad-soft: linear-gradient(135deg, color-mix(in srgb, #14b8a6 16%, transparent), color-mix(in srgb, #0ea5e9 16%, transparent));
+    --success: #34d399;
+    --warn: #fbbf24;
+    --info: #38bdf8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.5);
+    --side-bg: linear-gradient(180deg, #08101c 0%, #0c1829 100%);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1320;
+  --card-bg: #121d2e;
+  --text: #e6edf6;
+  --text-muted: #94a3b8;
+  --border: #22314a;
+  --indigo: #2dd4bf;
+  --violet: #38bdf8;
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --grad: linear-gradient(135deg, #14b8a6, #0ea5e9);
+  --grad-soft: linear-gradient(135deg, color-mix(in srgb, #14b8a6 16%, transparent), color-mix(in srgb, #0ea5e9 16%, transparent));
+  --success: #34d399;
+  --warn: #fbbf24;
+  --info: #38bdf8;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --side-bg: linear-gradient(180deg, #08101c 0%, #0c1829 100%);
+}
+
+/* ពណ៌ shadow ស្វាយចាស់ក្នុង style.css → ជំនួសដោយ teal */
+button:hover { box-shadow: 0 6px 16px rgba(13, 148, 136, 0.28); }
+button.secondary:hover { box-shadow: none; }
+button.danger:hover { box-shadow: 0 6px 16px rgba(225, 29, 72, 0.28); }
+.modal { box-shadow: 0 24px 64px rgba(15, 27, 45, 0.28); }
+.org-root-card { box-shadow: 0 8px 22px rgba(13, 148, 136, 0.28); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 2) Icon (SVG inline) ---------- */
+.ui-ico {
+  width: 1.15em; height: 1.15em; flex: 0 0 auto;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+  display: block;
+}
+
+/* ---------- 3) Frame ទៅលើ Icon ---------- */
+.ico-frame {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tone, var(--accent)) 14%, transparent);
+  color: var(--tone, var(--accent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, var(--accent)) 22%, transparent);
+  font-size: 1.15rem;
+}
+
+/* ---------- 4) Sidebar ---------- */
+.sidebar {
+  background: var(--side-bg);
+  color: var(--side-text);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(8, 16, 28, 0.35);
+  padding: 12px 10px 16px;
+}
+.sidebar-brand {
+  color: #fff;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 6px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 10px;
+}
+.sidebar-brand .ico-frame {
+  width: 36px; height: 36px; flex-basis: 36px; border-radius: 11px;
+  background: var(--grad); color: #fff; box-shadow: none;
+}
+.sidebar .nav-item { color: var(--side-text); border-radius: 11px; padding: 7px 8px; gap: 11px; }
+.sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.sidebar .nav-item .ico { width: 32px; flex: 0 0 32px; }
+.sidebar .nav-item .ico-frame {
+  width: 32px; height: 32px; flex-basis: 32px; border-radius: 10px;
+  background: var(--side-frame); color: inherit; box-shadow: none; font-size: 1rem;
+}
+.sidebar .nav-item:hover .ico-frame { background: rgba(255, 255, 255, 0.12); }
+.sidebar .nav-item.active {
+  background: rgba(45, 212, 191, 0.12);
+  color: #fff; box-shadow: none;
+}
+.sidebar .nav-item.active .ico-frame { background: var(--grad); color: #fff; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.45); }
+.sidebar .nav-sub { margin-left: 15px; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, 0.1); }
+.sidebar .nav-sub .nav-item.active { background: rgba(45, 212, 191, 0.12); }
+.sidebar .nav-sub .nav-item.active .dot { background: #2dd4bf; border-color: #2dd4bf; }
+.sidebar .chev { opacity: 0.55; }
+
+/* ---------- 5) ក្បាលទំព័រ (page title + icon frame) ---------- */
+.page-title { display: inline-flex; align-items: center; gap: 12px; }
+.page-title .ico-frame { width: 38px; height: 38px; flex-basis: 38px; border-radius: 11px; }
+
+/* ---------- 6) Grid column ----------
+   ប្រអប់សង្ខេប៖ column ស្វ័យប្រវត្តិតាមទទឹង (auto-fit) ឬកំណត់ដោយ class */
+.stats, .attendance-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+@media (max-width: 1100px) { .grid-cols-6, .grid-cols-4 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+@media (max-width: 720px) {
+  .stats, .attendance-stats,
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-6 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+}
+
+/* Dashboard 12 columns: ក្រាហ្វិក 7 · តារាងផ្នែក 5 */
+.dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.dash-grid > * { grid-column: span 6; min-width: 0; }
+.dash-grid > :nth-child(1) { grid-column: span 7; }
+.dash-grid > :nth-child(2) { grid-column: span 5; }
+@media (max-width: 1000px) { .dash-grid > * { grid-column: 1 / -1 !important; } }
+.col-span-2 { grid-column: span 2; }
+.col-span-3 { grid-column: span 3; }
+.col-span-full { grid-column: 1 / -1; }
+
+/* ---------- 7) Stat card = Frame + Icon ---------- */
+.stat-card, .attendance-stats .stat-card {
+  --tone: var(--accent);
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas: "num" "label";
+  column-gap: 14px; align-items: center;
+  text-align: left;
+  padding: 14px 16px;
+  min-width: 0;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.stat-card::before { display: none; }
+.stat-card.has-ico, .attendance-stats .stat-card.has-ico {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "ico num" "ico label";
+}
+.stat-card .ico-frame { grid-area: ico; width: 46px; height: 46px; flex-basis: 46px; border-radius: 14px; font-size: 1.3rem; }
+.stat-card .num, .attendance-stats .stat-card .num {
+  grid-area: num;
+  font-size: 1.35rem; font-weight: 700; line-height: 1.25;
+  background: none; -webkit-text-fill-color: currentColor;
+  color: var(--text);                 /* style="color:..." ក្នុង JS នៅតែឈ្នះ */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card .label, .attendance-stats .stat-card .label {
+  grid-area: label; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;
+}
+.stat-card[data-tone="success"] { --tone: var(--success); }
+.stat-card[data-tone="warn"]    { --tone: var(--warn); }
+.stat-card[data-tone="danger"]  { --tone: var(--danger); }
+.stat-card[data-tone="muted"]   { --tone: var(--text-muted); }
+.stat-card[onclick]:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--border));
+  box-shadow: var(--shadow-hover);
+}
+@media (max-width: 720px) {
+  .stat-card, .attendance-stats .stat-card { padding: 11px 12px; column-gap: 10px; }
+  .stat-card .ico-frame { width: 34px; height: 34px; flex-basis: 34px; border-radius: 10px; font-size: 1rem; }
+  .stat-card .num, .attendance-stats .stat-card .num { font-size: 0.98rem; }
+  .stat-card .label, .attendance-stats .stat-card .label { font-size: 0.72rem; }
+}
+
+/* ---------- 8) Frame ផ្ទាំង / តារាង ---------- */
+.scan-result-card, .scan-camera-card, .table-wrap, .portal-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+th { background: color-mix(in srgb, var(--accent) 5%, var(--card-bg)); }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.badge.active { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+.badge.pending { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.bar { border-radius: 8px 8px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card[onclick]:hover { transform: none; }
+}
