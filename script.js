@@ -623,9 +623,16 @@ function renderAttendanceTab() {
 
   // បំបែក "តាមវត្តមាន" និង "អត្ថប្រយោជន៍/ប្រាក់កាត់" ឱ្យច្បាស់ + បង្ហាញឈ្មោះធាតុនីមួយៗ
   const sumT = summarizeEmpMonth(emp, month);
-  const itemLines = (list, sign, color) => (list || []).map(p =>
-    `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${sign} ${escapeHtml(p.name)}</span><span style="color:${color};">${sign}$${fmtUSD(payrollItemToUSD(p))}</span></div>`).join('');
+  const monthLocked = (typeof isMonthLocked === 'function') && isMonthLocked(month);
+  const itemLines = (list, sign, color) => (list || []).map(p => {
+    const tag = p.virtual ? '' : (p.recurrence === 'fixed' ? ' <small style="color:#9ca3af;">[ថេរ]</small>' : ' <small style="color:#9ca3af;">[ប្រែប្រួល]</small>');
+    const del = (!monthLocked && !p.virtual && p.id) ? ` <button title="លុបធាតុនេះ" style="border:none;background:none;cursor:pointer;padding:0 2px;" onclick="deletePayrollItem('${String(p.id).replace(/'/g, '')}')">🗑</button>` : '';
+    return `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${sign} ${escapeHtml(p.name)}${tag}${del}</span><span style="color:${color};">${sign}$${fmtUSD(payrollItemToUSD(p))}</span></div>`;
+  }).join('');
   const itemsHtml = itemLines(sumT.benefitItems, '+', '#16a34a') + itemLines(sumT.deductionItems, '−', '#dc2626');
+  const lockHtml = monthLocked
+    ? `<div style="margin-bottom:6px;padding:4px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:0.76rem;">🔒 ខែ ${month} បិទរួច — លេខមកពី Snapshot (ការលុប/កែធាតុមិនប៉ះពាល់ទេ លុះត្រាតែបើកខែឡើងវិញ)</div>`
+    : '';
 
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
@@ -651,6 +658,7 @@ function renderAttendanceTab() {
   const row = (label, val, color) => `<div style="display:flex;justify-content:space-between;gap:16px;"><span>${label}</span><span style="color:${color || 'inherit'};">${val}</span></div>`;
   bd.style.cssText = 'width:100%;max-width:520px;margin:10px 0;font-size:0.82rem;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;';
   bd.innerHTML = `
+      ${lockHtml}
       ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.normalPay))}
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
