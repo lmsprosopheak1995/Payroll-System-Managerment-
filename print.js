@@ -237,7 +237,7 @@ function printAttendance() {
 // ---------------------------------------------------------------------------
 function printPayrollSheet() {
   const month = currentPayrollMonth();
-  const list = employees.filter(e => e.status === 'active')
+  const list = (typeof payrollEmployeesForMonth === 'function' ? payrollEmployeesForMonth(month) : employees.filter(e => e.status === 'active'))
     .sort((a, b) => (a.dept || '').localeCompare(b.dept || '') || (a.name || '').localeCompare(b.name || ''));
   if (!list.length) { customAlert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
   const g = { work: 0, ot: 0, total: 0, ben: 0, ded: 0, net: 0, netRiel: 0 };
@@ -328,7 +328,7 @@ function printPayslip() {
 
 function printAllPayslips() {
   const month = currentPayrollMonth();
-  const list = employees.filter(e => e.status === 'active')
+  const list = (typeof payrollEmployeesForMonth === 'function' ? payrollEmployeesForMonth(month) : employees.filter(e => e.status === 'active'))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   if (!list.length) { customAlert('មិនមានបុគ្គលិកសកម្មទេ'); return; }
   openPrintWindow(`Payslip ទាំងអស់ ${month}`, list.map(e => payslipPageHtml(e, month)).join(''), false);

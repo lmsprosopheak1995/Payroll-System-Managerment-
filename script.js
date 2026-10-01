@@ -42,6 +42,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
+    Object.keys(loadFailures).forEach(k => delete loadFailures[k]);
     await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null)]);
     renderAll();
     return;
@@ -196,6 +197,7 @@ async function loadData() {
   if (error) {
     console.error('Load employees failed', error);
     customAlert('មិនអាចទាញយកទិន្នន័យបុគ្គលិកពី Supabase បានទេ៖ ' + error.message);
+    pcLoadFail('បុគ្គលិក', error.message);
     employees = [];
     return;
   }
@@ -207,6 +209,7 @@ async function loadAttendance() {
   if (error) {
     console.error('Load attendance failed', error);
     customAlert('មិនអាចទាញយកទិន្នន័យវត្តមានពី Supabase បានទេ៖ ' + error.message);
+    pcLoadFail('វត្តមាន', error.message);
     attendance = {};
     return;
   }
@@ -221,6 +224,7 @@ async function loadSettings() {
   const { data, error } = await supabaseClient.from('app_settings').select('*').eq('id', 1).maybeSingle();
   if (error) {
     console.error('Load settings failed', error);
+    pcLoadFail('ការកំណត់ (អត្រាប្តូរប្រាក់...)', error.message);
     settings = { ...DEFAULT_SETTINGS };
     return;
   }
@@ -257,7 +261,9 @@ async function upsertEmployee(emp) {
   if (error) {
     console.error('Save employee failed', error);
     customAlert('រក្សាទុកបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    return false;
   }
+  return true;
 }
 
 async function deleteEmployeeRow(id) {
@@ -265,7 +271,9 @@ async function deleteEmployeeRow(id) {
   if (error) {
     console.error('Delete employee failed', error);
     customAlert('លុបបុគ្គលិកលើ Supabase មិនជោគជ័យ៖ ' + error.message);
+    return false;
   }
+  return true;
 }
 
 async function upsertAttendanceRecord(date, empId, rec) {
@@ -730,7 +738,7 @@ async function loadOvertimeRequests() {
 // ==== Benefits / Deductions (payroll items) ====
 async function loadPayrollItems() {
   const { data, error } = await supabaseClient.from('payroll_items').select('*').order('created_at', { ascending: false });
-  if (error) { console.error('Load payroll items failed', error); payrollItems = []; return; }
+  if (error) { console.error('Load payroll items failed', error); pcLoadFail('ធាតុប្រាក់ខែ', error.message); customAlert('មិនអាចទាញយកធាតុអត្ថប្រយោជន៍/ប្រាក់កាត់បានទេ៖ ' + error.message + '\nលេខប្រាក់ខែនឹងមិនត្រឹមត្រូវ — កុំព្រីន ឬបិទខែ រហូតដល់ដោះស្រាយ'); payrollItems = []; return; }
   payrollItems = (data || []).map(row => ({
     id: row.id,
     employeeId: row.employee_id,
@@ -1592,6 +1600,15 @@ async function saveEmployee() {
     data._photoDirty = true;
   }
 
+  const newSal = parseFloat(data.salary);
+  const oldSal = existingEmp ? parseFloat(existingEmp.salary) : NaN;
+  if (!(newSal > 0)) {
+    if (!(await customConfirm('⚠️ ប្រាក់ខែមូលដ្ឋានទទេ ឬ $0 — ប្រាក់ខែនឹងត្រូវគណនាជា $0 ក្នុងគ្រប់ខែដែលមិនទាន់បិទ។ តើបន្តរក្សាទុកមែនទេ?'))) return;
+  } else if (existingEmp && oldSal > 0 && Math.abs(newSal - oldSal) > 0.0001) {
+    if (!(await customConfirm(`ប្តូរប្រាក់ខែមូលដ្ឋាន ${existingEmp.name}៖ $${fmtUSD(oldSal)} → $${fmtUSD(newSal)}\nប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទមិនប្តូរទេ។ បន្ត?`))) return;
+  }
+  const prevEmp = existingEmp ? { ...existingEmp } : null;
+
   let savedEmp;
   if (editingId) {
     const idx = employees.findIndex(x => x.id === editingId);
@@ -1602,9 +1619,15 @@ async function saveEmployee() {
     employees.push(savedEmp);
   }
 
-  closeModal();
   renderAll();
-  await upsertEmployee(savedEmp);
+  const saved = await upsertEmployee(savedEmp);
+  if (!saved) { // រក្សាទុកមិនជោគជ័យ → ត្រឡប់តម្លៃដើមវិញ (កុំឲ្យបង្ហាញថាបានរក្សាទុក) ហើយទុកប្រអប់ឲ្យបើកដើម្បីព្យាយាមម្តងទៀត
+    if (prevEmp) { const i = employees.findIndex(x => x.id === savedEmp.id); if (i !== -1) employees[i] = prevEmp; }
+    else employees = employees.filter(x => x.id !== savedEmp.id);
+    renderAll();
+    return;
+  }
+  closeModal();
   delete savedEmp._photoDirty;
   delete savedEmp._idCardDirty;
   if (passwordInput) {
@@ -1616,13 +1639,34 @@ async function saveEmployee() {
   }
 }
 
+function employeeHasHistory(id) {
+  if (Object.values(attendance).some(day => day && day[id])) return true;
+  if (payrollItems.some(p => p.employeeId === id)) return true;
+  return typeof pcEmployeeHasPayrollRecords === 'function' && pcEmployeeHasPayrollRecords(id);
+}
+
 async function deleteEmployee(id) {
   const e = employees.find(x => x.id === id);
   if (!e) return;
-  if (!(await customConfirm(`តើអ្នកប្រាកដជាចង់លុប "${e.name}" មែនទេ?`))) return;
+  if (employeeHasHistory(id)) {
+    // មានប្រវត្តិវត្តមាន/ប្រាក់ខែ → មិនអនុញ្ញាតលុប (ការលុបនឹងបាត់ប្រាក់ខែចាស់ៗ) — ប្តូរទៅ "ឈប់បម្រើការ" ជំនួស
+    if (e.status === 'inactive') { customAlert(`"${e.name}" មានប្រវត្តិវត្តមាន/ប្រាក់ខែ ដូច្នេះមិនអាចលុបបានទេ។ គាត់នៅរក្សាទុកជា "ឈប់បម្រើការ" ហើយ ប្រវត្តិប្រាក់ខែទាំងអស់នៅដដែល។`); return; }
+    if (await customConfirm(`"${e.name}" មានប្រវត្តិវត្តមាន/ប្រាក់ខែ — មិនអាចលុបបានទេ ព្រោះនឹងបាត់ប្រាក់ខែចាស់ៗ។\n\nចង់ប្តូរទៅ "ឈប់បម្រើការ" ជំនួសទេ? ទិន្នន័យទាំងអស់នៅរក្សាទុក ហើយគាត់នៅមានក្នុងប្រាក់ខែខែដែលគាត់បានធ្វើការ។`)) {
+      const prev = e.status;
+      e.status = 'inactive';
+      renderAll();
+      if (!(await upsertEmployee(e))) { e.status = prev; renderAll(); }
+    }
+    return;
+  }
+  // គ្មានប្រវត្តិ (ឧ. បង្កើតខុស) → លុបបាន តែត្រូវវាយឈ្មោះបញ្ជាក់
+  const typed = await customPrompt(`លុប "${e.name}" ជាអចិន្ត្រៃយ៍។ វាយឈ្មោះ "${e.name}" ដើម្បីបញ្ជាក់៖`);
+  if (typed === null) return;
+  if (typed.trim() !== e.name) { customAlert('ឈ្មោះមិនត្រូវគ្នា — មិនបានលុបទេ'); return; }
+  const idx = employees.findIndex(x => x.id === id);
   employees = employees.filter(x => x.id !== id);
   renderAll();
-  deleteEmployeeRow(id);
+  if (!(await deleteEmployeeRow(id))) { employees.splice(idx, 0, e); renderAll(); } // លុបមិនជោគជ័យ → ដាក់វិញ
 }
 
 function exportCSV() {
@@ -2348,8 +2392,7 @@ function advanceVirtualItems(empId, month) {
 
 function monthlyRows(month) {
   const q = (document.getElementById('monthlySearch')?.value || '').trim().toLowerCase();
-  return employees
-    .filter(e => e.status === 'active')
+  return payrollEmployeesForMonth(month)
     .filter(e => !q || (typeof employeeMatchesSearch === 'function' ? employeeMatchesSearch(e, q) : ((e.name || '') + (e.username || '')).toLowerCase().includes(q)))
     .sort((a, b) => (a.dept || '').localeCompare(b.dept || '') || (a.name || '').localeCompare(b.name || ''))
     .map(e => {
@@ -2419,7 +2462,7 @@ function monthlyOpenEmployee(empId) {
 async function runMonthlyPayroll() {
   const month = currentMonthlyMonth();
   if (guardLocked(month, 'គណនាប្រាក់កាត់')) return;
-  const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
+  const targets = payrollEmployeesForMonth(month).filter(e => calcDeductionRow(e, month).total > 0);
   const stale = payrollItems.filter(p => p.id.startsWith('auto_ded_') && p.month === month &&
     !targets.some(e => dedItemId(e.id, month) === p.id));
   if (targets.length === 0 && stale.length === 0) { customAlert('មិនមានប្រាក់កាត់យឺត/ច្បាប់ក្នុងខែនេះទេ'); return; }
