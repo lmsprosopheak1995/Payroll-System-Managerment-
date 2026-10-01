@@ -673,19 +673,21 @@ function renderAttendanceTab() {
   // (1) ប្រៀបធៀបខែមុន
   const prevMonth = monthsBack(month, 2)[1];
   const prevT = summarizeEmpMonth(emp, prevMonth);
+  const cmpGrid = 'display:grid;grid-template-columns:minmax(80px,1.4fr) 1fr 1fr 1.2fr;column-gap:8px;row-gap:5px;font-size:0.78rem;align-items:baseline;';
   const cmpRow = (label, prev, cur, fmtFn, goodWhenUp) => {
     const d = (cur || 0) - (prev || 0);
     const color = Math.abs(d) < 1e-9 ? '#9ca3af' : ((d > 0) === goodWhenUp ? '#16a34a' : '#dc2626');
     const sign = d > 0 ? '▲ +' : (d < 0 ? '▼ −' : '= ');
-    return `<tr><td>${label}</td><td style="text-align:right;">${fmtFn(prev || 0)}</td><td style="text-align:right;">${fmtFn(cur || 0)}</td><td style="text-align:right;color:${color};">${sign}${fmtFn(Math.abs(d))}</td></tr>`;
+    return `<div>${label}</div><div style="text-align:right;">${fmtFn(prev || 0)}</div><div style="text-align:right;">${fmtFn(cur || 0)}</div><div style="text-align:right;color:${color};white-space:nowrap;">${sign}${fmtFn(Math.abs(d))}</div>`;
   };
+  const cmpHead = t => `<div style="text-align:right;color:var(--text-muted);">${t}</div>`;
   const cmpHtml = `<div style="${cardCss}">${cardTitle('📈 ប្រៀបធៀបខែមុន')}
-    <table style="width:100%;font-size:0.8rem;border-collapse:collapse;"><thead><tr style="color:var(--text-muted);"><th style="text-align:left;font-weight:500;"></th><th style="text-align:right;font-weight:500;">${prevMonth}</th><th style="text-align:right;font-weight:500;">${month}</th><th style="text-align:right;font-weight:500;">ផ្លាស់ប្តូរ</th></tr></thead><tbody>
+    <div style="${cmpGrid}"><div></div>${cmpHead(prevMonth)}${cmpHead(month)}${cmpHead('ផ្លាស់ប្តូរ')}
     ${cmpRow('ថ្ងៃធ្វើការ', prevT.workDays, sumT.workDays, v => String(v), true)}
     ${cmpRow('ម៉ោង OT', prevT.otHours, sumT.otHours, fmtHours, true)}
     ${cmpRow('ប្រាក់ OT ($)', prevT.otPay, sumT.otPay, v => '$' + fmtUSD(v), true)}
     ${cmpRow('ប្រាក់ខែសុទ្ធ ($)', prevT.net, sumT.net, v => '$' + net2(v), true)}
-    </tbody></table></div>`;
+    </div></div>`;
 
   // (2) សង្ខេបថ្ងៃ
   const cnt = { present: 0, leave: 0, absent: 0, late: 0 };
@@ -695,6 +697,7 @@ function renderAttendanceTab() {
   const chip = (label, n, color) => `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 10px;border-radius:999px;background:${n ? color + '22' : '#f3f4f6'};color:${n ? color : '#9ca3af'};font-weight:600;">${label} ${n}</span>`;
   const daysHtml = `<div style="${cardCss}">${cardTitle('🗓 សង្ខេបថ្ងៃ')}
     ${chip('មកធ្វើការ', cnt.present, '#16a34a')}${chip('ច្បាប់', cnt.leave, '#d97706')}${chip('អវត្តមាន', cnt.absent, '#dc2626')}${chip('យឺត', cnt.late, '#d97706')}${chip('មិនទាន់កត់', unmarked.length, '#6b7280')}
+    ${(() => { const lst = st => daily.filter(d => d.status === st).map(d => d.date.slice(8)).join(', '); const parts = []; if (cnt.absent) parts.push(`<span style="color:#dc2626;">អវត្តមាន៖ ថ្ងៃទី ${lst('absent')}</span>`); if (cnt.leave) parts.push(`<span style="color:#d97706;">ច្បាប់៖ ថ្ងៃទី ${lst('leave')}</span>`); return parts.length ? `<div style="margin-top:6px;">${parts.join(' · ')}</div>` : ''; })()}
     ${unmarked.length ? `<div style="margin-top:6px;color:#b45309;">⚠️ ថ្ងៃមិនទាន់កត់៖ ${unmarked.slice(0, 12).map(d => d.slice(8)).join(', ')}${unmarked.length > 12 ? ' …' : ''}</div>` : '<div style="margin-top:6px;color:#16a34a;">✓ កត់វត្តមានគ្រប់ថ្ងៃ</div>'}</div>`;
 
   // (3) ក្រាហ្វម៉ោងធ្វើការ/OT ប្រចាំថ្ងៃ
