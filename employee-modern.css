@@ -255,3 +255,16 @@ body { background: var(--bg); }
 /* icon ក្នុង frame ត្រូវនៅកណ្តាល (មិនមាន margin) */
 .menu-ico .ui-ico.inline, .pf-q .qi .ui-ico.inline, .bnav-item .ic .ui-ico.inline { margin: 0; vertical-align: baseline; }
 .portal button .ui-ico.inline { margin-right: 6px; }
+
+/* ---------- 15) Stat card នៅកណ្តាល (icon នៅលើ · លេខ · ស្លាក) ---------- */
+.portal .stat-card,
+.portal .stat-card.has-ico {
+  grid-template-columns: 1fr;
+  grid-template-areas: "ico" "num" "label";
+  justify-items: center;
+  text-align: center;
+  row-gap: 4px;
+}
+.portal .stat-card .ico-frame { justify-self: center; }
+.portal .stat-card .num,
+.portal .stat-card .label { text-align: center; max-width: 100%; }

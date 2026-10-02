@@ -238,3 +238,20 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 @media (prefers-reduced-motion: reduce) {
   .stat-card[onclick]:hover { transform: none; }
 }
+
+/* ---------- 9) Stat card នៅកណ្តាល (icon នៅលើ · លេខ · ស្លាក) ---------- */
+.stat-card,
+.stat-card.has-ico,
+.attendance-stats .stat-card,
+.attendance-stats .stat-card.has-ico {
+  grid-template-columns: 1fr;
+  grid-template-areas: "ico" "num" "label";
+  justify-items: center;
+  text-align: center;
+  row-gap: 4px;
+}
+.stat-card .ico-frame { justify-self: center; }
+.stat-card .num,
+.stat-card .label,
+.attendance-stats .stat-card .num,
+.attendance-stats .stat-card .label { text-align: center; max-width: 100%; }
