@@ -159,6 +159,7 @@
         <button class="menu-row" data-go="payroll" style="--c:#0ea5e9"><span class="menu-ico">💰</span><span class="lbl">ប្រាក់ខែ</span><span class="go">›</span></button>
         <button class="menu-row" data-go="feedback" style="--c:#ec4899"><span class="menu-ico">💬</span><span class="lbl">មតិកែលម្អ</span><span class="go">›</span></button>
       </div>
+      <div id="homePayCards" class="home-pay"></div>
     </div>
 
     <div id="profileTabContent" class="tab-content">
@@ -1061,6 +1062,53 @@ function renderHome() {
   document.getElementById('homeAvatar').innerHTML = e.photo ? `<img src="${e.photo}" alt="">` : escapeHtml(Array.from(e.name || '?')[0]);
   renderHomeBanner();
   startBannerAuto();
+  renderHomePayCards();
+}
+
+// ==== ទំព័រដើម៖ បញ្ជីបែងចែកប្រាក់ខែ + ប្រៀបធៀបខែមុន ====
+let homePayReq = 0;
+async function renderHomePayCards() {
+  const box = document.getElementById('homePayCards');
+  if (!box || !currentEmployee) return;
+  const my = ++homePayReq; // ហៅថ្មីជាងឈ្នះ — លទ្ធផលចាស់ត្រូវបោះបង់
+  try {
+    const month = todayStr().slice(0, 7);
+    const prevMonth = monthsBackEmp(month, 2)[1];
+    const [t, p] = await Promise.all([summarizeMonth(month), summarizeMonth(prevMonth)]);
+    if (my !== homePayReq) return;
+    const line = (l, v, c) => `<div class="hp-line"><span>${l}</span><span${c ? ` style="color:${c}"` : ''}>${v}</span></div>`;
+    const items = (arr, sign, c) => (arr || []).map(i => line(escapeHtml(i.name), `${sign} ${fmtItemAmountEmp(i)}`, c)).join('');
+    const rate = t.exchangeRate || settings.exchangeRate;
+    const cmp = (label, a, b, f, goodUp) => {
+      const d = (b || 0) - (a || 0);
+      const c = Math.abs(d) < 1e-9 ? 'var(--text-muted)' : ((d > 0) === goodUp ? 'var(--success)' : 'var(--danger)');
+      const sg = d > 0 ? '▲ +' : (d < 0 ? '▼ −' : '= ');
+      return `<span>${label}</span><span>${f(a || 0)}</span><span>${f(b || 0)}</span><span style="color:${c};white-space:nowrap">${sg}${f(Math.abs(d))}</span>`;
+    };
+    box.innerHTML = `
+      <div class="portal-card hp-card">
+        <div class="hp-title">💰 ប្រាក់ខែខែនេះ <small>${month}</small></div>
+        ${line('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(t.normalPay))}
+        ${line('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(t.otPay))}
+        ${line('ប្រាក់បាយ', fmtRiel((t.foodPay + t.foodOtPay) * rate) + ' ៛')}
+        ${items(t.benefitItems, '+', 'var(--success)')}
+        ${items(t.deductionItems, '−', 'var(--danger)')}
+        <div class="hp-line hp-total"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD2(t.net)}<small>${fmtUSDplusRiel(t.net)}</small></span></div>
+      </div>
+      <div class="portal-card hp-card">
+        <div class="hp-title">📈 ប្រៀបធៀបខែមុន</div>
+        <div class="hp-cmp">
+          <span></span><span class="h">${prevMonth}</span><span class="h">${month}</span><span class="h">ផ្លាស់ប្តូរ</span>
+          ${cmp('ថ្ងៃធ្វើការ', p.workDays, t.workDays, v => String(v), true)}
+          ${cmp('ម៉ោង OT', p.otHours, t.otHours, fmtHours, true)}
+          ${cmp('ប្រាក់ OT ($)', p.otPay, t.otPay, v => '$' + fmtUSD(v), true)}
+          ${cmp('ប្រាក់ខែសុទ្ធ ($)', p.net, t.net, v => '$' + fmtUSD2(v), true)}
+        </div>
+      </div>`;
+  } catch (e) {
+    console.warn('renderHomePayCards failed', e);
+    if (my === homePayReq) box.innerHTML = '';
+  }
 }
 
 // ==== Banner ដើរស្វ័យប្រវត្តិ ====
@@ -1295,6 +1343,7 @@ async function clockOut() {
 }
 
 async function renderHistory() {
+  renderHomePayCards(); // អាប់ដេត card ប្រាក់ខែ/ប្រៀបធៀបនៅទំព័រដើម ក្រោយកត់ម៉ោងចូល-ចេញ
   const session = getSession();
   const list = document.getElementById('historyList');
   list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';

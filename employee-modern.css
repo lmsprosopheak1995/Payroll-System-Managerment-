@@ -285,3 +285,16 @@ body { background: var(--bg); }
 @media (max-width: 340px) {
   #empAttStats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
+
+/* ---------- 16) ទំព័រដើម៖ card ប្រាក់ខែ + ប្រៀបធៀបខែមុន ---------- */
+.home-pay { margin: 0 16px 14px; display: grid; gap: 10px; }
+.home-pay .hp-card { margin: 0; padding: 12px 14px; }
+.hp-title { font-weight: 700; font-size: 0.82rem; margin-bottom: 6px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hp-title small { font-weight: 500; color: var(--text-muted); font-size: 0.7rem; }
+.hp-line { display: flex; justify-content: space-between; gap: 12px; font-size: 0.76rem; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.hp-line > span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.hp-total { font-weight: 700; font-size: 0.86rem; border-bottom: 0; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+.hp-total small { display: block; font-weight: 500; color: var(--text-muted); font-size: 0.68rem; }
+.hp-cmp { display: grid; grid-template-columns: minmax(70px, 1.5fr) 1fr 1fr 1.3fr; column-gap: 6px; row-gap: 6px; font-size: 0.72rem; align-items: baseline; }
+.hp-cmp > span:not(:nth-child(4n+1)) { text-align: right; font-variant-numeric: tabular-nums; }
+.hp-cmp .h { color: var(--text-muted); font-size: 0.66rem; }
