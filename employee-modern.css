@@ -256,15 +256,32 @@ body { background: var(--bg); }
 .menu-ico .ui-ico.inline, .pf-q .qi .ui-ico.inline, .bnav-item .ic .ui-ico.inline { margin: 0; vertical-align: baseline; }
 .portal button .ui-ico.inline { margin-right: 6px; }
 
-/* ---------- 15) Stat card នៅកណ្តាល (icon នៅលើ · លេខ · ស្លាក) ---------- */
+/* ---------- 15) Stat card នៅកណ្តាល · តូច ស្អាត (compact) ---------- */
 .portal .stat-card,
 .portal .stat-card.has-ico {
   grid-template-columns: 1fr;
   grid-template-areas: "ico" "num" "label";
   justify-items: center;
   text-align: center;
-  row-gap: 4px;
+  row-gap: 2px;
+  padding: 9px 6px;
+  border-radius: 12px;
 }
-.portal .stat-card .ico-frame { justify-self: center; }
-.portal .stat-card .num,
-.portal .stat-card .label { text-align: center; max-width: 100%; }
+.portal .stat-card .ico-frame {
+  justify-self: center;
+  width: 28px; height: 28px; flex-basis: 28px;
+  border-radius: 9px; font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+.portal .stat-card .num { font-size: 0.95rem; text-align: center; max-width: 100%; }
+.portal .stat-card .label {
+  font-size: 0.66rem; line-height: 1.3; text-align: center; max-width: 100%;
+  white-space: normal;
+}
+
+/* #pfStats = 4 ប្រអប់ (2 column) · #empAttStats = 6 ប្រអប់ (3 column × 2 ជួរ) */
+#pfStats, #empAttStats { gap: 8px; }
+#empAttStats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+@media (max-width: 340px) {
+  #empAttStats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
