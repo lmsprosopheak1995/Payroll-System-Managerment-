@@ -5,7 +5,9 @@
    • រក្សាទុកជាធាតុក្នុង payroll_items (id ថេរ មិនស្ទួន) → ចូលក្នុង Payslip / ប្រាក់ខែសុទ្ធដោយស្វ័យប្រវត្តិ
 
    ដំឡើង៖ index.html ដាក់ក្រោម bank-pay.js៖  <script src="full-month.js"></script>
-   (មិនត្រូវការ SQL ថ្មី) · លុបវាចេញ → ត្រលប់ទៅដើមវិញ
+   ① ដំណើរការ full-month.sql ក្នុង Supabase ជាមុន (បន្ថែម 3 column ក្នុង app_settings)
+   លក្ខខណ្ឌ (ចំនួនព្រីម / យឺតអនុញ្ញាត / ច្បាប់) រក្សាក្នុង Supabase ទាំងអស់ — មិនប្រើ localStorage
+   លុបវាចេញ → ត្រលប់ទៅដើមវិញ
    ត្រូវការ៖ employees, payrollItems, payrollEmployeesForMonth, summarizeEmpMonth, calcDeductionRow,
             countUnmarkedDays, daysInMonth, isMonthLocked, guardLocked, upsertPayrollItemRow,
             deletePayrollItemRow, currentMonthlyMonth, todayStr, logAudit, customAlert, customConfirm
@@ -13,16 +15,59 @@
 (function () {
   'use strict';
 
-  const KEY = 'fullmonth_rules_v1';
+  const OLD_KEY = 'fullmonth_rules_v1'; // ប្រើតែដើម្បីផ្ទេរតម្លៃចាស់ឡើង Supabase ម្តង
   const DEF = { amount: 10, leaveBreaks: true, allowLate: 0 };
-  let rules = loadRules();
+  let rules = { ...DEF };
+  let rulesReady = false;   // true ក្រោយទាញពី Supabase បាន
+  let rulesError = '';
+  let saveTimer = null;
   let overlay = null, curMonth = '', rows = [];
 
-  function loadRules() {
-    try { const raw = localStorage.getItem(KEY); if (raw) return { ...DEF, ...JSON.parse(raw) }; } catch (e) { /* ignore */ }
-    return { ...DEF };
+  // ---- លក្ខខណ្ឌ ↔ Supabase (app_settings id=1) ----
+  async function loadRules() {
+    rulesReady = false; rulesError = '';
+    try {
+      const { data, error } = await supabaseClient.from('app_settings')
+        .select('fm_amount, fm_allow_late, fm_leave_breaks').eq('id', 1).maybeSingle();
+      if (error) { rulesError = /fm_(amount|allow_late|leave_breaks)/.test(error.message) ? 'មិនទាន់ដំណើរការ full-month.sql ក្នុង Supabase (column fm_* មិនទាន់មាន)' : error.message; return false; }
+      if (!data) { rulesError = 'រកមិនឃើញជួរ app_settings (id=1)'; return false; }
+      if (data.fm_amount == null) {
+        // ម្តងដំបូង៖ ផ្ទេរតម្លៃចាស់ពី localStorage (បើមាន) ឬប្រើ default ហើយរក្សាទុកក្នុង Supabase
+        let old = null;
+        try { const raw = localStorage.getItem(OLD_KEY); if (raw) old = JSON.parse(raw); } catch (e) { /* ignore */ }
+        rules = { ...DEF, ...(old || {}) };
+        const ok = await saveRulesNow();
+        if (ok) { try { localStorage.removeItem(OLD_KEY); } catch (e) { /* ignore */ } }
+        else return false;
+      } else {
+        rules = {
+          amount: Math.max(0, parseFloat(data.fm_amount) || 0),
+          allowLate: Math.max(0, parseInt(data.fm_allow_late, 10) || 0),
+          leaveBreaks: data.fm_leave_breaks !== false,
+        };
+        try { localStorage.removeItem(OLD_KEY); } catch (e) { /* ignore */ }
+      }
+      rulesReady = true;
+      return true;
+    } catch (e) {
+      rulesError = String(e && e.message || e);
+      return false;
+    }
   }
-  function saveRules() { try { localStorage.setItem(KEY, JSON.stringify(rules)); } catch (e) { /* ignore */ } }
+
+  async function saveRulesNow() {
+    const { data, error } = await supabaseClient.from('app_settings').update({
+      fm_amount: rules.amount, fm_allow_late: rules.allowLate, fm_leave_breaks: !!rules.leaveBreaks,
+    }).eq('id', 1).select('id');
+    if (error || !data || !data.length) { rulesError = error ? error.message : 'រក្សាទុកមិនបាន (រកមិនឃើញ app_settings id=1)'; return false; }
+    rulesError = '';
+    return true;
+  }
+  // debounce — កុំសរសេរ DB រាល់ការវាយគ្រាប់ចុច
+  function saveRules() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => { const ok = await saveRulesNow(); if (!ok && overlay) render(); }, 600);
+  }
 
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const money = n => r2(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -154,13 +199,15 @@
 
   function close() { if (overlay) overlay.classList.remove('open'); }
 
-  function open() {
+  async function open() {
     if (!overlay) build();
     curMonth = (typeof currentMonthlyMonth === 'function' && currentMonthlyMonth()) || todayStr().slice(0, 7);
     const $ = id => overlay.querySelector('#' + id);
-    $('fmAmount').value = rules.amount; $('fmLate').value = rules.allowLate; $('fmLeave').checked = !!rules.leaveBreaks;
     $('fmQ').value = ''; $('fmF').value = '';
     overlay.classList.add('open');
+    $('fmBody').innerHTML = '<tr><td colspan="13" style="padding:16px">កំពុងផ្ទុក...</td></tr>';
+    await loadRules();
+    $('fmAmount').value = rules.amount; $('fmLate').value = rules.allowLate; $('fmLeave').checked = !!rules.leaveBreaks;
     render();
   }
 
@@ -174,9 +221,11 @@
     $('fmMonthTxt').textContent = curMonth;
     $('fmMonth').value = curMonth;
     const locked = isMonthLocked(curMonth), ended = monthEnded(curMonth);
-    $('fmStatus').innerHTML = (locked ? '<div class="fm-warn">🔒 ខែនេះបានបិទហើយ — មើលបានតែមិនអាចបន្ថែម/កាត់ព្រីមបានទេ។</div>' : '')
+    $('fmStatus').innerHTML = (!rulesReady ? `<div class="fm-warn">⚠️ មិនអាចផ្ទុក/រក្សាទុកលក្ខខណ្ឌក្នុង Supabase បាន៖ ${esc(rulesError || 'មិនស្គាល់')}<br>ប៊ូតុង "ផ្តល់/កាត់ទាំងអស់" ត្រូវបានបិទ រហូតដល់ដោះស្រាយ។ <button class="secondary fm-act" id="fmRetry">↻ ព្យាយាមម្តងទៀត</button></div>` : (rulesError ? `<div class="fm-warn">⚠️ រក្សាទុកលក្ខខណ្ឌមិនជោគជ័យ៖ ${esc(rulesError)}</div>` : ''))
+      + (locked ? '<div class="fm-warn">🔒 ខែនេះបានបិទហើយ — មើលបានតែមិនអាចបន្ថែម/កាត់ព្រីមបានទេ។</div>' : '')
       + (!ended ? '<div class="fm-warn">⏳ ខែនេះមិនទាន់ចប់ — ស្ថានភាព "ពេញខែ" នៅបណ្ដោះអាសន្ន ហើយអាចប្តូរបើមានអវត្តមាន/យឺតបន្ថែម។</div>' : '');
-    ['fmAddAll', 'fmCutAll'].forEach(id => { $(id).disabled = locked; });
+    ['fmAddAll', 'fmCutAll'].forEach(id => { $(id).disabled = locked || !rulesReady; });
+    const rt = $('fmRetry'); if (rt) rt.addEventListener('click', open);
     buildRows();
     let nFull = 0, nPart = 0, sumAdd = 0, sumCut = 0;
     rows.forEach(r => { r.c.full ? nFull++ : nPart++; if (r.add) sumAdd += Number(r.add.amount) || 0; if (r.cut) sumCut += Number(r.cut.amount) || 0; });
@@ -252,6 +301,7 @@
   async function bulk(kind) {
     const month = curMonth;
     if (guardLocked(month, kind === 'add' ? 'ផ្តល់ព្រីម' : 'កាត់ព្រីម')) return;
+    if (!rulesReady) { await customAlert('មិនទាន់ទាញលក្ខខណ្ឌពី Supabase បាន — មិនអាចដំណើរការទាំងអស់បានទេ'); return; }
     const amount = r2(rules.amount);
     if (!(amount > 0)) { await customAlert('សូមកំណត់ "ចំនួនព្រីម ($)" ឱ្យលើសពី 0 ជាមុន'); return; }
     // គ្រប់បុគ្គលិកក្នុងខែ (មិនអនុលោមតាម filter/ស្វែងរក) ដែលត្រូវលក្ខខណ្ឌ ហើយមិនទាន់មានចំនួនដូចគ្នា
