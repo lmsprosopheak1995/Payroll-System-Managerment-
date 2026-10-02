@@ -298,3 +298,8 @@ body { background: var(--bg); }
 .hp-cmp { display: grid; grid-template-columns: minmax(70px, 1.5fr) 1fr 1fr 1.3fr; column-gap: 6px; row-gap: 6px; font-size: 0.72rem; align-items: baseline; }
 .hp-cmp > span:not(:nth-child(4n+1)) { text-align: right; font-variant-numeric: tabular-nums; }
 .hp-cmp .h { color: var(--text-muted); font-size: 0.66rem; }
+
+/* ---------- 17) ប៊ូតុងព្រីន (ប្រតិទិនវត្តមាន) មិនបែកអក្សរ ---------- */
+.portal #attPrintBtn { white-space: nowrap; flex: 0 0 auto; width: auto; padding: 6px 12px; display: inline-flex; align-items: center; justify-content: center; }
+.portal #attMonthInput { min-width: 0; flex: 1 1 auto; }
+#attendanceTabContent .portal-card > div:first-child > div { flex: 1 1 auto; justify-content: flex-end; }
