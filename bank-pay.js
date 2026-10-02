@@ -6,6 +6,7 @@
    ⚠️ មុខងារនេះ មិនផ្ទេរលុយដោយផ្ទាល់ពីកម្មវិធីទេ — វាបង្កើតឯកសារសម្រាប់ upload ក្នុង
       Internet/Mobile Banking របស់ក្រុមហ៊ុន (Bulk Transfer) ហើយតាមដានថាបានបើករួចឬនៅ។
 
+   សុវត្ថិភាព៖ ទិន្នន័យធនាគារចូលតាម RPC ដែលតម្រូវពាក្យសម្ងាត់ admin (សួរម្តងក្នុងមួយ session — មិនរក្សាទុកក្នុង browser)
    ដំឡើង៖ ① ដំណើរការ bank-pay.sql ក្នុង Supabase
            ② index.html ដាក់ក្រោម advance-sync.js៖  <script src="bank-pay.js"></script>
    ត្រូវការ៖ monthlyRows, currentMonthlyMonth, isMonthLocked, downloadXlsx, customAlert,
@@ -31,18 +32,32 @@
   const cleanTxt = v => String(v || '').replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, 80);
 
   // ---------------------------------------------------------------- data ----
+  let adminPw = null; // រក្សាក្នុង memory ប៉ុណ្ណោះ (បាត់ពេលបិទ/refresh)
+
+  async function askPw() {
+    if (adminPw) return adminPw;
+    const v = await customPrompt('បញ្ចូលពាក្យសម្ងាត់ Admin ដើម្បីមើល/កែព័ត៌មានធនាគារ៖', true);
+    return v ? v : null;
+  }
+  // ហៅ RPC ជាមួយពាក្យសម្ងាត់ — បើខុសសួរម្តងទៀត
+  async function bankRpc(fn, args) {
+    const pw = await askPw();
+    if (!pw) return { cancelled: true };
+    const { data, error } = await supabaseClient.rpc(fn, { p_password: pw, ...args });
+    if (error && /unauthorized/i.test(error.message)) { adminPw = null; return { error: { message: 'ពាក្យសម្ងាត់ Admin មិនត្រឹមត្រូវ' } }; }
+    if (!error) adminPw = pw;
+    return { data, error };
+  }
+
   async function loadBank(month) {
     missing = null;
-    const [a, b] = await Promise.all([
-      supabaseClient.from('employee_bank').select('*'),
-      supabaseClient.from('bank_payments').select('*').eq('month', month),
-    ]);
-    const err = a.error || b.error;
-    if (err) { missing = err.message; return false; }
+    const { data, error, cancelled } = await bankRpc('bank_load', { p_month: month });
+    if (cancelled) { missing = 'បានបោះបង់'; return false; }
+    if (error) { missing = error.message; return false; }
     bankInfo = {};
-    (a.data || []).forEach(r => { bankInfo[r.employee_id] = r; });
+    ((data && data.info) || []).forEach(r => { bankInfo[r.employee_id] = r; });
     Object.keys(bankPaid).filter(k => k.startsWith(month + '|')).forEach(k => delete bankPaid[k]);
-    (b.data || []).forEach(r => { bankPaid[r.month + '|' + r.employee_id] = r; });
+    ((data && data.paid) || []).forEach(r => { bankPaid[r.month + '|' + r.employee_id] = r; });
     return true;
   }
 
@@ -114,7 +129,8 @@
     overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="8" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
     const ok = await loadBank(curMonth);
     if (!ok) {
-      overlay.querySelector('#bpStatus').innerHTML = `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)}<br>សូមដំណើរការ <b>bank-pay.sql</b> ក្នុង Supabase ជាមុនសិន។</div>`;
+      overlay.querySelector('#bpStatus').innerHTML = `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)}<br>ប្រសិនបើមិនទាន់ដំណើរការ <b>bank-pay.sql</b> (v2) ក្នុង Supabase សូមដំណើរការជាមុន។ <button class="secondary" id="bpRetry" style="margin-left:8px">↻ ព្យាយាមម្តងទៀត</button></div>`;
+      const rt = overlay.querySelector('#bpRetry'); if (rt) rt.addEventListener('click', open);
       overlay.querySelector('#bpBody').innerHTML = '';
       return;
     }
@@ -173,8 +189,9 @@
     const filled = rows.filter(r => r.bank_name && r.account_no && r.account_name)
       .filter(r => { const o = bankInfo[r.employee_id] || {}; return o.bank_name !== r.bank_name || o.account_no !== r.account_no || o.account_name !== r.account_name; });
     if (!filled.length) { await customAlert('គ្មានការផ្លាស់ប្តូរ'); return; }
-    const payload = filled.map(({ locked, ...r }) => ({ ...r, updated_at: new Date().toISOString() }));
-    const { error } = await supabaseClient.from('employee_bank').upsert(payload, { onConflict: 'employee_id' });
+    const payload = filled.map(({ locked, ...r }) => r);
+    const { error, cancelled } = await bankRpc('bank_save_info', { p_rows: payload });
+    if (cancelled) return;
     if (error) { await customAlert('រក្សាទុកមិនបានជោគជ័យ៖ ' + error.message); return; }
     payload.forEach(r => {
       const old = bankInfo[r.employee_id];
@@ -248,10 +265,9 @@
       if (!todo.length) { await customAlert('គ្មានជួរដែលអាចសម្គាល់បានទេ' + (bad.length ? '\nខ្វះព័ត៌មាន/ទឹកប្រាក់៖ ' + bad.join(', ') : '')); return; }
       const total = todo.reduce((s, x) => s + x.amount_usd, 0);
       if (!(await customConfirm(`សម្គាល់ថា "បានបើកតាមធនាគារ" ${todo.length} នាក់ · សរុប $${money(total)}?\n(សូមប្រាកដថាបានផ្ទេរលុយរួចហើយ)${bad.length ? '\n\nរំលង៖ ' + bad.join(', ') : ''}`))) return;
-      const { error } = await supabaseClient.from('bank_payments').upsert(todo, { onConflict: 'month,employee_id' });
+      const { error, cancelled } = await bankRpc('bank_mark_paid', { p_month: curMonth, p_rows: todo.map(({ employee_id, amount_usd, bank_name, account_no, account_name, reference }) => ({ employee_id, amount_usd, bank_name, account_no, account_name, reference })) });
+      if (cancelled) return;
       if (error) { await customAlert('រក្សាទុកមិនបានជោគជ័យ៖ ' + error.message); return; }
-      // រក្សាព័ត៌មានធនាគារដែលបានប្រើ ក្នុង employee_bank ផងដែរ
-      await supabaseClient.from('employee_bank').upsert(todo.map(x => ({ employee_id: x.employee_id, bank_name: x.bank_name, account_no: x.account_no, account_name: x.account_name, updated_at: x.paid_at })), { onConflict: 'employee_id' });
       todo.forEach(x => {
         bankPaid[x.month + '|' + x.employee_id] = x; bankInfo[x.employee_id] = x;
         if (typeof logAudit === 'function') logAudit('bank_paid', { entity: 'bank_payment', ref: x.month + '|' + x.employee_id, month: x.month, employeeId: x.employee_id, new: { amount_usd: x.amount_usd, bank: x.bank_name, account_no: maskAcc(x.account_no) } });
@@ -260,7 +276,8 @@
       const del = ids.filter(isPaid);
       if (!del.length) { await customAlert('ជួរដែលបានជ្រើសមិនទាន់ត្រូវបានសម្គាល់ថាបានបើកទេ'); return; }
       if (!(await customConfirm(`ដកការសម្គាល់ "បានបើក" ${del.length} នាក់?`))) return;
-      const { error } = await supabaseClient.from('bank_payments').delete().eq('month', curMonth).in('employee_id', del);
+      const { error, cancelled } = await bankRpc('bank_unmark_paid', { p_month: curMonth, p_ids: del });
+      if (cancelled) return;
       if (error) { await customAlert('លុបមិនបានជោគជ័យ៖ ' + error.message); return; }
       del.forEach(id => {
         const old = bankPaid[curMonth + '|' + id]; delete bankPaid[curMonth + '|' + id];
