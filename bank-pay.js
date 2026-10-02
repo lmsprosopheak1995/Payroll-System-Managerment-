@@ -78,7 +78,9 @@
 .bp-tbl td,.bp-tbl th{white-space:nowrap;vertical-align:middle}
 .bp-ok{color:var(--success,#059669);font-weight:600}
 .bp-no{color:var(--text-muted,#5b6b80)}
-.bp-sum{font-size:.82rem;font-weight:600;margin-left:auto}
+.bp-sum{font-size:.82rem;font-weight:600;margin-left:auto;flex:1 0 100%;text-align:right}
+.bp-mon{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
+.bp-mon input{font-size:.8rem;padding:6px 8px}
 `;
 
   function build() {
@@ -96,6 +98,7 @@
           <button class="secondary" id="bpCsvBtn">⬇️ Export CSV</button>
           <button id="bpPaidBtn">✓ សម្គាល់ថាបានបើក (ជួរដែលបានជ្រើស)</button>
           <button class="secondary" id="bpUnpaidBtn">↩ ដកការសម្គាល់</button>
+          <span class="bp-mon"><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
         </div>
         <div class="table-wrap" style="max-height:56vh;overflow:auto;">
@@ -116,26 +119,60 @@
     $('bpCsvBtn').addEventListener('click', () => exportList('csv'));
     $('bpPaidBtn').addEventListener('click', () => markSelected(true));
     $('bpUnpaidBtn').addEventListener('click', () => markSelected(false));
+    $('bpMonthInput').addEventListener('change', e => switchMonth(e.target.value));
+    $('bpPrev').addEventListener('click', () => switchMonth(shiftMonth(curMonth, -1)));
+    $('bpNext').addEventListener('click', () => switchMonth(shiftMonth(curMonth, 1)));
     $('bpAll').addEventListener('change', e => overlay.querySelectorAll('.bp-chk:not(:disabled)').forEach(c => { c.checked = e.target.checked; }));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) close(); });
   }
 
   function close() { if (overlay) overlay.classList.remove('open'); }
 
-  async function open() {
-    if (!overlay) build();
-    curMonth = currentMonthlyMonth();
+  const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+  function shiftMonth(m, d) {
+    let [y, mo] = m.split('-').map(Number);
+    mo += d; while (mo > 12) { mo -= 12; y++; } while (mo < 1) { mo += 12; y--; }
+    return `${y}-${String(mo).padStart(2, '0')}`;
+  }
+
+  // មានព័ត៌មានធនាគារដែលបានវាយ ប៉ុន្តែមិនទាន់រក្សាទុក?
+  function hasUnsaved() {
+    return readRowInputs().some(r => !r.locked && (r.bank_name || r.account_no || r.account_name) &&
+      (() => { const o = bankInfo[r.employee_id] || {}; return o.bank_name !== r.bank_name || o.account_no !== r.account_no || o.account_name !== r.account_name; })());
+  }
+
+  async function loadMonthView() {
     overlay.querySelector('#bpMonth').textContent = curMonth;
-    overlay.classList.add('open');
+    overlay.querySelector('#bpMonthInput').value = curMonth;
+    overlay.querySelector('#bpStatus').innerHTML = '';
+    overlay.querySelector('#bpSum').textContent = '';
     overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="8" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
     const ok = await loadBank(curMonth);
     if (!ok) {
       overlay.querySelector('#bpStatus').innerHTML = `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)}<br>ប្រសិនបើមិនទាន់ដំណើរការ <b>bank-pay.sql</b> (v2) ក្នុង Supabase សូមដំណើរការជាមុន។ <button class="secondary" id="bpRetry" style="margin-left:8px">↻ ព្យាយាមម្តងទៀត</button></div>`;
-      const rt = overlay.querySelector('#bpRetry'); if (rt) rt.addEventListener('click', open);
+      const rt = overlay.querySelector('#bpRetry'); if (rt) rt.addEventListener('click', loadMonthView);
       overlay.querySelector('#bpBody').innerHTML = '';
+      curRows = [];
       return;
     }
     render();
+  }
+
+  // ប្តូរទៅខែផ្សេង (ជ្រើសខែណាក៏បាន)
+  async function switchMonth(m) {
+    const input = overlay.querySelector('#bpMonthInput');
+    if (!MONTH_RE.test(m || '')) { input.value = curMonth; return; }
+    if (m === curMonth) return;
+    if (hasUnsaved() && !(await customConfirm('មានព័ត៌មានធនាគារដែលមិនទាន់រក្សាទុក — ប្តូរខែនឹងបាត់។ បន្ត?'))) { input.value = curMonth; return; }
+    curMonth = m;
+    await loadMonthView();
+  }
+
+  async function open() {
+    if (!overlay) build();
+    curMonth = currentMonthlyMonth();
+    overlay.classList.add('open');
+    await loadMonthView();
   }
 
   function render() {
