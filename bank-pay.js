@@ -66,6 +66,7 @@
 
   // ---------------------------------------------------------------- UI ----
   const CSS = `
+#customDialogOverlay{z-index:99999!important}
 .bp-ovl{position:fixed;inset:0;z-index:9980;background:rgba(8,16,28,.55);display:none;align-items:center;justify-content:center;padding:16px}
 .bp-ovl.open{display:flex}
 .bp-box{width:100%;max-width:1100px;max-height:94vh;overflow:auto;border-radius:16px;background:var(--card-bg,#fff);color:var(--text,#0f1b2d);border:1px solid var(--border,#e1e8ef);padding:16px 18px;box-shadow:0 24px 64px rgba(15,27,45,.35)}
