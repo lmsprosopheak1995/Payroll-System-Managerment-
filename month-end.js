@@ -2,7 +2,7 @@
    month-end.js — សារ "ពិនិត្យប្រាក់ខែបុគ្គលិក" ពេលដល់ចុងខែ (Admin)
    • ពេលបើកកម្មវិធី ហើយជិតចប់ខែ (២ ថ្ងៃចុងក្រោយ) ឬខែមុនមិនទាន់បិទ (ក្នុង ១០ ថ្ងៃដំបូង)
      → បង្ហាញបញ្ជីត្រួតពិនិត្យ ដើម្បីកុំភ្លេចមុនបិទខែ/បើកប្រាក់ខែ
-   • កាលវិភាគបើកប្រាក់ខែ៖ ដងទី១ ថ្ងៃ 25 (ប្រាក់ខែទី១) · ដងទី២ ថ្ងៃទី 10 នៃខែបន្ទាប់ (សៅរ៍→9 អាទិត្យ→8) — បង្ហាញថ្ងៃនៅសល់ក្នុងសារ
+   • កាលវិភាគបើកប្រាក់ខែ៖ ដងទី១ ថ្ងៃ 25 (ប្រាក់ខែទី១) · ដងទី២ ថ្ងៃទី 10 នៃខែបន្ទាប់ (សៅរ៍/អាទិត្យ/ថ្ងៃបុណ្យ → ថយទៅថ្ងៃធ្វើការមុន) — បង្ហាញថ្ងៃនៅសល់ក្នុងសារ
    • ពិនិត្យ៖ ខែមិនទាន់បិទ · ថ្ងៃមិនទាន់កត់វត្តមាន · ប្រាក់កាត់យឺត/ច្បាប់មិនទាន់បញ្ចូល ·
               សំណើច្បាប់/ពាក្យតវ៉ាមិនទាន់សម្រេច · គ្មានប្រាក់ខែមូលដ្ឋាន · ប្រាក់ខែសុទ្ធ ≤ 0
    • ប៊ូតុង "🔔 ពិនិត្យចុងខែ" ក្នុងផ្ទាំងប្រាក់ខែប្រចាំខែ — បើកមើលបានគ្រប់ពេល (ខែដែលបានជ្រើស)
@@ -38,6 +38,11 @@
 
   const nextMonthOf = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
   const dayDiff = (a, b) => Math.round((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000);
+  const holidayName = d => (typeof holidays !== 'undefined' && holidays && holidays[d] !== undefined) ? (holidays[d] || 'ថ្ងៃបុណ្យ') : null;
+  const isOffDay = d => { const w = new Date(d + 'T00:00:00').getDay(); return w === 0 || w === 6 || holidayName(d) !== null; };
+  const shiftDay = (d, k) => { const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() + k); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`; };
+  const rollBack = d => { let x = d, n = 0; while (isOffDay(x) && n < 14) { x = shiftDay(x, -1); n++; } return x; };   // សៅរ៍/អាទិត្យ/ថ្ងៃបុណ្យ → ថយទៅថ្ងៃធ្វើការមុនគេ
+  const offWhy = d => { const h = holidayName(d); if (h !== null) return 'ថ្ងៃបុណ្យ ' + h; const w = new Date(d + 'T00:00:00').getDay(); return w === 6 ? 'សៅរ៍' : (w === 0 ? 'អាទិត្យ' : ''); };
   const whenTxt = d => d > 0 ? `នៅសល់ ${d} ថ្ងៃ` : (d === 0 ? 'ថ្ងៃនេះ' : `ហួសកំណត់ ${-d} ថ្ងៃ`);
 
   // ---------------------------------------------------------------- ការត្រួតពិនិត្យ ----
@@ -55,17 +60,16 @@
       items.push({ lvl: 'bad', text: 'ទិន្នន័យខ្លះផ្ទុកមិនជោគជ័យ — លេខខាងក្រោមអាចមិនពេញលេញ', detail: Object.keys(loadFailures).join(', ') });
 
     // កាលវិភាគបើកប្រាក់ ២ ដង
-    // ថ្ងៃទី 10 នៃខែបន្ទាប់ · សៅរ៍ → 9 · អាទិត្យ → 8
-    const nm = nextMonthOf(month), [ny, nmo] = nm.split('-').map(Number);
-    const ndow = new Date(ny, nmo - 1, 10).getDay();
-    const finalDate = `${nm}-${ndow === 6 ? '09' : ndow === 0 ? '08' : '10'}`;
+    // ថ្ងៃទី 10 នៃខែបន្ទាប់ · សៅរ៍ → 9 · អាទិត្យ → 8 · ថ្ងៃបុណ្យ → ថយទៅថ្ងៃធ្វើការមុនគេ
+    const finalBase = nextMonthOf(month) + '-10';
+    const finalDate = rollBack(finalBase);
     const dLeft = dayDiff(finalDate, todayStr());
     items.push({ lvl: locked || dLeft > 3 ? 'info' : (dLeft < 0 ? 'bad' : 'warn'),
-      text: `ដងទី២ បើកប្រាក់ខែនៅសល់ (${finalDate}${ndow === 6 || ndow === 0 ? ` — ថ្ងៃទី 10 ត្រូវ${ndow === 6 ? 'សៅរ៍' : 'អាទិត្យ'} ប្តូរមកមុន` : ''}) · ${whenTxt(dLeft)}`,
+      text: `ដងទី២ បើកប្រាក់ខែនៅសល់ (${finalDate}${finalDate !== finalBase ? ` — ថ្ងៃទី 10 ត្រូវ${offWhy(finalBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dLeft)}`,
       detail: locked ? 'ខែបានបិទរួច — អាចបើកតាមធនាគារបាន' : 'ត្រូវបិទខែ ហើយបើកតាមធនាគារ មុនថ្ងៃនេះ' });
-    if (typeof advanceDateOf === 'function') {
-      const advDate = advanceDateOf(month), dAdv = dayDiff(advDate, todayStr());
-      if (dAdv >= -2) items.push({ lvl: 'info', text: `ដងទី១ ប្រាក់ខែទី១ ថ្ងៃ 25 (${advDate}) · ${whenTxt(dAdv)}` });
+    {
+      const advBase = month + '-25', advDate = rollBack(advBase), dAdv = dayDiff(advDate, todayStr());
+      if (dAdv >= -2) items.push({ lvl: 'info', text: `ដងទី១ ប្រាក់ខែទី១ (${advDate}${advDate !== advBase ? ` — ថ្ងៃទី 25 ត្រូវ${offWhy(advBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dAdv)}` });
     }
 
     if (locked) items.push({ lvl: 'ok', text: `ខែ ${month} បានបិទរួចរាល់` });
