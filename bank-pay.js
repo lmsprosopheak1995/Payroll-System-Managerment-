@@ -47,11 +47,12 @@
     const pw = await askPw();
     if (!pw) return { cancelled: true };
     const { data, error } = await supabaseClient.rpc(fn, { p_password: pw, ...args });
+    if (error) console.warn('bank rpc', fn, error.message);
     if (error && /unauthorized/i.test(error.message)) { adminPw = null; return { error: { message: 'ពាក្យសម្ងាត់ Admin មិនត្រឹមត្រូវ' } }; }
     if (error && /account_issue/.test(error.message)) return { error: { message: 'គណនីមានបញ្ហា — សូមប្តូរគណនីថ្មី ឬដោះស្រាយបញ្ហាជាមុន' } };
     if (error && /no_account/.test(error.message)) return { error: { message: 'បុគ្គលិកនេះមិនទាន់មានគណនីធនាគារទេ' } };
     if (error && /incomplete/.test(error.message)) return { error: { message: 'ព័ត៌មានគណនីមិនគ្រប់ (ធនាគារ + លេខគណនី + ឈ្មោះគណនី)' } };
-    if (error && /bank_(history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase' } };
+    if (error && /bank_(history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase — សូមបើក Supabase → SQL Editor ហើយ Run ឯកសារ bank-pay.sql ទាំងមូលម្តងទៀត រួចរង់ចាំ ១០ វិនាទី' } };
     if (!error) adminPw = pw;
     return { data, error };
   }
