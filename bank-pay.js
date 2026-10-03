@@ -2,7 +2,8 @@
    bank-pay.js — បើកប្រាក់ខែតាមប្រព័ន្ធធនាគារ (Admin)
    ① រក្សាទុកគណនីធនាគាររបស់បុគ្គលិក  ② Export បញ្ជីផ្ទេរប្រាក់ (Excel / CSV)
    ③ សម្គាល់ថា "បានបើកតាមធនាគារ" ក្នុងខែដែលបានបិទ
-   ④ ប្រវត្តិបើកប្រាក់ · បញ្ជីបុគ្គលិក · គណនីមានបញ្ហា · ប្តូរគណនីថ្មី (ត្រូវការ bank-pay.sql v3)
+   ④ ប្រវត្តិបើកប្រាក់ · បញ្ជីបុគ្គលិក · គណនីមានបញ្ហា · ប្តូរគណនីថ្មី
+   ⑤ បើកប្រាក់ខែ ២ ដង/ខែ៖ ដងទី១ = ប្រាក់ខែទី១ (Advance) · ដងទី២ = ប្រាក់ខែសុទ្ធនៅសល់ (ត្រូវការ bank-pay.sql v4)
 
    ⚠️ មុខងារនេះ មិនផ្ទេរលុយដោយផ្ទាល់ពីកម្មវិធីទេ — វាបង្កើតឯកសារសម្រាប់ upload ក្នុង
       Internet/Mobile Banking របស់ក្រុមហ៊ុន (Bulk Transfer) ហើយតាមដានថាបានបើករួចឬនៅ។
@@ -22,7 +23,8 @@
     'FTB', 'Bakong', 'TrueMoney', 'Pi Pay'];
 
   let bankInfo = {};      // empId -> { bank_name, account_no, account_name }
-  let bankPaid = {};      // 'YYYY-MM|empId' -> row
+  let bankPaid = {};      // 'YYYY-MM|empId|round' -> row  (round = advance | final)
+  let curRound = 'final'; // ដងបើកប្រាក់៖ advance = ប្រាក់ខែទី១ · final = ចុងខែ (នៅសល់)
   let missing = null;     // សារកំហុស បើតារាងមិនទាន់មាន
   let overlay = null, curMonth = '', curRows = [];
 
@@ -49,7 +51,7 @@
     if (error && /account_issue/.test(error.message)) return { error: { message: 'គណនីមានបញ្ហា — សូមប្តូរគណនីថ្មី ឬដោះស្រាយបញ្ហាជាមុន' } };
     if (error && /no_account/.test(error.message)) return { error: { message: 'បុគ្គលិកនេះមិនទាន់មានគណនីធនាគារទេ' } };
     if (error && /incomplete/.test(error.message)) return { error: { message: 'ព័ត៌មានគណនីមិនគ្រប់ (ធនាគារ + លេខគណនី + ឈ្មោះគណនី)' } };
-    if (error && /bank_(history|set_issue|change_account)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v3) ក្នុង Supabase' } };
+    if (error && /bank_(history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase' } };
     if (!error) adminPw = pw;
     return { data, error };
   }
@@ -62,11 +64,18 @@
     bankInfo = {};
     ((data && data.info) || []).forEach(r => { bankInfo[r.employee_id] = r; });
     Object.keys(bankPaid).filter(k => k.startsWith(month + '|')).forEach(k => delete bankPaid[k]);
-    ((data && data.paid) || []).forEach(r => { bankPaid[r.month + '|' + r.employee_id] = r; });
+    ((data && data.paid) || []).forEach(r => { bankPaid[r.month + '|' + r.employee_id + '|' + (r.kind || 'final')] = r; });
     return true;
   }
 
-  const isPaid = (empId) => !!bankPaid[curMonth + '|' + empId];
+  const ROUND_LABEL = { advance: 'ដងទី១ · ប្រាក់ខែទី១', final: 'ដងទី២ · ចុងខែ (នៅសល់)' };
+  const ROUND_SHORT = { advance: 'ប្រាក់ខែទី១', final: 'ចុងខែ' };
+  const pkey = (m, id, round) => `${m}|${id}|${round || curRound}`;
+  const isPaid = (empId, round) => !!bankPaid[pkey(curMonth, empId, round)];
+  const refOf = () => (curRound === 'advance' ? 'Salary advance ' : 'Salary ') + curMonth;
+  // ទឹកប្រាក់នៃដងបច្ចុប្បន្ន៖ ទី១ = ប្រាក់ខែទី១ (តាមច្បាប់) · ទី២ = ប្រាក់ខែសុទ្ធ (បានកាត់ប្រាក់ខែទី១ រួច)
+  const advOf = row => { const a = row.adv; return (a && a.eligible !== false) ? Math.max(0, r2(a.amount)) : 0; };
+  const amountOf = row => (curRound === 'advance' ? advOf(row) : r2(row.t.net));
   const hasBank = (empId) => { const i = bankInfo[empId]; return !!(i && i.bank_name && i.account_no && i.account_name); };
   // គណនីមានបញ្ហា — ចាត់ទុកថាមានបញ្ហា លុះត្រាតែលេខគណនីដែលកំពុងប្រើនៅដូចដែលបានសម្គាល់
   const issueOf = (empId, inf) => { const o = bankInfo[empId]; return (o && o.issue && (!inf || !inf.account_no || inf.account_no === o.account_no)) ? o.issue : ''; };
@@ -107,7 +116,7 @@
 .bp-reason{color:#dc2626;font-size:.74rem;white-space:normal;max-width:260px}
 .bp-sum{font-size:.82rem;font-weight:600;margin-left:auto;flex:1 0 100%;text-align:right}
 .bp-mon{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
-.bp-mon input{font-size:.8rem;padding:6px 8px}
+.bp-mon input,.bp-mon select{font-size:.8rem;padding:6px 8px}
 `;
 
   function build() {
@@ -129,7 +138,7 @@
           <button class="secondary" id="bpListBtn">👥 បញ្ជីបុគ្គលិក</button>
           <button class="secondary" id="bpProbBtn">⚠️ គណនីមានបញ្ហា</button>
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
-          <span class="bp-mon"><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
+          <span class="bp-mon"><select id="bpRound" title="ដងបើកប្រាក់ក្នុងមួយខែ"><option value="advance">ដងទី១ · ប្រាក់ខែទី១</option><option value="final" selected>ដងទី២ · ចុងខែ (នៅសល់)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
         </div>
         <div class="table-wrap" style="max-height:56vh;overflow:auto;">
@@ -150,6 +159,7 @@
     $('bpCsvBtn').addEventListener('click', () => exportList('csv'));
     $('bpPaidBtn').addEventListener('click', () => markSelected(true));
     $('bpUnpaidBtn').addEventListener('click', () => markSelected(false));
+    $('bpRound').addEventListener('change', e => { curRound = e.target.value; render(); });
     $('bpHistBtn').addEventListener('click', showHistory);
     $('bpListBtn').addEventListener('click', showEmpList);
     $('bpProbBtn').addEventListener('click', showProblems);
@@ -179,6 +189,7 @@
   async function loadMonthView() {
     overlay.querySelector('#bpMonth').textContent = curMonth;
     overlay.querySelector('#bpMonthInput').value = curMonth;
+    overlay.querySelector('#bpRound').value = curRound;
     overlay.querySelector('#bpStatus').innerHTML = '';
     overlay.querySelector('#bpSum').textContent = '';
     overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="8" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
@@ -213,22 +224,28 @@
   function render() {
     curRows = monthlyRows(curMonth);
     const locked = isMonthLocked(curMonth);
-    overlay.querySelector('#bpStatus').innerHTML = locked ? '' :
-      `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុន ទើបអាចសម្គាល់ថា "បានបើក" បាន (Export ពិនិត្យមើលបាន)។</div>`;
-    overlay.querySelector('#bpPaidBtn').disabled = !locked;
-    overlay.querySelector('#bpBody').innerHTML = curRows.length ? curRows.map(({ e, t }, i) => {
+    const advDate = curRows.length && curRows[0].adv ? (curRows[0].adv.dueDate || curRows[0].adv.advanceDate || '') : '';
+    overlay.querySelector('#bpStatus').innerHTML = curRound === 'advance'
+      ? `<div class="bp-warn" style="background:#e0f2fe;color:#075985">💵 <b>ដងទី១ · ប្រាក់ខែទី១</b> — ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)${advDate ? ` · ថ្ងៃទូទាត់ ${esc(advDate)}` : ''}។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
+      : (locked ? '<div class="bp-warn" style="background:#e0f2fe;color:#075985">💵 <b>ដងទី២ · ចុងខែ</b> — ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>'
+        : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុន ទើបអាចសម្គាល់ថា "បានបើក" ដងទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
+    overlay.querySelector('#bpPaidBtn').disabled = curRound === 'final' && !locked;
+    overlay.querySelector('#bpBody').innerHTML = curRows.length ? curRows.map((row, i) => {
+      const { e, t } = row;
       const inf = bankInfo[e.id] || {};
-      const paid = bankPaid[curMonth + '|' + e.id];
-      const net = r2(t.net);
+      const paid = bankPaid[pkey(curMonth, e.id)];
+      const net = amountOf(row);
+      const advDed = curRound === 'final' && advOf(row) > 0 && row.adv && (row.adv.due || locked) ? advOf(row) : 0;
+      const advNote = advDed ? `<div style="font-size:.66rem;color:${isPaid(e.id, 'advance') ? 'var(--success,#059669)' : '#b45309'}">កាត់ប្រាក់ខែទី១ $${money(advDed)}${isPaid(e.id, 'advance') ? ' (បានបើក ✓)' : ' (មិនទាន់កត់បើកតាមធនាគារ)'}</div>` : '';
       return `<tr data-id="${esc(e.id)}">
         <td><input type="checkbox" class="bp-chk" ${net <= 0 ? 'disabled' : ''}></td>
         <td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td>
         <td><input type="text" class="bp-bank" list="bpBanks" value="${esc(inf.bank_name || '')}" placeholder="ABA Bank" ${paid ? 'disabled' : ''}></td>
         <td><input type="text" class="bp-acc" inputmode="numeric" value="${esc(inf.account_no || '')}" placeholder="000 123 456" ${paid ? 'disabled' : ''}></td>
         <td><input type="text" class="bp-name" value="${esc(inf.account_name || '')}" placeholder="SOK SOPHEA" ${paid ? 'disabled' : ''}></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;">${money(net)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${money(net)}${advNote}</td>
         <td>${paid ? `<span class="bp-ok">✓ បានបើក</span><div class="bp-no" style="font-size:.68rem">${esc(String(paid.paid_at || '').slice(0, 16).replace('T', ' '))}</div>`
-          : (net <= 0 ? '<span class="bp-no">គ្មានទឹកប្រាក់</span>' : (!hasBank(e.id) ? '<span style="color:#b45309">ខ្វះព័ត៌មានធនាគារ</span>' : (issueOf(e.id) ? `<span style="color:#dc2626;font-weight:600" title="${esc(issueOf(e.id))}">⚠ មានបញ្ហា</span>` : '<span class="bp-no">មិនទាន់បើក</span>')))}</td>
+          : (net <= 0 ? `<span class="bp-no">${curRound === 'advance' ? 'មិនមានសិទ្ធិប្រាក់ខែទី១' : 'គ្មានទឹកប្រាក់'}</span>` : (!hasBank(e.id) ? '<span style="color:#b45309">ខ្វះព័ត៌មានធនាគារ</span>' : (issueOf(e.id) ? `<span style="color:#dc2626;font-weight:600" title="${esc(issueOf(e.id))}">⚠ មានបញ្ហា</span>` : '<span class="bp-no">មិនទាន់បើក</span>')))}</td>
       </tr>`;
     }).join('') : '<tr><td colspan="8" style="padding:16px;">មិនមានបុគ្គលិកក្នុងខែនេះ</td></tr>';
     updateSum();
@@ -242,9 +259,9 @@
   }
 
   function updateSum() {
-    const total = curRows.reduce((s, { t }) => s + Math.max(0, r2(t.net)), 0);
-    const paid = curRows.reduce((s, { e, t }) => s + (isPaid(e.id) ? Math.max(0, r2(t.net)) : 0), 0);
-    overlay.querySelector('#bpSum').textContent = `សរុប $${money(total)} · បានបើក $${money(paid)} · នៅសល់ $${money(total - paid)}`;
+    const total = curRows.reduce((s, row) => s + Math.max(0, amountOf(row)), 0);
+    const paid = curRows.reduce((s, row) => s + (isPaid(row.e.id) ? Math.max(0, amountOf(row)) : 0), 0);
+    overlay.querySelector('#bpSum').textContent = `${ROUND_SHORT[curRound]} · សរុប $${money(total)} · បានបើក $${money(paid)} · នៅសល់ $${money(total - paid)}`;
   }
 
   // ---------------------------------------------------------------- save bank info ----
@@ -291,8 +308,9 @@
     // ប្រើតម្លៃក្នុងប្រអប់ (មិនទាន់រក្សាទុកក៏បាន) ប៉ុន្តែត្រូវពេញលេញ
     const inputs = {}; readRowInputs().forEach(r => { inputs[r.employee_id] = r; });
     const list = [], skipped = [];
-    curRows.forEach(({ e, t }) => {
-      const net = r2(t.net);
+    curRows.forEach(row => {
+      const { e } = row;
+      const net = amountOf(row);
       const inf = inputs[e.id] || bankInfo[e.id] || {};
       if (net <= 0) return;
       if (isPaid(e.id)) { skipped.push(`${e.name} (បានបើករួច)`); return; }
@@ -303,11 +321,12 @@
     if (!list.length) { await customAlert('គ្មានបុគ្គលិកដែលអាច Export បានទេ' + (skipped.length ? '\n\nរំលង៖\n' + skipped.join('\n') : '')); return; }
     if (skipped.length && !(await customConfirm(`នឹង Export ${list.length} នាក់ ហើយរំលង ${skipped.length} នាក់៖\n${skipped.slice(0, 10).join('\n')}${skipped.length > 10 ? '\n…' : ''}\n\nបន្ត?`))) return;
 
-    const ref = 'Salary ' + curMonth;
+    const ref = refOf();
+    const suffix = curRound === 'advance' ? '_advance' : '_final';
     const total = list.reduce((s, x) => s + x.net, 0);
     if (kind === 'xlsx') {
-      downloadXlsx(`bank_transfer_${curMonth}.xlsx`, [{
-        name: 'Bank Transfer ' + curMonth,
+      downloadXlsx(`bank_transfer_${curMonth}${suffix}.xlsx`, [{
+        name: 'Bank Transfer ' + curMonth + (curRound === 'advance' ? ' Adv' : ''),
         columns: [
           { header: '#', width: 5, fmt: 'int' }, { header: 'Account Name', width: 28, fmt: 'text' }, { header: 'Account Number', width: 20, fmt: 'text' },
           { header: 'Bank', width: 26, fmt: 'text' }, { header: 'Amount (USD)', width: 14, fmt: 'usd' }, { header: 'Remark', width: 18, fmt: 'text' },
@@ -320,15 +339,15 @@
       const q = v => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; }; // ការពារ formula injection
       const lines = [['No', 'Account Name', 'Account Number', 'Bank', 'Amount (USD)', 'Remark', 'Employee ID', 'Employee Name'].map(q).join(',')];
       list.forEach(({ e, net, inf }, i) => lines.push([i + 1, inf.account_name, inf.account_no, inf.bank_name, net.toFixed(2), ref, e.username || '', e.name || ''].map((v, c) => c === 0 || c === 4 ? String(v) : q(v)).join(',')));
-      pcDownloadText(`bank_transfer_${curMonth}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+      pcDownloadText(`bank_transfer_${curMonth}${suffix}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
     }
-    if (typeof logAudit === 'function') logAudit('bank_export', { entity: 'bank_payments', ref: curMonth, month: curMonth, new: { count: list.length, total_usd: r2(total), format: kind } });
-    await customAlert(`បាន Export ${list.length} នាក់ · សរុប $${money(total)}\nសូមពិនិត្យលេខគណនីឱ្យត្រឹមត្រូវ មុន upload ទៅធនាគារ។`);
+    if (typeof logAudit === 'function') logAudit('bank_export', { entity: 'bank_payments', ref: curMonth, month: curMonth, new: { count: list.length, total_usd: r2(total), format: kind, round: curRound } });
+    await customAlert(`បាន Export (${ROUND_SHORT[curRound]}) ${list.length} នាក់ · សរុប $${money(total)}\nសូមពិនិត្យលេខគណនីឱ្យត្រឹមត្រូវ មុន upload ទៅធនាគារ។`);
   }
 
   // ---------------------------------------------------------------- mark paid ----
   async function markSelected(paid) {
-    if (paid && !isMonthLocked(curMonth)) { await customAlert(`ត្រូវ "🔒 បិទខែ" ${curMonth} ជាមុន ទើបអាចសម្គាល់ថាបានបើក (ដើម្បីឱ្យទឹកប្រាក់ថេរ)`); return; }
+    if (paid && curRound === 'final' && !isMonthLocked(curMonth)) { await customAlert(`ដងទី២ (ចុងខែ)៖ ត្រូវ "🔒 បិទខែ" ${curMonth} ជាមុន ទើបអាចសម្គាល់ថាបានបើក (ដើម្បីឱ្យទឹកប្រាក់ថេរ)`); return; }
     const ids = [...overlay.querySelectorAll('#bpBody tr[data-id]')].filter(tr => tr.querySelector('.bp-chk').checked).map(tr => tr.dataset.id);
     if (!ids.length) { await customAlert('សូមជ្រើសរើសបុគ្គលិកយ៉ាងហោចណាស់ម្នាក់'); return; }
     const inputs = {}; readRowInputs().forEach(r => { inputs[r.employee_id] = r; });
@@ -338,31 +357,32 @@
       ids.forEach(id => {
         const row = curRows.find(x => x.e.id === id); if (!row) return;
         if (isPaid(id)) return;
-        const inf = inputs[id] || bankInfo[id] || {}, net = r2(row.t.net);
+        const inf = inputs[id] || bankInfo[id] || {}, net = amountOf(row);
+        if (curRound === 'advance' && !isMonthLocked(curMonth) && !(row.adv && row.adv.due)) { bad.push(row.e.name + ' (មិនទាន់ដល់ថ្ងៃទូទាត់)'); return; }
         if (net <= 0 || !(inf.bank_name && inf.account_no && inf.account_name) || issueOf(id, inf)) { bad.push(row.e.name); return; }
         todo.push({ month: curMonth, employee_id: id, amount_usd: net, bank_name: inf.bank_name, account_no: inf.account_no, account_name: inf.account_name,
-          status: 'paid', reference: 'Salary ' + curMonth, paid_at: new Date().toISOString() });
+          kind: curRound, status: 'paid', reference: refOf(), paid_at: new Date().toISOString() });
       });
       if (!todo.length) { await customAlert('គ្មានជួរដែលអាចសម្គាល់បានទេ' + (bad.length ? '\nខ្វះព័ត៌មាន/ទឹកប្រាក់៖ ' + bad.join(', ') : '')); return; }
       const total = todo.reduce((s, x) => s + x.amount_usd, 0);
-      if (!(await customConfirm(`សម្គាល់ថា "បានបើកតាមធនាគារ" ${todo.length} នាក់ · សរុប $${money(total)}?\n(សូមប្រាកដថាបានផ្ទេរលុយរួចហើយ)${bad.length ? '\n\nរំលង៖ ' + bad.join(', ') : ''}`))) return;
-      const { error, cancelled } = await bankRpc('bank_mark_paid', { p_month: curMonth, p_rows: todo.map(({ employee_id, amount_usd, bank_name, account_no, account_name, reference }) => ({ employee_id, amount_usd, bank_name, account_no, account_name, reference })) });
+      if (!(await customConfirm(`សម្គាល់ថា "បានបើកតាមធនាគារ" (${ROUND_SHORT[curRound]}) ${todo.length} នាក់ · សរុប $${money(total)}?\n(សូមប្រាកដថាបានផ្ទេរលុយរួចហើយ)${bad.length ? '\n\nរំលង៖ ' + bad.join(', ') : ''}`))) return;
+      const { error, cancelled } = await bankRpc('bank_mark_paid', { p_month: curMonth, p_kind: curRound, p_rows: todo.map(({ employee_id, amount_usd, bank_name, account_no, account_name, reference }) => ({ employee_id, amount_usd, bank_name, account_no, account_name, reference })) });
       if (cancelled) return;
       if (error) { await customAlert('រក្សាទុកមិនបានជោគជ័យ៖ ' + error.message); return; }
       todo.forEach(x => {
-        bankPaid[x.month + '|' + x.employee_id] = x; bankInfo[x.employee_id] = x;
-        if (typeof logAudit === 'function') logAudit('bank_paid', { entity: 'bank_payment', ref: x.month + '|' + x.employee_id, month: x.month, employeeId: x.employee_id, new: { amount_usd: x.amount_usd, bank: x.bank_name, account_no: maskAcc(x.account_no) } });
+        bankPaid[pkey(x.month, x.employee_id, x.kind)] = x; bankInfo[x.employee_id] = x;
+        if (typeof logAudit === 'function') logAudit('bank_paid', { entity: 'bank_payment', ref: x.month + '|' + x.employee_id + '|' + x.kind, month: x.month, employeeId: x.employee_id, new: { round: x.kind, amount_usd: x.amount_usd, bank: x.bank_name, account_no: maskAcc(x.account_no) } });
       });
     } else {
       const del = ids.filter(isPaid);
       if (!del.length) { await customAlert('ជួរដែលបានជ្រើសមិនទាន់ត្រូវបានសម្គាល់ថាបានបើកទេ'); return; }
-      if (!(await customConfirm(`ដកការសម្គាល់ "បានបើក" ${del.length} នាក់?`))) return;
-      const { error, cancelled } = await bankRpc('bank_unmark_paid', { p_month: curMonth, p_ids: del });
+      if (!(await customConfirm(`ដកការសម្គាល់ "បានបើក" (${ROUND_SHORT[curRound]}) ${del.length} នាក់?`))) return;
+      const { error, cancelled } = await bankRpc('bank_unmark_paid', { p_month: curMonth, p_kind: curRound, p_ids: del });
       if (cancelled) return;
       if (error) { await customAlert('លុបមិនបានជោគជ័យ៖ ' + error.message); return; }
       del.forEach(id => {
-        const old = bankPaid[curMonth + '|' + id]; delete bankPaid[curMonth + '|' + id];
-        if (typeof logAudit === 'function') logAudit('bank_unpaid', { entity: 'bank_payment', ref: curMonth + '|' + id, month: curMonth, employeeId: id, old: old ? { amount_usd: old.amount_usd } : null, new: null });
+        const old = bankPaid[pkey(curMonth, id)]; delete bankPaid[pkey(curMonth, id)];
+        if (typeof logAudit === 'function') logAudit('bank_unpaid', { entity: 'bank_payment', ref: curMonth + '|' + id + '|' + curRound, month: curMonth, employeeId: id, old: old ? { amount_usd: old.amount_usd } : null, new: null });
       });
     }
     render();
@@ -399,12 +419,12 @@
     const txt = cleanTxt(reason);
     if (!txt) { await customAlert('សូមបញ្ជាក់មូលហេតុ'); return false; }
     let unmark = null;
-    if (bankPaid[curMonth + '|' + empId] && await customConfirm(`ខែ ${curMonth} ត្រូវបានសម្គាល់ថាបានបើករួច។\nដកការសម្គាល់នោះ (ព្រោះប្រាក់មិនទាន់ដល់)?`)) unmark = curMonth;
-    const { error, cancelled } = await bankRpc('bank_set_issue', { p_emp: empId, p_issue: txt, p_unmark_month: unmark });
+    if (bankPaid[pkey(curMonth, empId)] && await customConfirm(`ខែ ${curMonth} (${ROUND_SHORT[curRound]}) ត្រូវបានសម្គាល់ថាបានបើករួច។\nដកការសម្គាល់នោះ (ព្រោះប្រាក់មិនទាន់ដល់)?`)) unmark = curMonth;
+    const { error, cancelled } = await bankRpc('bank_set_issue', { p_emp: empId, p_issue: txt, p_unmark_month: unmark, p_unmark_kind: unmark ? curRound : null });
     if (cancelled) return false;
     if (error) { await customAlert('មិនជោគជ័យ៖ ' + error.message); return false; }
     bankInfo[empId] = { ...inf, issue: txt, issue_at: new Date().toISOString() };
-    if (unmark) delete bankPaid[unmark + '|' + empId];
+    if (unmark) delete bankPaid[pkey(unmark, empId)];
     audit('bank_issue_flag', empId, { new: { issue: txt, account_no: maskAccount(inf.account_no), unmarked_month: unmark } });
     refreshMain();
     return true;
@@ -413,7 +433,7 @@
   async function resolveIssue(empId) {
     const inf = bankInfo[empId]; if (!inf || !inf.issue) return false;
     if (!(await customConfirm(`ដោះស្រាយបញ្ហាគណនីរបស់ ${nameOf(empId)}?\n(គណនីនេះនឹងអាចបើកប្រាក់បានឡើងវិញ)`))) return false;
-    const { error, cancelled } = await bankRpc('bank_set_issue', { p_emp: empId, p_issue: '', p_unmark_month: null });
+    const { error, cancelled } = await bankRpc('bank_set_issue', { p_emp: empId, p_issue: '', p_unmark_month: null, p_unmark_kind: null });
     if (cancelled) return false;
     if (error) { await customAlert('មិនជោគជ័យ៖ ' + error.message); return false; }
     audit('bank_issue_clear', empId, { old: { issue: inf.issue }, new: null });
@@ -579,9 +599,9 @@
       if (view === 'pay') {
         const rows = pays.filter(x => (!e || x.employee_id === e) && (!m || x.month === m));
         const total = rows.reduce((s, x) => s + Number(x.amount_usd || 0), 0);
-        $('hvHead').innerHTML = '<tr><th>ខែ</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th style="text-align:right">ចំនួន ($)</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th>ពេលបើក</th></tr>';
-        $('hvBody').innerHTML = rows.length ? rows.map(x => `<tr><td>${esc(x.month)}</td><td>${esc(userOf(x.employee_id))}</td><td>${esc(nameOf(x.employee_id))}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(x.amount_usd)}</td><td>${esc(x.bank_name)}</td><td>${esc(x.account_no)}</td><td>${esc(x.account_name)}</td><td>${esc(fmtDT(x.paid_at))}</td></tr>`).join('')
-          : '<tr><td colspan="8" style="padding:16px">មិនមានប្រវត្តិបើកប្រាក់</td></tr>';
+        $('hvHead').innerHTML = '<tr><th>ខែ</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th style="text-align:right">ចំនួន ($)</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th>ពេលបើក</th><th>ដង</th></tr>';
+        $('hvBody').innerHTML = rows.length ? rows.map(x => `<tr><td>${esc(x.month)}</td><td>${esc(userOf(x.employee_id))}</td><td>${esc(nameOf(x.employee_id))}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(x.amount_usd)}</td><td>${esc(x.bank_name)}</td><td>${esc(x.account_no)}</td><td>${esc(x.account_name)}</td><td>${esc(fmtDT(x.paid_at))}</td><td>${x.kind === 'advance' ? 'ទី១ (ប្រាក់ខែទី១)' : 'ចុងខែ'}</td></tr>`).join('')
+          : '<tr><td colspan="9" style="padding:16px">មិនមានប្រវត្តិបើកប្រាក់</td></tr>';
         $('hvSum').textContent = `${rows.length} ដង · សរុប $${money(total)}`;
       } else {
         const rows = chg.filter(x => !e || x.employee_id === e);
@@ -603,8 +623,8 @@
         name: 'Bank Payment History',
         columns: [{ header: 'Month', width: 10, fmt: 'text' }, { header: 'Employee ID', width: 12, fmt: 'text' }, { header: 'Employee Name', width: 26, fmt: 'text' },
           { header: 'Amount (USD)', width: 14, fmt: 'usd' }, { header: 'Bank', width: 24, fmt: 'text' }, { header: 'Account Number', width: 20, fmt: 'text' },
-          { header: 'Account Name', width: 26, fmt: 'text' }, { header: 'Paid At', width: 18, fmt: 'text' }],
-        rows: rows.map(x => [x.month, userOf(x.employee_id), nameOf(x.employee_id), Number(x.amount_usd || 0), x.bank_name, String(x.account_no), x.account_name, fmtDT(x.paid_at)]),
+          { header: 'Account Name', width: 26, fmt: 'text' }, { header: 'Paid At', width: 18, fmt: 'text' }, { header: 'Round', width: 12, fmt: 'text' }],
+        rows: rows.map(x => [x.month, userOf(x.employee_id), nameOf(x.employee_id), Number(x.amount_usd || 0), x.bank_name, String(x.account_no), x.account_name, fmtDT(x.paid_at), x.kind === 'advance' ? 'Advance' : 'Final']),
         totals: { label: `សរុប (${rows.length})`, labelCol: 2, sumCols: [3] },
       }]);
     });
