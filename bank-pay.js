@@ -141,6 +141,8 @@
 .bp-act{padding:4px 8px;font-size:.72rem}
 .bp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
 .bp-reason{color:#dc2626;font-size:.74rem;white-space:normal;max-width:260px}
+.bp-sum-gross{font-weight:600;margin-top:-2px}
+.bp-sum-all{color:var(--accent,#0d9488);border-top:1px dashed var(--border,#e1e8ef);padding-top:4px;margin-top:-2px}
 .bp-sum{font-size:.82rem;font-weight:600;margin-left:auto;flex:1 0 100%;text-align:right}
 .bp-mon{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
 .bp-mon input,.bp-mon select{font-size:.8rem;padding:6px 8px}
@@ -167,6 +169,8 @@
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
           <span class="bp-mon"><select id="bpRound" title="ដងបើកប្រាក់ក្នុងមួយខែ"><option value="advance">ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)</option><option value="final" selected>ដងទី២ · ថ្ងៃទី 10 (ថយបើឈប់/បុណ្យ)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
+          <span class="bp-sum bp-sum-gross" id="bpSumGross"></span>
+          <span class="bp-sum bp-sum-all" id="bpSumAll"></span>
         </div>
         <div class="table-wrap" style="max-height:56vh;overflow:auto;">
           <table class="bp-tbl">
@@ -289,6 +293,28 @@
     const total = curRows.reduce((s, row) => s + Math.max(0, amountOf(row)), 0);
     const paid = curRows.reduce((s, row) => s + (isPaid(row.e.id) ? Math.max(0, amountOf(row)) : 0), 0);
     overlay.querySelector('#bpSum').textContent = `${ROUND_SHORT[curRound]} · សរុប $${money(total)} · បានបើក $${money(paid)} · នៅសល់ $${money(total - paid)}`;
+
+    // ប្រាក់ខែសរុបទាំងខែ (ដងទី១ + ដងទី២) — មិនអាស្រ័យលើដងដែលកំពុងមើល
+    const locked = isMonthLocked(curMonth);
+    let adv1 = 0, fin = 0, paidAdv = 0, paidFin = 0, grossWork = 0, grossBen = 0;
+    curRows.forEach(row => {
+      grossWork += Number(row.t.total) || 0;                               // ប្រាក់តាមវត្តមាន (មុនបូក/កាត់)
+      grossBen += Number(row.t.benefitsUSD) || 0;                          // អត្ថប្រយោជន៍
+      fin += Math.max(0, r2(row.t.net));                                   // ប្រាក់ខែសុទ្ធ (បានកាត់ប្រាក់ខែទី១ រួច)
+      adv1 += (row.adv && (row.adv.due || locked)) ? advOf(row) : 0;       // ប្រាក់ខែទី១ ដែលបានកាត់ចេញពី net
+      const pa = bankPaid[pkey(curMonth, row.e.id, 'advance')], pf = bankPaid[pkey(curMonth, row.e.id, 'final')];
+      paidAdv += pa ? Number(pa.amount_usd) || 0 : 0;
+      paidFin += pf ? Number(pf.amount_usd) || 0 : 0;
+    });
+    const all = adv1 + fin, paidAll = paidAdv + paidFin;
+    // សរុបមុនពេលកាត់ = ប្រាក់តាមវត្តមាន + អត្ថប្រយោជន៍ · ប្រាក់កាត់ផ្សេងៗ = (សរុបមុនកាត់) − (ប្រាក់ខែទី១ + ប្រាក់ខែសុទ្ធ)
+    const gross = grossWork + grossBen, otherDed = Math.max(0, gross - all);
+    overlay.querySelector('#bpSumGross').textContent = curRows.length
+      ? `សរុបមុនពេលកាត់ $${money(gross)} (វត្តមាន $${money(grossWork)} + អត្ថប្រយោជន៍ $${money(grossBen)}) − ប្រាក់កាត់ផ្សេងៗ (យឺត/ច្បាប់/ផ្សេងៗ) $${money(otherDed)} = $${money(all)}`
+      : '';
+    overlay.querySelector('#bpSumAll').textContent = curRows.length
+      ? `ប្រាក់ខែសរុបទាំងខែ (ដង១ + ដង២) $${money(all)} = $${money(adv1)} + $${money(fin)} · បានបើកសរុប $${money(paidAll)} (ដង១ $${money(paidAdv)} · ដង២ $${money(paidFin)}) · នៅសល់ $${money(Math.max(0, all - paidAll))}`
+      : '';
   }
 
   // ---------------------------------------------------------------- save bank info ----
