@@ -2940,11 +2940,14 @@ function readAdvControls() {
 }
 
 // ថ្ងៃកំណត់៖ ២៥ ប៉ុន្តែបើជាសៅរ៍ → ២៤, អាទិត្យ → ២៣ (ដូច IF(WEEKDAY(...)=7,24,IF(...=1,23,25)))
+// បន្ថែម៖ បើជាថ្ងៃបុណ្យ (តារាង holidays) ក៏ថយក្រោយទៅថ្ងៃធ្វើការមុនគេដែរ (ឧ. ២៥ ជាថ្ងៃបុណ្យ → ២៤; បើ ២៤ ជាសៅរ៍ → ២៣...)
 function advanceDateOf(month) {
   const [y, m] = month.split('-').map(Number);
-  const dow = new Date(y, m - 1, 25).getDay(); // 0=អាទិត្យ, 6=សៅរ៍
-  const day = dow === 6 ? 24 : dow === 0 ? 23 : 25;
-  return `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const ymd = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || (typeof holidays !== 'undefined' && holidays[ymd(dt)] !== undefined);
+  const d = new Date(y, m - 1, 25, 12); // 12:00 ដើម្បីជៀសវាងបញ្ហា DST
+  for (let i = 0; i < 14 && isOff(d); i++) d.setDate(d.getDate() - 1);
+  return ymd(d);
 }
 
 function calcAdvanceRow(emp, month) {

@@ -82,7 +82,7 @@
   const finalBase = m => nextMonthOf(m) + '-10';
   const advBase = m => m + '-25';
   const finalDateOf = m => rollBack(finalBase(m));
-  const advDateOf = m => rollBack(advBase(m));
+  const advDateOf = m => (typeof advanceDateOf === 'function' ? advanceDateOf(m) : rollBack(advBase(m))); // script.js គិតថ្ងៃបុណ្យដូចគ្នា
   const offReason = d => { const h = holidayName(d); if (h !== null) return 'ថ្ងៃបុណ្យ ' + esc(h); const w = new Date(d + 'T00:00:00').getDay(); return w === 6 ? 'ថ្ងៃសៅរ៍' : (w === 0 ? 'ថ្ងៃអាទិត្យ' : ''); };
   const payDateNote = (base, actual) => base === actual ? '' : ` <small>(ថ្ងៃទី ${parseInt(base.slice(8), 10)} ត្រូវ${offReason(base)} → ប្តូរមកថ្ងៃទី ${parseInt(actual.slice(8), 10)})</small>`;
   const holidayWarn = () => (typeof holidaysAvailable !== 'undefined' && !holidaysAvailable) ? ' <small style="color:#b45309">⚠ មិនទាន់មានតារាងថ្ងៃបុណ្យ — មិនទាន់គិតថ្ងៃបុណ្យ</small>' : '';

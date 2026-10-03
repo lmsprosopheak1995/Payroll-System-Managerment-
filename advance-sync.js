@@ -38,10 +38,12 @@ async function syncAdvanceItems(month) {
     // 1) បន្ថែម / អាប់ដេត
     for (const [id, { emp, a }] of wanted) {
       const existing = payrollItems.find(p => p.id === id);
-      if (existing && Math.abs(existing.amount - a.amount) < 0.00005) continue;
+      const itemName = `ប្រាក់ខែទី១ (បានទទួល ${a.dueDate})`;
+      // ចំនួន និងឈ្មោះ (ថ្ងៃទូទាត់) ដូចគ្នា → មិនបាច់សរសេរ (ថ្ងៃទូទាត់អាចប្តូរបើមានថ្ងៃបុណ្យថ្មី)
+      if (existing && Math.abs(existing.amount - a.amount) < 0.00005 && existing.name === itemName) continue;
       const item = {
         id, employeeId: emp.id, type: 'deduction',
-        name: `ប្រាក់ខែទី១ (បានទទួល ${a.dueDate})`,
+        name: itemName,
         recurrence: 'variable', month, currency: 'USD', amount: a.amount,
       };
       const saved = await upsertPayrollItemRow(item);
