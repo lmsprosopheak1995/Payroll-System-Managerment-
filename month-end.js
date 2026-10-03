@@ -65,11 +65,11 @@
     const finalDate = rollBack(finalBase);
     const dLeft = dayDiff(finalDate, todayStr());
     items.push({ lvl: locked || dLeft > 3 ? 'info' : (dLeft < 0 ? 'bad' : 'warn'),
-      text: `ដងទី២ បើកប្រាក់ខែនៅសល់ (${finalDate}${finalDate !== finalBase ? ` — ថ្ងៃទី 10 ត្រូវ${offWhy(finalBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dLeft)}`,
+      text: `ប្រាក់ខែទី២ (នៅសល់) បើកថ្ងៃ (${finalDate}${finalDate !== finalBase ? ` — ថ្ងៃទី 10 ត្រូវ${offWhy(finalBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dLeft)}`,
       detail: locked ? 'ខែបានបិទរួច — អាចបើកតាមធនាគារបាន' : 'ត្រូវបិទខែ ហើយបើកតាមធនាគារ មុនថ្ងៃនេះ' });
     {
       const advBase = month + '-25', advDate = (typeof advanceDateOf === 'function' ? advanceDateOf(month) : rollBack(advBase)), dAdv = dayDiff(advDate, todayStr());
-      if (dAdv >= -2) items.push({ lvl: 'info', text: `ដងទី១ ប្រាក់ខែទី១ (${advDate}${advDate !== advBase ? ` — ថ្ងៃទី 25 ត្រូវ${offWhy(advBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dAdv)}` });
+      if (dAdv >= -2) items.push({ lvl: 'info', text: `ប្រាក់ខែទី១ បើកថ្ងៃ (${advDate}${advDate !== advBase ? ` — ថ្ងៃទី 25 ត្រូវ${offWhy(advBase)} ប្តូរមកមុន` : ''}) · ${whenTxt(dAdv)}` });
     }
 
     if (locked) items.push({ lvl: 'ok', text: `ខែ ${month} បានបិទរួចរាល់` });

@@ -71,7 +71,7 @@
 
   // ក្រឡាចំនួនទឹកប្រាក់នៃដងនីមួយៗ (ប្រាក់ខែទី១ / ប្រាក់ខែទី២) — ដងដែលកំពុងជ្រើសត្រូវបានបញ្ជាក់ដោយអក្សរដិត
   const roundCell = (v, paidFlag, round) => `<td style="text-align:right;font-variant-numeric:tabular-nums;${curRound === round ? 'font-weight:700;background:color-mix(in srgb,var(--accent,#0d9488) 8%,transparent);' : ''}">${v > 0 ? money(v) : '<span class="bp-no">-</span>'}${paidFlag ? '<div class="bp-ok" style="font-size:.66rem">✓ បានបើក</div>' : ''}</td>`;
-  const ROUND_LABEL = { advance: 'ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)', final: 'ដងទី២ · ថ្ងៃទី 10 (នៅសល់)' };
+  const ROUND_LABEL = { advance: 'ប្រាក់ខែទី១ · ថ្ងៃ 25', final: 'ប្រាក់ខែទី២ · ថ្ងៃទី 10 (នៅសល់)' };
   // កាលវិភាគបើកប្រាក់៖ ដងទី១ = ថ្ងៃ 25 (ប្រាក់ខែទី១ ក្នុងខែដដែល) · ដងទី២ = ថ្ងៃទី 10 នៃខែបន្ទាប់ (ប្រាក់ខែនៅសល់)
   const nextMonthOf = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
   // ថ្ងៃបើកប្រាក់៖ ថ្ងៃទី 25 (ដងទី១) និងថ្ងៃទី 10 នៃខែបន្ទាប់ (ដងទី២)
@@ -98,7 +98,7 @@
     const wk = (dow === 0 || dow === 6) ? ` · ⚠ ត្រូវថ្ងៃ${KH_DOW[dow]} (ធនាគារអាចមិនដំណើរការ)` : '';
     return `<b>${esc(date)}</b> (ថ្ងៃ${KH_DOW[dow]}) · <span style="color:${color};font-weight:600">${when}</span>${wk}`;
   }
-  const ROUND_SHORT = { advance: 'ប្រាក់ខែទី១', final: 'ចុងខែ' };
+  const ROUND_SHORT = { advance: 'ប្រាក់ខែទី១', final: 'ប្រាក់ខែទី២' };
   const pkey = (m, id, round) => `${m}|${id}|${round || curRound}`;
   const isPaid = (empId, round) => !!bankPaid[pkey(curMonth, empId, round)];
   const refOf = () => (curRound === 'advance' ? 'Salary advance ' : 'Salary ') + curMonth;
@@ -169,7 +169,7 @@
           <button class="secondary" id="bpListBtn">👥 បញ្ជីបុគ្គលិក</button>
           <button class="secondary" id="bpProbBtn">⚠️ គណនីមានបញ្ហា</button>
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
-          <span class="bp-mon"><select id="bpRound" title="ដងបើកប្រាក់ក្នុងមួយខែ"><option value="advance">ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)</option><option value="final" selected>ដងទី២ · ថ្ងៃទី 10 (ថយបើឈប់/បុណ្យ)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
+          <span class="bp-mon"><select id="bpRound" title="ជ្រើសប្រាក់ខែទី១ ឬ ប្រាក់ខែទី២"><option value="advance">ប្រាក់ខែទី១ · ថ្ងៃ 25</option><option value="final" selected>ប្រាក់ខែទី២ · ថ្ងៃទី 10 (ថយបើឈប់/បុណ្យ)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
           <span class="bp-sum bp-sum-gross" id="bpSumGross"></span>
           <span class="bp-sum bp-sum-all" id="bpSumAll"></span>
@@ -260,9 +260,9 @@
     const locked = isMonthLocked(curMonth);
     const blue = 'background:#e0f2fe;color:#075985';
     overlay.querySelector('#bpStatus').innerHTML = curRound === 'advance'
-      ? `<div class="bp-warn" style="${blue}">💵 <b>ដងទី១ · ថ្ងៃ 25 — ប្រាក់ខែទី១</b> · ថ្ងៃទូទាត់ ${dueInfo(advDateOf(curMonth))}${payDateNote(advBase(curMonth), advDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
-      : `<div class="bp-warn" style="${blue}">💵 <b>ដងទី២ · ថ្ងៃទី 10 — ប្រាក់ខែនៅសល់ នៃខែ ${esc(curMonth)}</b> · ត្រូវបើកត្រឹម ${dueInfo(finalDateOf(curMonth))}${payDateNote(finalBase(curMonth), finalDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>`
-        + (locked ? '' : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុនថ្ងៃទី 10 ទើបអាចសម្គាល់ថា "បានបើក" ដងទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
+      ? `<div class="bp-warn" style="${blue}">💵 <b>ប្រាក់ខែទី១ · ថ្ងៃ 25</b> · ថ្ងៃទូទាត់ ${dueInfo(advDateOf(curMonth))}${payDateNote(advBase(curMonth), advDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
+      : `<div class="bp-warn" style="${blue}">💵 <b>ប្រាក់ខែទី២ · ថ្ងៃទី 10 — ប្រាក់ខែនៅសល់ នៃខែ ${esc(curMonth)}</b> · ត្រូវបើកត្រឹម ${dueInfo(finalDateOf(curMonth))}${payDateNote(finalBase(curMonth), finalDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>`
+        + (locked ? '' : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុនថ្ងៃទី 10 ទើបអាចសម្គាល់ថា "បានបើក" ប្រាក់ខែទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
     overlay.querySelector('#bpPaidBtn').disabled = curRound === 'final' && !locked;
     overlay.querySelector('#bpBody').innerHTML = curRows.length ? curRows.map((row, i) => {
       const { e, t } = row;
@@ -321,7 +321,7 @@
       ? `សរុបមុនពេលកាត់ $${money(gross)} (វត្តមាន $${money(grossWork)} + អត្ថប្រយោជន៍ $${money(grossBen)}) − ប្រាក់កាត់ផ្សេងៗ (យឺត/ច្បាប់/ផ្សេងៗ) $${money(otherDed)} = $${money(all)}`
       : '';
     overlay.querySelector('#bpSumAll').textContent = curRows.length
-      ? `ប្រាក់ខែសរុបទាំងខែ (ដង១ + ដង២) $${money(all)} = $${money(adv1)} + $${money(fin)} · បានបើកសរុប $${money(paidAll)} (ដង១ $${money(paidAdv)} · ដង២ $${money(paidFin)}) · នៅសល់ $${money(Math.max(0, all - paidAll))}`
+      ? `ប្រាក់ខែសរុបទាំងខែ (ប្រាក់ខែទី១ + ប្រាក់ខែទី២) $${money(all)} = $${money(adv1)} + $${money(fin)} · បានបើកសរុប $${money(paidAll)} (ប្រាក់ខែទី១ $${money(paidAdv)} · ប្រាក់ខែទី២ $${money(paidFin)}) · នៅសល់ $${money(Math.max(0, all - paidAll))}`
       : '';
   }
 
@@ -408,7 +408,7 @@
 
   // ---------------------------------------------------------------- mark paid ----
   async function markSelected(paid) {
-    if (paid && curRound === 'final' && !isMonthLocked(curMonth)) { await customAlert(`ដងទី២ (ចុងខែ)៖ ត្រូវ "🔒 បិទខែ" ${curMonth} ជាមុន ទើបអាចសម្គាល់ថាបានបើក (ដើម្បីឱ្យទឹកប្រាក់ថេរ)`); return; }
+    if (paid && curRound === 'final' && !isMonthLocked(curMonth)) { await customAlert(`ប្រាក់ខែទី២៖ ត្រូវ "🔒 បិទខែ" ${curMonth} ជាមុន ទើបអាចសម្គាល់ថាបានបើក (ដើម្បីឱ្យទឹកប្រាក់ថេរ)`); return; }
     const ids = [...overlay.querySelectorAll('#bpBody tr[data-id]')].filter(tr => tr.querySelector('.bp-chk').checked).map(tr => tr.dataset.id);
     if (!ids.length) { await customAlert('សូមជ្រើសរើសបុគ្គលិកយ៉ាងហោចណាស់ម្នាក់'); return; }
     const inputs = {}; readRowInputs().forEach(r => { inputs[r.employee_id] = r; });
@@ -660,8 +660,8 @@
       if (view === 'pay') {
         const rows = pays.filter(x => (!e || x.employee_id === e) && (!m || x.month === m));
         const total = rows.reduce((s, x) => s + Number(x.amount_usd || 0), 0);
-        $('hvHead').innerHTML = '<tr><th>ខែ</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th style="text-align:right">ចំនួន ($)</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th>ពេលបើក</th><th>ដង</th></tr>';
-        $('hvBody').innerHTML = rows.length ? rows.map(x => `<tr><td>${esc(x.month)}</td><td>${esc(userOf(x.employee_id))}</td><td>${esc(nameOf(x.employee_id))}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(x.amount_usd)}</td><td>${esc(x.bank_name)}</td><td>${esc(x.account_no)}</td><td>${esc(x.account_name)}</td><td>${esc(fmtDT(x.paid_at))}</td><td>${x.kind === 'advance' ? 'ទី១ (ប្រាក់ខែទី១)' : 'ចុងខែ'}</td></tr>`).join('')
+        $('hvHead').innerHTML = '<tr><th>ខែ</th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th style="text-align:right">ចំនួន ($)</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th>ពេលបើក</th><th>ប្រាក់ខែ</th></tr>';
+        $('hvBody').innerHTML = rows.length ? rows.map(x => `<tr><td>${esc(x.month)}</td><td>${esc(userOf(x.employee_id))}</td><td>${esc(nameOf(x.employee_id))}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(x.amount_usd)}</td><td>${esc(x.bank_name)}</td><td>${esc(x.account_no)}</td><td>${esc(x.account_name)}</td><td>${esc(fmtDT(x.paid_at))}</td><td>${x.kind === 'advance' ? 'ប្រាក់ខែទី១' : 'ប្រាក់ខែទី២'}</td></tr>`).join('')
           : '<tr><td colspan="9" style="padding:16px">មិនមានប្រវត្តិបើកប្រាក់</td></tr>';
         $('hvSum').textContent = `${rows.length} ដង · សរុប $${money(total)}`;
       } else {
