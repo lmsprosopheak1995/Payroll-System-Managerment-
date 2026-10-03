@@ -3,6 +3,7 @@
    ① រក្សាទុកគណនីធនាគាររបស់បុគ្គលិក  ② Export បញ្ជីផ្ទេរប្រាក់ (Excel / CSV)
    ③ សម្គាល់ថា "បានបើកតាមធនាគារ" ក្នុងខែដែលបានបិទ
    ④ ប្រវត្តិបើកប្រាក់ · បញ្ជីបុគ្គលិក · គណនីមានបញ្ហា · ប្តូរគណនីថ្មី
+   ⑥ 🌐 Internet Banking៖ ផ្ទេរម្នាក់ម្តងៗ (Copy លេខគណនី/ចំនួន + បើកតំណធនាគារ + កត់ថាបានផ្ទេរ) · ជាក្រុមតាមធនាគារ (Export) · តំណធនាគារ (រក្សាក្នុង Supabase)
    ⑤ បើកប្រាក់ខែ ២ ដង/ខែ៖ ដងទី១ = ប្រាក់ខែទី១ (Advance) · ដងទី២ = ប្រាក់ខែសុទ្ធនៅសល់ (ត្រូវការ bank-pay.sql v4)
 
    ⚠️ មុខងារនេះ មិនផ្ទេរលុយដោយផ្ទាល់ពីកម្មវិធីទេ — វាបង្កើតឯកសារសម្រាប់ upload ក្នុង
@@ -169,6 +170,7 @@
           <button class="secondary" id="bpListBtn">👥 បញ្ជីបុគ្គលិក</button>
           <button class="secondary" id="bpProbBtn">⚠️ គណនីមានបញ្ហា</button>
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
+          <button id="bpIbBtn">🌐 Internet Banking</button>
           <span class="bp-mon"><select id="bpRound" title="ជ្រើសប្រាក់ខែទី១ ឬ ប្រាក់ខែទី២"><option value="advance">ប្រាក់ខែទី១ · ថ្ងៃ 25</option><option value="final" selected>ប្រាក់ខែទី២ · ថ្ងៃទី 10 (ថយបើឈប់/បុណ្យ)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
           <span class="bp-sum bp-sum-gross" id="bpSumGross"></span>
@@ -198,6 +200,7 @@
     $('bpListBtn').addEventListener('click', showEmpList);
     $('bpProbBtn').addEventListener('click', showProblems);
     $('bpChgBtn').addEventListener('click', () => openChange(''));
+    $('bpIbBtn').addEventListener('click', showIB);
     $('bpMonthInput').addEventListener('change', e => switchMonth(e.target.value));
     $('bpPrev').addEventListener('click', () => switchMonth(shiftMonth(curMonth, -1)));
     $('bpNext').addEventListener('click', () => switchMonth(shiftMonth(curMonth, 1)));
@@ -364,7 +367,7 @@
   const maskAcc = s => { s = String(s || ''); return s.length > 4 ? '••••' + s.slice(-4) : s; }; // audit log មិនរក្សាលេខគណនីពេញ
 
   // ---------------------------------------------------------------- export ----
-  async function exportList(kind) {
+  async function exportList(kind, onlyBank) {
     if (!curRows.length) { await customAlert('មិនមានទិន្នន័យ'); return; }
     // ប្រើតម្លៃក្នុងប្រអប់ (មិនទាន់រក្សាទុកក៏បាន) ប៉ុន្តែត្រូវពេញលេញ
     const inputs = {}; readRowInputs().forEach(r => { inputs[r.employee_id] = r; });
@@ -373,6 +376,7 @@
       const { e } = row;
       const net = amountOf(row);
       const inf = inputs[e.id] || bankInfo[e.id] || {};
+      if (onlyBank && (inf.bank_name || '') !== onlyBank) return;
       if (net <= 0) return;
       if (isPaid(e.id)) { skipped.push(`${e.name} (បានបើករួច)`); return; }
       if (!(inf.bank_name && inf.account_no && inf.account_name)) { skipped.push(`${e.name} (ខ្វះព័ត៌មានធនាគារ)`); return; }
@@ -383,7 +387,7 @@
     if (skipped.length && !(await customConfirm(`នឹង Export ${list.length} នាក់ ហើយរំលង ${skipped.length} នាក់៖\n${skipped.slice(0, 10).join('\n')}${skipped.length > 10 ? '\n…' : ''}\n\nបន្ត?`))) return;
 
     const ref = refOf();
-    const suffix = curRound === 'advance' ? '_advance' : '_final';
+    const suffix = (curRound === 'advance' ? '_advance' : '_final') + (onlyBank ? '_' + onlyBank.replace(/[^A-Za-z0-9]+/g, '') : '');
     const total = list.reduce((s, x) => s + x.net, 0);
     if (kind === 'xlsx') {
       downloadXlsx(`bank_transfer_${curMonth}${suffix}.xlsx`, [{
@@ -566,7 +570,7 @@
         ${missingL.length ? missingL.map(e => `<tr data-id="${esc(e.id)}"><td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td><td>${esc(e.dept || '')}</td><td><button class="secondary bp-act" data-act="chg">➕ បញ្ចូលគណនី</button></td></tr>`).join('') : '<tr><td colspan="4" style="padding:14px;color:var(--success)">✓ បុគ្គលិកទាំងអស់មានគណនី</td></tr>'}
         </tbody></table></div>`;
     };
-    body.addEventListener('click', async ev => {
+    body.querySelector('#prBox').addEventListener('click', async ev => {   // element ថ្មីរាល់ពេលបើក → មិនមាន listener ស្ទួន
       const btn = ev.target.closest('button[data-act]'); if (!btn) return;
       const id = btn.closest('tr').dataset.id;
       if (btn.dataset.act === 'chg') openChange(id);
@@ -690,6 +694,183 @@
       }]);
     });
     draw();
+  }
+
+  // ================================================================ 🌐 Internet Banking ====
+  // ជំនួយផ្ទេរតាម Internet Banking របស់ធនាគារ — កម្មវិធីនេះមិនផ្ទេរលុយដោយខ្លួនឯងទេ៖
+  // Copy ព័ត៌មាន → បើកគេហទំព័រធនាគារ → ផ្ទេរ → ត្រឡប់មកកត់ថា "បានផ្ទេរ"
+  const DEFAULT_PORTALS = {
+    'ABA Bank': 'https://www.ababank.com', 'ACLEDA Bank': 'https://www.acledabank.com.kh', 'Wing Bank': 'https://www.wingbank.com.kh',
+    'Canadia Bank': 'https://www.canadiabank.com.kh', 'Sathapana Bank': 'https://www.sathapana.com.kh', 'Vattanac Bank': 'https://www.vattanacbank.com',
+  };
+  let ibPortals = null, ibWarn = '', ibTab = 'one', ibIdx = 0, ibBusy = false;
+  const okUrl = u => /^https:\/\/[^\s"'<>]+$/i.test(String(u || ''));
+  const portalOf = b => (ibPortals && ibPortals[b]) || '';
+
+  async function loadPortals() {
+    if (ibPortals) return;
+    ibPortals = { ...DEFAULT_PORTALS }; ibWarn = '';
+    try {
+      const { data, error } = await supabaseClient.from('app_settings').select('bank_portals').eq('id', 1).maybeSingle();
+      if (error) { ibWarn = /bank_portals/.test(error.message) ? 'មិនទាន់មាន column bank_portals — សូម Run bank-pay.sql ម្តងទៀត (តំណនឹងមិនត្រូវបានរក្សាទុក)' : error.message; return; }
+      const m = data && data.bank_portals;
+      if (m && typeof m === 'object') Object.keys(m).forEach(k => { if (okUrl(m[k])) ibPortals[k] = m[k]; });
+    } catch (e) { ibWarn = String(e && e.message || e); }
+  }
+  async function savePortals() {
+    const { data, error } = await supabaseClient.from('app_settings').update({ bank_portals: ibPortals }).eq('id', 1).select('id');
+    if (error || !data || !data.length) { ibWarn = error ? error.message : 'រកមិនឃើញ app_settings (id=1)'; return false; }
+    ibWarn = ''; return true;
+  }
+
+  function copyTxt(text, btn) {
+    const done = () => { const o = btn.dataset.l || btn.textContent; btn.dataset.l = o; btn.textContent = '✓ បាន Copy'; setTimeout(() => { btn.textContent = o; }, 1200); };
+    const fb = () => { const t = document.createElement('textarea'); t.value = text; t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ } document.body.removeChild(t); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fb); else fb();
+  }
+
+  // បុគ្គលិកដែលត្រូវផ្ទេរ (មិនទាន់បើក · មានទឹកប្រាក់ · មានគណនីគ្រប់ · គណនីមិនមានបញ្ហា) តម្រៀបតាមធនាគារ
+  function ibQueue() {
+    const inputs = {}; readRowInputs().forEach(r => { inputs[r.employee_id] = r; });
+    const list = [];
+    curRows.forEach(row => {
+      const e = row.e, net = amountOf(row), inf = inputs[e.id] || bankInfo[e.id] || {};
+      if (net <= 0 || isPaid(e.id)) return;
+      if (!(inf.bank_name && inf.account_no && inf.account_name) || issueOf(e.id, inf)) return;
+      list.push({ row, e, net, inf });
+    });
+    return list.sort((a, b) => (a.inf.bank_name || '').localeCompare(b.inf.bank_name || '') || (a.e.name || '').localeCompare(b.e.name || ''));
+  }
+
+  function ibBlockReason() {
+    if (curRound === 'final' && !isMonthLocked(curMonth)) return `ប្រាក់ខែទី២៖ ត្រូវ "🔒 បិទខែ" ${curMonth} ជាមុន ទើបកត់ថា "បានផ្ទេរ" បាន (Copy/បើកធនាគារ ធ្វើបានដូចធម្មតា)`;
+    if (curRound === 'advance' && !isMonthLocked(curMonth) && todayStr() < advDateOf(curMonth)) return `ប្រាក់ខែទី១៖ មិនទាន់ដល់ថ្ងៃទូទាត់ ${advDateOf(curMonth)} — កត់ថា "បានផ្ទេរ" មិនទាន់បាន`;
+    return '';
+  }
+
+  // កត់ថា "បានផ្ទេរ" សម្រាប់បុគ្គលិកម្នាក់ (ច្បាប់ដូចប៊ូតុង "សម្គាល់ថាបានបើក" ក្នុងតារាង)
+  async function markPaidOne(it) {
+    const why = ibBlockReason();
+    if (why) { await customAlert(why); return false; }
+    const { e, net, inf } = it;
+    const rec = { employee_id: e.id, amount_usd: net, bank_name: inf.bank_name, account_no: inf.account_no, account_name: inf.account_name, reference: refOf() };
+    const { error, cancelled } = await bankRpc('bank_mark_paid', { p_month: curMonth, p_kind: curRound, p_rows: [rec] });
+    if (cancelled) return false;
+    if (error) { await customAlert('រក្សាទុកមិនបានជោគជ័យ៖ ' + error.message); return false; }
+    const x = { ...rec, month: curMonth, kind: curRound, status: 'paid', paid_at: new Date().toISOString() };
+    bankPaid[pkey(curMonth, e.id, curRound)] = x; bankInfo[e.id] = x;
+    audit('bank_paid', e.id, { month: curMonth, new: { round: curRound, amount_usd: net, bank: inf.bank_name, account_no: maskAccount(inf.account_no), via: 'internet_banking' } });
+    refreshMain();
+    return true;
+  }
+
+  const IB_CSS = `
+.ib-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.ib-card{border:1px solid var(--border,#e1e8ef);border-radius:14px;padding:14px;background:color-mix(in srgb,var(--accent,#0d9488) 4%,var(--card-bg,#fff))}
+.ib-prog{font-size:.76rem;color:var(--text-muted,#5b6b80);margin-bottom:6px}
+.ib-name{font-size:1.02rem;font-weight:700;margin-bottom:8px}
+.ib-f{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border,#e1e8ef)}
+.ib-f small{flex:0 0 96px;color:var(--text-muted,#5b6b80);font-size:.72rem}
+.ib-f b{flex:1;font-size:.95rem;word-break:break-all;font-variant-numeric:tabular-nums}
+.ib-f button{padding:4px 10px;font-size:.74rem}
+.ib-amt b{font-size:1.15rem;color:var(--accent,#0d9488)}
+.ib-link{display:inline-block;padding:8px 14px;border-radius:10px;background:var(--accent,#0d9488);color:#fff;text-decoration:none;font-size:.82rem;font-weight:600}
+.ib-link.off{background:var(--border,#e1e8ef);color:var(--text-muted,#5b6b80);pointer-events:none}
+`;
+  let ibStyled = false;
+
+  async function showIB() {
+    if (!ibStyled) { const st = document.createElement('style'); st.textContent = IB_CSS; document.head.appendChild(st); ibStyled = true; }
+    if (!curRows.length) { await customAlert('មិនមានទិន្នន័យក្នុងខែនេះ'); return; }
+    const body = openPanel('🌐 Internet Banking', '<div class="bp-note">កំពុងផ្ទុក...</div>');
+    await loadPortals();
+    ibTab = 'one'; ibIdx = 0;
+    if (!body.dataset.ibBound) {
+      body.dataset.ibBound = '1';
+      body.addEventListener('click', ev => ibClick(ev, body));
+    }
+    ibRender(body);
+  }
+
+  function ibRender(body) {
+    const q = ibQueue();
+    const why = ibBlockReason();
+    const tab = (id, label) => `<button class="secondary bp-tab${ibTab === id ? ' on' : ''}" data-ib="tab" data-v="${id}">${label}</button>`;
+    let html = `<p class="bp-note">${esc(ROUND_LABEL[curRound])} · ខែ ${esc(curMonth)} · ត្រូវផ្ទេរ <b>${q.length}</b> នាក់ · សរុប <b>$${money(q.reduce((s, x) => s + x.net, 0))}</b> — កម្មវិធីមិនផ្ទេរលុយដោយខ្លួនឯងទេ៖ Copy ព័ត៌មាន → ផ្ទេរក្នុង Internet Banking → ចុច "✓ បានផ្ទេររួច"។</p>`
+      + (why ? `<div class="bp-warn">⏳ ${esc(why)}</div>` : '')
+      + (ibWarn ? `<div class="bp-warn">⚠️ ${esc(ibWarn)}</div>` : '')
+      + `<div class="ib-tabs">${tab('one', '👤 ផ្ទេរម្នាក់ម្តងៗ')}${tab('bulk', '🏦 ផ្ទេរជាក្រុម (តាមធនាគារ)')}${tab('cfg', '⚙ តំណធនាគារ')}</div>`;
+
+    if (ibTab === 'one') {
+      if (!q.length) html += '<div class="ib-card" style="text-align:center;color:var(--success,#059669);font-weight:600">✓ គ្មានបុគ្គលិកត្រូវផ្ទេរទៀតទេ (ឬខ្វះព័ត៌មាន/គណនីមានបញ្ហា — មើលក្នុងតារាងធនាគារ)</div>';
+      else {
+        if (ibIdx >= q.length) ibIdx = 0; if (ibIdx < 0) ibIdx = q.length - 1;
+        const it = q[ibIdx], { e, net, inf } = it, url = portalOf(inf.bank_name);
+        const acc = String(inf.account_no).replace(/[\s-]/g, '');
+        const f = (label, val, copy, cls) => `<div class="ib-f ${cls || ''}"><small>${label}</small><b>${esc(val)}</b>${copy != null ? `<button class="secondary" data-ib="copy" data-v="${esc(copy)}">📋 Copy</button>` : ''}</div>`;
+        html += `<div class="ib-card">
+          <div class="ib-prog">${ibIdx + 1} / ${q.length}</div>
+          <div class="ib-name">${esc(e.username || '')} — ${esc(e.name || '')}</div>
+          ${f('ធនាគារ', inf.bank_name, null)}
+          ${f('លេខគណនី', inf.account_no, acc)}
+          ${f('ឈ្មោះគណនី', inf.account_name, inf.account_name)}
+          ${f('ចំនួន (USD)', '$' + money(net), net.toFixed(2), 'ib-amt')}
+          ${f('Remark', refOf(), refOf())}
+          <div class="bp-bar" style="margin-top:12px">
+            ${okUrl(url) ? `<a class="ib-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">🌐 បើកគេហទំព័រ ${esc(inf.bank_name)}</a>` : '<span class="ib-link off">មិនទាន់កំណត់តំណធនាគារនេះ (ផ្ទាំង ⚙)</span>'}
+            <span style="flex:1"></span>
+            <button class="secondary" data-ib="prev">◀ មុន</button>
+            <button class="secondary" data-ib="next">រំលង ▶</button>
+            <button data-ib="paid" ${why ? 'disabled' : ''}>✓ បានផ្ទេររួច → បន្ទាប់</button>
+          </div></div>`;
+        body.dataset.cur = e.id;
+      }
+    } else if (ibTab === 'bulk') {
+      const g = {};
+      q.forEach(x => { const b = x.inf.bank_name; (g[b] = g[b] || { n: 0, t: 0 }); g[b].n++; g[b].t += x.net; });
+      const banks = Object.keys(g).sort();
+      html += banks.length ? `<div class="table-wrap"><table class="bp-tbl"><thead><tr><th>ធនាគារ</th><th style="text-align:right">នាក់</th><th style="text-align:right">សរុប ($)</th><th>សកម្មភាព</th></tr></thead><tbody>${banks.map(b => `<tr><td>${esc(b)}</td><td style="text-align:right">${g[b].n}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(g[b].t)}</td>
+        <td>${okUrl(portalOf(b)) ? `<a class="ib-link" style="padding:4px 10px;font-size:.74rem" href="${esc(portalOf(b))}" target="_blank" rel="noopener noreferrer">🌐 បើកធនាគារ</a>` : '<span class="bp-no" style="font-size:.74rem">គ្មានតំណ</span>'}
+          <button class="secondary bp-act" data-ib="xlsx" data-v="${esc(b)}">📊 Excel</button> <button class="secondary bp-act" data-ib="csv" data-v="${esc(b)}">⬇ CSV</button></td></tr>`).join('')}</tbody></table></div>
+        <p class="bp-note" style="margin-top:8px">Export តាមធនាគារនីមួយៗ ដើម្បី upload ជាក្រុម (Bulk Transfer) ក្នុង Internet Banking របស់ធនាគារនោះ។ បន្ទាប់ពីផ្ទេរ ត្រឡប់ទៅតារាងធនាគារ ជ្រើសជួរ ហើយចុច "✓ សម្គាល់ថាបានបើក"។</p>` : '<div class="ib-card" style="text-align:center">គ្មានបុគ្គលិកត្រូវផ្ទេរ</div>';
+    } else {
+      const names = [...new Set(Object.keys(ibPortals).concat(Object.values(bankInfo).map(i => i && i.bank_name).filter(Boolean)))].sort();
+      html += `<p class="bp-note">តំណគេហទំព័រ Internet Banking របស់ធនាគារនីមួយៗ (ត្រូវចាប់ផ្តើមដោយ https://) — រក្សាក្នុង Supabase។ ត្រូវប្រាកដថាជាគេហទំព័រផ្លូវការរបស់ធនាគារ។</p>
+        <div class="table-wrap"><table class="bp-tbl"><thead><tr><th>ធនាគារ</th><th style="width:100%">តំណ (URL)</th></tr></thead><tbody>${names.map(b => `<tr><td>${esc(b)}</td><td><input type="text" class="ib-url" data-bank="${esc(b)}" value="${esc(ibPortals[b] || '')}" placeholder="https://..." style="width:100%;min-width:320px"></td></tr>`).join('')}</tbody></table></div>
+        <div class="bp-bar"><button data-ib="saveurl">💾 រក្សាទុកតំណ</button></div>`;
+    }
+    body.innerHTML = html;
+  }
+
+  async function ibClick(ev, body) {
+    const btn = ev.target.closest('[data-ib]'); if (!btn || ibBusy) return;
+    const act = btn.dataset.ib;
+    if (act === 'copy') { copyTxt(btn.dataset.v, btn); return; }
+    if (act === 'tab') { ibTab = btn.dataset.v; ibIdx = 0; ibRender(body); return; }
+    if (act === 'next') { ibIdx++; ibRender(body); return; }
+    if (act === 'prev') { ibIdx--; ibRender(body); return; }
+    if (act === 'xlsx' || act === 'csv') { await exportList(act, btn.dataset.v); return; }
+    ibBusy = true;
+    try {
+      if (act === 'paid') {
+        const q = ibQueue(), it = q.find(x => x.e.id === body.dataset.cur);
+        if (!it) { ibRender(body); return; }
+        if (await markPaidOne(it)) ibRender(body);   // បុគ្គលិកនេះចេញពីជួរ → អ្នកបន្ទាប់ឡើងមកជំនួស
+      } else if (act === 'saveurl') {
+        const next = { ...ibPortals }; let bad = '';
+        body.querySelectorAll('.ib-url').forEach(inp => {
+          const v = inp.value.trim(), b = inp.dataset.bank;
+          if (!v) { delete next[b]; return; }
+          if (!okUrl(v)) { bad = b; return; }
+          next[b] = v;
+        });
+        if (bad) { await customAlert(`តំណរបស់ "${bad}" មិនត្រឹមត្រូវ (ត្រូវចាប់ផ្តើមដោយ https://)`); return; }
+        ibPortals = next;
+        const ok = await savePortals();
+        await customAlert(ok ? 'បានរក្សាទុកតំណ' : 'រក្សាទុកក្នុង Supabase មិនបាន៖ ' + ibWarn);
+        ibRender(body);
+      }
+    } finally { ibBusy = false; }
   }
 
   // ---------------------------------------------------------------- init ----
