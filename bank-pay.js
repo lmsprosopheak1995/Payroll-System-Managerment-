@@ -69,6 +69,8 @@
     return true;
   }
 
+  // ក្រឡាចំនួនទឹកប្រាក់នៃដងនីមួយៗ (ប្រាក់ខែទី១ / ប្រាក់ខែទី២) — ដងដែលកំពុងជ្រើសត្រូវបានបញ្ជាក់ដោយអក្សរដិត
+  const roundCell = (v, paidFlag, round) => `<td style="text-align:right;font-variant-numeric:tabular-nums;${curRound === round ? 'font-weight:700;background:color-mix(in srgb,var(--accent,#0d9488) 8%,transparent);' : ''}">${v > 0 ? money(v) : '<span class="bp-no">-</span>'}${paidFlag ? '<div class="bp-ok" style="font-size:.66rem">✓ បានបើក</div>' : ''}</td>`;
   const ROUND_LABEL = { advance: 'ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)', final: 'ដងទី២ · ថ្ងៃទី 10 (នៅសល់)' };
   // កាលវិភាគបើកប្រាក់៖ ដងទី១ = ថ្ងៃ 25 (ប្រាក់ខែទី១ ក្នុងខែដដែល) · ដងទី២ = ថ្ងៃទី 10 នៃខែបន្ទាប់ (ប្រាក់ខែនៅសល់)
   const nextMonthOf = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -174,8 +176,9 @@
         </div>
         <div class="table-wrap" style="max-height:56vh;overflow:auto;">
           <table class="bp-tbl">
-            <thead><tr><th><input type="checkbox" id="bpAll" title="ជ្រើសទាំងអស់"></th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th style="text-align:right">ចំនួន ($)</th><th>ស្ថានភាព</th></tr></thead>
+            <thead><tr><th><input type="checkbox" id="bpAll" title="ជ្រើសទាំងអស់"></th><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th style="text-align:right">ប្រាក់ខែទី១ ($)</th><th style="text-align:right">ប្រាក់ខែទី២ ($)</th><th style="text-align:right">ចំនួនបើកឥឡូវ ($)</th><th>ស្ថានភាព</th></tr></thead>
             <tbody id="bpBody"></tbody>
+            <tfoot id="bpFoot"></tfoot>
           </table>
         </div>
         <datalist id="bpBanks">${BANKS.map(b => `<option value="${esc(b)}">`).join('')}</datalist>
@@ -223,7 +226,7 @@
     overlay.querySelector('#bpRound').value = curRound;
     overlay.querySelector('#bpStatus').innerHTML = '';
     overlay.querySelector('#bpSum').textContent = '';
-    overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="8" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
+    overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="10" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
     const ok = await loadBank(curMonth);
     if (!ok) {
       overlay.querySelector('#bpStatus').innerHTML = `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)}<br>ប្រសិនបើមិនទាន់ដំណើរការ <b>bank-pay.sql</b> (v2) ក្នុង Supabase សូមដំណើរការជាមុន។ <button class="secondary" id="bpRetry" style="margin-left:8px">↻ ព្យាយាមម្តងទៀត</button></div>`;
@@ -274,11 +277,12 @@
         <td><input type="text" class="bp-bank" list="bpBanks" value="${esc(inf.bank_name || '')}" placeholder="ABA Bank" ${paid ? 'disabled' : ''}></td>
         <td><input type="text" class="bp-acc" inputmode="numeric" value="${esc(inf.account_no || '')}" placeholder="000 123 456" ${paid ? 'disabled' : ''}></td>
         <td><input type="text" class="bp-name" value="${esc(inf.account_name || '')}" placeholder="SOK SOPHEA" ${paid ? 'disabled' : ''}></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;">${money(net)}${advNote}</td>
+        ${roundCell(advOf(row), isPaid(e.id, 'advance'), 'advance')}${roundCell(r2(t.net), isPaid(e.id, 'final'), 'final')}
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${money(net)}</td>
         <td>${paid ? `<span class="bp-ok">✓ បានបើក</span><div class="bp-no" style="font-size:.68rem">${esc(String(paid.paid_at || '').slice(0, 16).replace('T', ' '))}</div>`
           : (net <= 0 ? `<span class="bp-no">${curRound === 'advance' ? 'មិនមានសិទ្ធិប្រាក់ខែទី១' : 'គ្មានទឹកប្រាក់'}</span>` : (!hasBank(e.id) ? '<span style="color:#b45309">ខ្វះព័ត៌មានធនាគារ</span>' : (issueOf(e.id) ? `<span style="color:#dc2626;font-weight:600" title="${esc(issueOf(e.id))}">⚠ មានបញ្ហា</span>` : '<span class="bp-no">មិនទាន់បើក</span>')))}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="8" style="padding:16px;">មិនមានបុគ្គលិកក្នុងខែនេះ</td></tr>';
+    }).join('') : '<tr><td colspan="10" style="padding:16px;">មិនមានបុគ្គលិកក្នុងខែនេះ</td></tr>';
     updateSum();
     updateProbBtn();
   }
@@ -293,6 +297,10 @@
     const total = curRows.reduce((s, row) => s + Math.max(0, amountOf(row)), 0);
     const paid = curRows.reduce((s, row) => s + (isPaid(row.e.id) ? Math.max(0, amountOf(row)) : 0), 0);
     overlay.querySelector('#bpSum').textContent = `${ROUND_SHORT[curRound]} · សរុប $${money(total)} · បានបើក $${money(paid)} · នៅសល់ $${money(total - paid)}`;
+
+    const sumA1 = curRows.reduce((s, row) => s + advOf(row), 0), sumA2 = curRows.reduce((s, row) => s + Math.max(0, r2(row.t.net)), 0);
+    overlay.querySelector('#bpFoot').innerHTML = curRows.length
+      ? `<tr style="font-weight:700"><td colspan="6" style="text-align:right">សរុប (${curRows.length} នាក់)</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(sumA1)}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(sumA2)}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${money(total)}</td><td></td></tr>` : '';
 
     // ប្រាក់ខែសរុបទាំងខែ (ដងទី១ + ដងទី២) — មិនអាស្រ័យលើដងដែលកំពុងមើល
     const locked = isMonthLocked(curMonth);
