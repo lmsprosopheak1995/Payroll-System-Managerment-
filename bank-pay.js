@@ -68,7 +68,26 @@
     return true;
   }
 
-  const ROUND_LABEL = { advance: 'ដងទី១ · ប្រាក់ខែទី១', final: 'ដងទី២ · ចុងខែ (នៅសល់)' };
+  const ROUND_LABEL = { advance: 'ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)', final: 'ដងទី២ · ថ្ងៃទី 10 (នៅសល់)' };
+  const shiftNote = date => { const dd = date.slice(8, 10); return dd === '10' ? '' : ` <small>(ថ្ងៃទី 10 ត្រូវ${dd === '09' ? 'សៅរ៍' : 'អាទិត្យ'} → ប្តូរមកថ្ងៃទី ${parseInt(dd, 10)})</small>`; };
+  // កាលវិភាគបើកប្រាក់៖ ដងទី១ = ថ្ងៃ 25 (ប្រាក់ខែទី១ ក្នុងខែដដែល) · ដងទី២ = ថ្ងៃទី 10 នៃខែបន្ទាប់ (ប្រាក់ខែនៅសល់)
+  const nextMonthOf = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  // ថ្ងៃទី 10 នៃខែបន្ទាប់ · បើជាសៅរ៍ → 9 · អាទិត្យ → 8 (ដូចច្បាប់ប្រាក់ខែទី១ ៖ 25 / 24 / 23)
+  const finalDateOf = m => {
+    const nm = nextMonthOf(m), [y, mo] = nm.split('-').map(Number);
+    const dow = new Date(y, mo - 1, 10).getDay();
+    return `${nm}-${dow === 6 ? '09' : dow === 0 ? '08' : '10'}`;
+  };
+  const advDateOf = m => (typeof advanceDateOf === 'function' ? advanceDateOf(m) : m + '-25');
+  const dayDiff = (a, b) => Math.round((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000);
+  const KH_DOW = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+  function dueInfo(date) {
+    const d = dayDiff(date, todayStr()), dow = new Date(date + 'T00:00:00').getDay();
+    const when = d > 0 ? `នៅសល់ ${d} ថ្ងៃ` : (d === 0 ? 'ថ្ងៃនេះ' : `ហួសកំណត់ ${-d} ថ្ងៃ`);
+    const color = d < 0 ? '#dc2626' : (d <= 3 ? '#b45309' : 'inherit');
+    const wk = (dow === 0 || dow === 6) ? ` · ⚠ ត្រូវថ្ងៃ${KH_DOW[dow]} (ធនាគារអាចមិនដំណើរការ)` : '';
+    return `<b>${esc(date)}</b> (ថ្ងៃ${KH_DOW[dow]}) · <span style="color:${color};font-weight:600">${when}</span>${wk}`;
+  }
   const ROUND_SHORT = { advance: 'ប្រាក់ខែទី១', final: 'ចុងខែ' };
   const pkey = (m, id, round) => `${m}|${id}|${round || curRound}`;
   const isPaid = (empId, round) => !!bankPaid[pkey(curMonth, empId, round)];
@@ -138,7 +157,7 @@
           <button class="secondary" id="bpListBtn">👥 បញ្ជីបុគ្គលិក</button>
           <button class="secondary" id="bpProbBtn">⚠️ គណនីមានបញ្ហា</button>
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
-          <span class="bp-mon"><select id="bpRound" title="ដងបើកប្រាក់ក្នុងមួយខែ"><option value="advance">ដងទី១ · ប្រាក់ខែទី១</option><option value="final" selected>ដងទី២ · ចុងខែ (នៅសល់)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
+          <span class="bp-mon"><select id="bpRound" title="ដងបើកប្រាក់ក្នុងមួយខែ"><option value="advance">ដងទី១ · ថ្ងៃ 25 (ប្រាក់ខែទី១)</option><option value="final" selected>ដងទី២ · ថ្ងៃទី 10 (សៅរ៍→9 អាទិត្យ→8)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
         </div>
         <div class="table-wrap" style="max-height:56vh;overflow:auto;">
@@ -224,11 +243,11 @@
   function render() {
     curRows = monthlyRows(curMonth);
     const locked = isMonthLocked(curMonth);
-    const advDate = curRows.length && curRows[0].adv ? (curRows[0].adv.dueDate || curRows[0].adv.advanceDate || '') : '';
+    const blue = 'background:#e0f2fe;color:#075985';
     overlay.querySelector('#bpStatus').innerHTML = curRound === 'advance'
-      ? `<div class="bp-warn" style="background:#e0f2fe;color:#075985">💵 <b>ដងទី១ · ប្រាក់ខែទី១</b> — ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)${advDate ? ` · ថ្ងៃទូទាត់ ${esc(advDate)}` : ''}។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
-      : (locked ? '<div class="bp-warn" style="background:#e0f2fe;color:#075985">💵 <b>ដងទី២ · ចុងខែ</b> — ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>'
-        : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុន ទើបអាចសម្គាល់ថា "បានបើក" ដងទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
+      ? `<div class="bp-warn" style="${blue}">💵 <b>ដងទី១ · ថ្ងៃ 25 — ប្រាក់ខែទី១</b> · ថ្ងៃទូទាត់ ${dueInfo(advDateOf(curMonth))}<br>ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
+      : `<div class="bp-warn" style="${blue}">💵 <b>ដងទី២ · ថ្ងៃទី 10 — ប្រាក់ខែនៅសល់ នៃខែ ${esc(curMonth)}</b> · ត្រូវបើកត្រឹម ${dueInfo(finalDateOf(curMonth))}${shiftNote(finalDateOf(curMonth))}<br>ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>`
+        + (locked ? '' : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុនថ្ងៃទី 10 ទើបអាចសម្គាល់ថា "បានបើក" ដងទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
     overlay.querySelector('#bpPaidBtn').disabled = curRound === 'final' && !locked;
     overlay.querySelector('#bpBody').innerHTML = curRows.length ? curRows.map((row, i) => {
       const { e, t } = row;

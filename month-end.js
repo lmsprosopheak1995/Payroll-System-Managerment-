@@ -2,6 +2,7 @@
    month-end.js — សារ "ពិនិត្យប្រាក់ខែបុគ្គលិក" ពេលដល់ចុងខែ (Admin)
    • ពេលបើកកម្មវិធី ហើយជិតចប់ខែ (២ ថ្ងៃចុងក្រោយ) ឬខែមុនមិនទាន់បិទ (ក្នុង ១០ ថ្ងៃដំបូង)
      → បង្ហាញបញ្ជីត្រួតពិនិត្យ ដើម្បីកុំភ្លេចមុនបិទខែ/បើកប្រាក់ខែ
+   • កាលវិភាគបើកប្រាក់ខែ៖ ដងទី១ ថ្ងៃ 25 (ប្រាក់ខែទី១) · ដងទី២ ថ្ងៃទី 10 នៃខែបន្ទាប់ (សៅរ៍→9 អាទិត្យ→8) — បង្ហាញថ្ងៃនៅសល់ក្នុងសារ
    • ពិនិត្យ៖ ខែមិនទាន់បិទ · ថ្ងៃមិនទាន់កត់វត្តមាន · ប្រាក់កាត់យឺត/ច្បាប់មិនទាន់បញ្ចូល ·
               សំណើច្បាប់/ពាក្យតវ៉ាមិនទាន់សម្រេច · គ្មានប្រាក់ខែមូលដ្ឋាន · ប្រាក់ខែសុទ្ធ ≤ 0
    • ប៊ូតុង "🔔 ពិនិត្យចុងខែ" ក្នុងផ្ទាំងប្រាក់ខែប្រចាំខែ — បើកមើលបានគ្រប់ពេល (ខែដែលបានជ្រើស)
@@ -35,6 +36,10 @@
     return null;
   }
 
+  const nextMonthOf = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+  const dayDiff = (a, b) => Math.round((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000);
+  const whenTxt = d => d > 0 ? `នៅសល់ ${d} ថ្ងៃ` : (d === 0 ? 'ថ្ងៃនេះ' : `ហួសកំណត់ ${-d} ថ្ងៃ`);
+
   // ---------------------------------------------------------------- ការត្រួតពិនិត្យ ----
   function runChecks(month) {
     const dates = daysInMonth(month);
@@ -48,6 +53,20 @@
 
     if (typeof loadFailures !== 'undefined' && Object.keys(loadFailures).length)
       items.push({ lvl: 'bad', text: 'ទិន្នន័យខ្លះផ្ទុកមិនជោគជ័យ — លេខខាងក្រោមអាចមិនពេញលេញ', detail: Object.keys(loadFailures).join(', ') });
+
+    // កាលវិភាគបើកប្រាក់ ២ ដង
+    // ថ្ងៃទី 10 នៃខែបន្ទាប់ · សៅរ៍ → 9 · អាទិត្យ → 8
+    const nm = nextMonthOf(month), [ny, nmo] = nm.split('-').map(Number);
+    const ndow = new Date(ny, nmo - 1, 10).getDay();
+    const finalDate = `${nm}-${ndow === 6 ? '09' : ndow === 0 ? '08' : '10'}`;
+    const dLeft = dayDiff(finalDate, todayStr());
+    items.push({ lvl: locked || dLeft > 3 ? 'info' : (dLeft < 0 ? 'bad' : 'warn'),
+      text: `ដងទី២ បើកប្រាក់ខែនៅសល់ (${finalDate}${ndow === 6 || ndow === 0 ? ` — ថ្ងៃទី 10 ត្រូវ${ndow === 6 ? 'សៅរ៍' : 'អាទិត្យ'} ប្តូរមកមុន` : ''}) · ${whenTxt(dLeft)}`,
+      detail: locked ? 'ខែបានបិទរួច — អាចបើកតាមធនាគារបាន' : 'ត្រូវបិទខែ ហើយបើកតាមធនាគារ មុនថ្ងៃនេះ' });
+    if (typeof advanceDateOf === 'function') {
+      const advDate = advanceDateOf(month), dAdv = dayDiff(advDate, todayStr());
+      if (dAdv >= -2) items.push({ lvl: 'info', text: `ដងទី១ ប្រាក់ខែទី១ ថ្ងៃ 25 (${advDate}) · ${whenTxt(dAdv)}` });
+    }
 
     if (locked) items.push({ lvl: 'ok', text: `ខែ ${month} បានបិទរួចរាល់` });
     else items.push({ lvl: 'warn', text: ended ? `ខែ ${month} ចប់ហើយ ប៉ុន្តែមិនទាន់បិទ` : `ខែ ${month} ជិតចប់ — មិនទាន់បិទ` });
