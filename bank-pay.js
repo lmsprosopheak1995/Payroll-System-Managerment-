@@ -53,6 +53,8 @@
     if (error && /account_issue/.test(error.message)) return { error: { message: 'គណនីមានបញ្ហា — សូមប្តូរគណនីថ្មី ឬដោះស្រាយបញ្ហាជាមុន' } };
     if (error && /no_account/.test(error.message)) return { error: { message: 'បុគ្គលិកនេះមិនទាន់មានគណនីធនាគារទេ' } };
     if (error && /incomplete/.test(error.message)) return { error: { message: 'ព័ត៌មានគណនីមិនគ្រប់ (ធនាគារ + លេខគណនី + ឈ្មោះគណនី)' } };
+    if (error && /not_paid/.test(error.message)) return { error: { message: 'ការបើកប្រាក់នេះមិនទាន់ត្រូវបានកត់ថា "បានបើក"' } };
+    if (error && /bank_set_txn/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay-plus.sql ក្នុង Supabase — សូម Run ឯកសារនោះជាមុន រួចរង់ចាំ ១០ វិនាទី' } };
     if (error && /bank_(load|save_info|history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase — សូមបើក Supabase → SQL Editor ហើយ Run ឯកសារ bank-pay.sql ទាំងមូលម្តងទៀត រួចរង់ចាំ ១០ វិនាទី' } };
     if (!error) adminPw = pw;
     return { data, error };
@@ -150,6 +152,12 @@
 .bp-sum{font-size:.82rem;font-weight:600;margin-left:auto;flex:1 0 100%;text-align:right}
 .bp-mon{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
 .bp-mon input,.bp-mon select{font-size:.8rem;padding:6px 8px}
+.bp-wa{color:#b45309;font-size:.66rem;white-space:normal;max-width:190px;line-height:1.25}
+.bp-wa:empty{display:none}
+.bp-bar-bg{height:8px;border-radius:6px;background:var(--border,#e1e8ef);min-width:90px;overflow:hidden}
+.bp-bar-fg{height:100%;background:var(--accent,#0d9488)}
+.bp-ta{width:100%;min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;padding:8px;box-sizing:border-box}
+.bp-st-ok{color:var(--success,#059669);font-weight:600}.bp-st-bad{color:#dc2626;font-weight:600}.bp-st-warn{color:#b45309;font-weight:600}
 `;
 
   function build() {
@@ -172,6 +180,9 @@
           <button class="secondary" id="bpProbBtn">⚠️ គណនីមានបញ្ហា</button>
           <button class="secondary" id="bpChgBtn">🔄 ប្តូរគណនីថ្មី</button>
           <button id="bpIbBtn">🌐 Internet Banking</button>
+          <button class="secondary" id="bpImpBtn">📥 នាំចូលគណនី (CSV)</button>
+          <button class="secondary" id="bpRecBtn">🧾 ផ្ទៀងផ្ទាត់ Statement</button>
+          <button class="secondary" id="bpSumBtn">📈 សង្ខេបតាមធនាគារ</button>
           <span class="bp-mon"><select id="bpRound" title="ជ្រើសប្រាក់ខែទី១ ឬ ប្រាក់ខែទី២"><option value="advance">ប្រាក់ខែទី១ · ថ្ងៃ 25</option><option value="final" selected>ប្រាក់ខែទី២ · ថ្ងៃទី 10 (ថយបើឈប់/បុណ្យ)</option></select><button class="secondary" id="bpPrev" title="ខែមុន">◀</button><input type="month" id="bpMonthInput" title="ជ្រើសខែ"><button class="secondary" id="bpNext" title="ខែក្រោយ">▶</button></span>
           <span class="bp-sum" id="bpSum"></span>
           <span class="bp-sum bp-sum-gross" id="bpSumGross"></span>
@@ -202,6 +213,11 @@
     $('bpProbBtn').addEventListener('click', showProblems);
     $('bpChgBtn').addEventListener('click', () => openChange(''));
     $('bpIbBtn').addEventListener('click', showIB);
+    $('bpImpBtn').addEventListener('click', showImport);
+    $('bpRecBtn').addEventListener('click', showReconcile);
+    $('bpSumBtn').addEventListener('click', showBankSummary);
+    $('bpBody').addEventListener('click', onRowAction);
+    $('bpBody').addEventListener('input', ev => { if (ev.target.closest('.bp-acc, .bp-bank')) refreshWarns(); });
     $('bpMonthInput').addEventListener('change', e => switchMonth(e.target.value));
     $('bpPrev').addEventListener('click', () => switchMonth(shiftMonth(curMonth, -1)));
     $('bpNext').addEventListener('click', () => switchMonth(shiftMonth(curMonth, 1)));
@@ -272,6 +288,7 @@
       ? `<div class="bp-warn" style="${blue}">💵 <b>ប្រាក់ខែទី១ · ថ្ងៃ 25</b> · ថ្ងៃទូទាត់ ${dueInfo(advDateOf(curMonth))}${payDateNote(advBase(curMonth), advDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់តាមច្បាប់ប្រាក់ខែទី១ (បុគ្គលិកដែលមានសិទ្ធិប៉ុណ្ណោះ)។ សម្គាល់ថាបានបើកបាននៅពេលដល់ថ្ងៃទូទាត់ (មិនចាំបាច់បិទខែ)។</div>`
       : `<div class="bp-warn" style="${blue}">💵 <b>ប្រាក់ខែទី២ · ថ្ងៃទី 10 — ប្រាក់ខែនៅសល់ នៃខែ ${esc(curMonth)}</b> · ត្រូវបើកត្រឹម ${dueInfo(finalDateOf(curMonth))}${payDateNote(finalBase(curMonth), finalDateOf(curMonth))}${holidayWarn()}<br>ទឹកប្រាក់ = ប្រាក់ខែសុទ្ធ ដែលបានកាត់ប្រាក់ខែទី១ រួចហើយ។</div>`
         + (locked ? '' : `<div class="bp-warn">🔓 ខែ ${esc(curMonth)} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ។ ត្រូវ "🔒 បិទខែ" ជាមុនថ្ងៃទី 10 ទើបអាចសម្គាល់ថា "បានបើក" ប្រាក់ខែទី២ បាន (Export ពិនិត្យមើលបាន)។</div>`);
+    overlay.querySelector('#bpStatus').insertAdjacentHTML('afterbegin', reminderHtml());
     overlay.querySelector('#bpPaidBtn').disabled = curRound === 'final' && !locked;
     overlay.querySelector('#bpBody').innerHTML = curRows.length ? curRows.map((row, i) => {
       const { e, t } = row;
@@ -284,16 +301,19 @@
         <td><input type="checkbox" class="bp-chk" ${net <= 0 ? 'disabled' : ''}></td>
         <td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td>
         <td><input type="text" class="bp-bank" list="bpBanks" value="${esc(inf.bank_name || '')}" placeholder="ABA Bank" ${paid ? 'disabled' : ''}></td>
-        <td><input type="text" class="bp-acc" inputmode="numeric" value="${esc(inf.account_no || '')}" placeholder="000 123 456" ${paid ? 'disabled' : ''}></td>
+        <td><input type="text" class="bp-acc" inputmode="numeric" value="${esc(inf.account_no || '')}" placeholder="000 123 456" ${paid ? 'disabled' : ''}><div class="bp-wa"></div></td>
         <td><input type="text" class="bp-name" value="${esc(inf.account_name || '')}" placeholder="SOK SOPHEA" ${paid ? 'disabled' : ''}></td>
         ${roundCell(advOf(row), isPaid(e.id, 'advance'), 'advance')}${roundCell(r2(t.net), isPaid(e.id, 'final'), 'final')}
         <td style="text-align:right;font-variant-numeric:tabular-nums;">${money(net)}</td>
         <td>${paid ? `<span class="bp-ok">✓ បានបើក</span><div class="bp-no" style="font-size:.68rem">${esc(String(paid.paid_at || '').slice(0, 16).replace('T', ' '))}</div>`
+          + (paid.txn_ref ? `<div style="font-size:.68rem">🔖 ${esc(paid.txn_ref)}</div>` : '')
+          + '<div style="margin-top:3px"><button class="secondary bp-act" data-bpact="txn" title="កត់លេខយោងពីធនាគារ">🔖 លេខយោង</button> <button class="secondary bp-act" data-bpact="slip" title="បោះពុម្ពព្រឹត្តិប័ត្រ">🖨 Slip</button></div>'
           : (net <= 0 ? `<span class="bp-no">${curRound === 'advance' ? 'មិនមានសិទ្ធិប្រាក់ខែទី១' : 'គ្មានទឹកប្រាក់'}</span>` : (!hasBank(e.id) ? '<span style="color:#b45309">ខ្វះព័ត៌មានធនាគារ</span>' : (issueOf(e.id) ? `<span style="color:#dc2626;font-weight:600" title="${esc(issueOf(e.id))}">⚠ មានបញ្ហា</span>` : '<span class="bp-no">មិនទាន់បើក</span>')))}</td>
       </tr>`;
     }).join('') : '<tr><td colspan="10" style="padding:16px;">មិនមានបុគ្គលិកក្នុងខែនេះ</td></tr>';
     updateSum();
     updateProbBtn();
+    refreshWarns();
   }
 
   function updateProbBtn() {
@@ -877,6 +897,290 @@
         ibRender(body);
       }
     } finally { ibBusy = false; }
+  }
+
+  // ================================================================ មុខងារបន្ថែម ====
+  // ① ពិនិត្យលេខគណនី · ② នាំចូល CSV · ③ លេខយោង + Slip · ④ ផ្ទៀងផ្ទាត់ Statement · ⑤ សង្ខេបតាមធនាគារ · ⑥ ការរំលឹក
+
+  const accDigits = s => String(s || '').replace(/[\s-]/g, '');
+  const amtNum = v => { const n = Number(String(v == null ? '' : v).replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; };
+  // ច្បាប់ប្រវែងលេខគណនី (ព្រមានប៉ុណ្ណោះ មិនទប់ស្កាត់) — កែបានតាមពិតរបស់ធនាគារ
+  const ACC_RULES = { 'ABA Bank': [9], 'Wing Bank': [8], 'ACLEDA Bank': [13] };
+  function accWarn(bank, acc, empId, taken) {
+    const out = [], d = accDigits(acc);
+    if (!d) return '';
+    const rule = ACC_RULES[bank];
+    if (rule) {
+      if (!/^\d+$/.test(d)) out.push('លេខគណនីគួរមានតែលេខ');
+      else if (!rule.includes(d.length)) out.push(`${bank} ជាធម្មតា ${rule.join('/')} ខ្ទង់ (ឥឡូវ ${d.length})`);
+    }
+    const dup = (taken[d] || []).filter(id => id !== empId);
+    if (dup.length) out.push('ស្ទួនជាមួយ ' + dup.map(nameOf).join(', '));
+    return out.join(' · ');
+  }
+  function refreshWarns() {
+    if (!overlay) return;
+    const rows = [...overlay.querySelectorAll('#bpBody tr[data-id]')];
+    const taken = {};
+    rows.forEach(tr => { const d = accDigits(tr.querySelector('.bp-acc').value); if (d) (taken[d] = taken[d] || []).push(tr.dataset.id); });
+    rows.forEach(tr => {
+      const el = tr.querySelector('.bp-wa'); if (!el) return;
+      el.textContent = accWarn(tr.querySelector('.bp-bank').value.trim(), tr.querySelector('.bp-acc').value, tr.dataset.id, taken);
+    });
+  }
+
+  // ⑥ ការរំលឹកថ្ងៃទូទាត់
+  function reminderHtml() {
+    const date = curRound === 'advance' ? advDateOf(curMonth) : finalDateOf(curMonth);
+    const todo = curRows.filter(r => amountOf(r) > 0 && !isPaid(r.e.id));
+    if (!todo.length) return '';
+    const days = dayDiff(date, todayStr());
+    if (days > 3) return '';
+    const noBank = todo.filter(r => !hasBank(r.e.id)).length, bad = todo.filter(r => hasBank(r.e.id) && issueOf(r.e.id)).length;
+    const total = todo.reduce((s, r) => s + amountOf(r), 0);
+    const when = days < 0 ? `ហួសកំណត់ ${-days} ថ្ងៃ` : (days === 0 ? 'ថ្ងៃនេះជាថ្ងៃទូទាត់' : `នៅសល់ ${days} ថ្ងៃ`);
+    const bg = days < 0 ? 'background:#fee2e2;color:#991b1b' : 'background:#fef3c7;color:#92400e';
+    return `<div class="bp-warn" style="${bg}">⏰ <b>${when}</b> · មិនទាន់បើក ${todo.length} នាក់ ($${money(total)})${noBank ? ` · ខ្វះព័ត៌មានធនាគារ ${noBank}` : ''}${bad ? ` · គណនីមានបញ្ហា ${bad}` : ''}</div>`;
+  }
+
+  // ---- ជំនួយ៖ parse អត្ថបទ CSV/TSV ----
+  function parseDelimited(text) {
+    text = String(text || '').replace(/^﻿/, '');
+    const first = text.split(/\r?\n/).find(l => l.trim()) || '';
+    const cnt = c => (first.match(new RegExp(c === '\t' ? '\\t' : '\\' + c, 'g')) || []).length;
+    const delim = cnt('\t') >= 1 ? '\t' : (cnt(';') > cnt(',') ? ';' : ',');
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === delim) { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim() !== '')) rows.push(row); row = []; }
+      else cell += c;
+    }
+    row.push(cell); if (row.some(x => x.trim() !== '')) rows.push(row);
+    return rows.map(r => r.map(x => x.trim()));
+  }
+  // រកជួរឈរតាមឈ្មោះក្បាលតារាង
+  const HDR = {
+    id: /^(emp(loyee)?[\s_-]*(id|no|code)?|id|username|user|អត្តលេខ|លេខសម្គាល់)$/i,
+    bank: /^(bank|bank[\s_-]*name|ធនាគារ)$/i,
+    acc: /^(acc(ount)?([\s_-]*(no|number|num))?|លេខគណនី)$/i,
+    name: /^(account[\s_-]*name|acc[\s_-]*name|beneficiary|ឈ្មោះគណនី)$/i,
+    emp: /^(employee[\s_-]*name|name|ឈ្មោះ)$/i,
+    amt: /^(amount([\s_-]*\(?usd\)?)?|credit|debit|usd|ចំនួន(ទឹកប្រាក់)?)$/i,
+    ref: /^(ref(erence)?|txn|transaction([\s_-]*(id|ref|no))?|trx[\s_-]*id|លេខយោង)$/i,
+  };
+  function findCols(header) {
+    const m = {};
+    header.forEach((h, i) => { for (const k of Object.keys(HDR)) if (m[k] == null && HDR[k].test(h.trim())) { m[k] = i; break; } });
+    return m;
+  }
+  function normBank(b) {
+    const s = String(b || '').trim(); if (!s) return '';
+    const low = s.toLowerCase();
+    const hit = BANKS.find(x => x.toLowerCase() === low) || BANKS.find(x => x.toLowerCase().split(/[\s(]/)[0] === low.split(/[\s(]/)[0]);
+    return hit || s;
+  }
+  function readFileText(file, cb) {
+    if (/\.xlsx?$/i.test(file.name)) { customAlert('សូមរក្សាទុក Excel ជា .csv ជាមុន (File → Save As → CSV) ហើយជ្រើសម្តងទៀត'); return; }
+    const fr = new FileReader(); fr.onload = () => cb(String(fr.result || '')); fr.readAsText(file, 'utf-8');
+  }
+
+  // ---- ② នាំចូលគណនី ----
+  function showImport() {
+    if (!curRows.length) { customAlert('សូមផ្ទុកទិន្នន័យខែនេះជាមុន (បញ្ចូលពាក្យសម្ងាត់ Admin)'); return; }
+    const body = openPanel('📥 នាំចូលគណនីធនាគារ (CSV)', `
+      <p class="bp-note">ជួរឈរ៖ <b>អត្តលេខ, ធនាគារ, លេខគណនី, ឈ្មោះគណនី</b> (មានក្បាលតារាងឬមិនមានក៏បាន — បើគ្មាន ត្រូវតាមលំដាប់នេះ)។ ចម្លងពី Excel មកបិទភ្ជាប់ ឬជ្រើសឯកសារ .csv។ ការនាំចូលគ្រាន់តែបំពេញក្នុងតារាង — ត្រូវចុច "💾 រក្សាទុកគណនីធនាគារ" ទើបរក្សាពិតប្រាកដ។</p>
+      <textarea class="bp-ta" id="imTxt" placeholder="B-2808,Wing Bank,04421651,HEM SOPHEAK"></textarea>
+      <div class="bp-bar"><input type="file" id="imFile" accept=".csv,.txt,.tsv"><button id="imPrev">👁 មើលជាមុន</button></div>
+      <div id="imOut"></div>`);
+    const $ = id => body.querySelector('#' + id);
+    let plan = [];
+    $('imFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) readFileText(f, t => { $('imTxt').value = t; $('imPrev').click(); }); });
+    $('imPrev').addEventListener('click', () => {
+      const rows = parseDelimited($('imTxt').value);
+      if (!rows.length) { $('imOut').innerHTML = '<div class="bp-warn">គ្មានទិន្នន័យ</div>'; return; }
+      let c = findCols(rows[0]), data = rows;
+      const hasHdr = c.id != null || c.acc != null || c.bank != null;
+      if (hasHdr) data = rows.slice(1); else c = { id: 0, bank: 1, acc: 2, name: 3 };
+      if (c.id == null && c.emp == null) { $('imOut').innerHTML = '<div class="bp-warn">រកមិនឃើញជួរ "អត្តលេខ"</div>'; return; }
+      const emps = curRows.map(r => r.e);
+      plan = data.map(r => {
+        const key = (r[c.id != null ? c.id : c.emp] || '').trim().toLowerCase();
+        const e = emps.find(x => (x.username || '').toLowerCase() === key) || emps.find(x => (x.name || '').toLowerCase() === key);
+        const bank = normBank(r[c.bank]), acc = cleanAcc(r[c.acc]), nm = cleanTxt(r[c.name]).toUpperCase();
+        let st = 'ok', msg = '';
+        if (!e) { st = 'bad'; msg = 'រកមិនឃើញបុគ្គលិក'; }
+        else if (isPaid(e.id, 'advance') || isPaid(e.id, 'final')) { st = 'skip'; msg = 'បានបើកប្រាក់រួច — រំលង'; }
+        else if (!(bank && acc && nm)) { st = 'bad'; msg = 'ព័ត៌មានមិនគ្រប់'; }
+        return { e, bank, acc, nm, st, msg, key };
+      });
+      const ok = plan.filter(p => p.st === 'ok');
+      $('imOut').innerHTML = `<div class="bp-sub"><b>${ok.length}</b> អាចនាំចូលបាន · ${plan.length - ok.length} រំលង/មានបញ្ហា <button id="imApply" ${ok.length ? '' : 'disabled'}>✓ ដាក់ចូលតារាង (${ok.length})</button></div>
+        <div class="table-wrap" style="max-height:34vh;overflow:auto"><table class="bp-tbl"><thead><tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ធនាគារ</th><th>លេខគណនី</th><th>ឈ្មោះគណនី</th><th>លទ្ធផល</th></tr></thead><tbody>${plan.map(p =>
+          `<tr><td>${esc(p.e ? p.e.username || '' : p.key)}</td><td>${esc(p.e ? p.e.name || '' : '-')}</td><td>${esc(p.bank)}</td><td>${esc(p.acc)}</td><td>${esc(p.nm)}</td><td class="${p.st === 'ok' ? 'bp-st-ok' : (p.st === 'skip' ? 'bp-st-warn' : 'bp-st-bad')}">${p.st === 'ok' ? '✓ ត្រឹមត្រូវ' : esc(p.msg)}</td></tr>`).join('')}</tbody></table></div>`;
+      const ap = $('imApply');
+      if (ap) ap.addEventListener('click', () => {
+        let n = 0;
+        plan.filter(p => p.st === 'ok').forEach(p => {
+          const tr = [...overlay.querySelectorAll('#bpBody tr[data-id]')].find(t => t.dataset.id === p.e.id); if (!tr) return; // (ឈ្មោះ CSS ត្រូវបានប្រើជាអថេរអត្ថបទខាងលើ → មិនប្រើ CSS.escape)
+          tr.querySelector('.bp-bank').value = p.bank; tr.querySelector('.bp-acc').value = p.acc; tr.querySelector('.bp-name').value = p.nm; n++;
+        });
+        refreshWarns(); closePanel();
+        customAlert(`បានដាក់ ${n} គណនីចូលតារាង។ សូមពិនិត្យ រួចចុច "💾 រក្សាទុកគណនីធនាគារ" ដើម្បីរក្សាពិតប្រាកដ។`);
+      });
+    });
+  }
+
+  // ---- ③ លេខយោង + Slip ----
+  async function onRowAction(ev) {
+    const btn = ev.target.closest('button[data-bpact]'); if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    if (btn.dataset.bpact === 'txn') await setTxn(id, curRound);
+    else if (btn.dataset.bpact === 'slip') printSlip(id, curRound);
+  }
+  async function setTxn(empId, round, value) {
+    const rec = bankPaid[pkey(curMonth, empId, round)];
+    if (!rec) { await customAlert('ការបើកប្រាក់នេះមិនទាន់ត្រូវបានកត់ថា "បានបើក"'); return false; }
+    let v = value;
+    if (v === undefined) {
+      v = await customPrompt(`លេខយោងប្រតិបត្តិការពីធនាគារ (${nameOf(empId)} · ${ROUND_SHORT[round]})៖\nទុកទទេ = លុបលេខយោង`);
+      if (v === null) return false;
+    }
+    const txn = cleanTxt(v).slice(0, 60);
+    const { error, cancelled } = await bankRpc('bank_set_txn', { p_month: curMonth, p_kind: round, p_emp: empId, p_txn: txn });
+    if (cancelled) return false;
+    if (error) { await customAlert('រក្សាទុកមិនបានជោគជ័យ៖ ' + error.message); return false; }
+    rec.txn_ref = txn;
+    audit('bank_txn_ref', empId, { month: curMonth, new: { round, txn_ref: txn } });
+    if (value === undefined) render();
+    return true;
+  }
+  function openPrint(title, bodyHtml) {
+    const w = window.open('', '_blank');
+    if (!w) { customAlert('Browser បានទប់ស្កាត់ផ្ទាំងថ្មី (pop-up) — សូមអនុញ្ញាត pop-up សម្រាប់គេហទំព័រនេះ រួចព្យាយាមម្តងទៀត'); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+      body{font-family:'Noto Sans Khmer','Khmer OS',system-ui,sans-serif;margin:28px;color:#111}
+      h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;color:#555;margin:0 0 16px;font-weight:500}
+      table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:7px 10px;font-size:13px;text-align:left}th{background:#f3f4f6;width:34%}
+      .r{text-align:right}.amt{font-size:18px;font-weight:700}.foot{margin-top:28px;font-size:11px;color:#666}
+      .sig{display:flex;gap:40px;margin-top:46px}.sig div{flex:1;border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center}
+      @media print{body{margin:12mm}}</style></head><body>${bodyHtml}<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>`);
+    w.document.close();
+  }
+  function printSlip(empId, round) {
+    const p = bankPaid[pkey(curMonth, empId, round)];
+    if (!p) { customAlert('ព្រឹត្តិប័ត្របានតែក្រោយកត់ថា "បានបើក"'); return; }
+    const e = empOf(empId) || {};
+    const row = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
+    openPrint('Payment Slip ' + (e.username || ''), `
+      <h1>ព្រឹត្តិប័ត្របើកប្រាក់ខែតាមធនាគារ · Salary Payment Slip</h1>
+      <h2>${esc(ROUND_LABEL[round])} · ខែ ${esc(curMonth)}</h2>
+      <table>
+        ${row('អត្តលេខ / Employee ID', esc(e.username || ''))}
+        ${row('ឈ្មោះ / Name', esc(e.name || nameOf(empId)))}
+        ${row('ធនាគារ / Bank', esc(p.bank_name || ''))}
+        ${row('លេខគណនី / Account', esc(maskAccount(p.account_no)))}
+        ${row('ឈ្មោះគណនី / Account name', esc(p.account_name || ''))}
+        ${row('ចំនួន / Amount (USD)', `<span class="amt">$${money(p.amount_usd)}</span>`)}
+        ${row('ថ្ងៃបើក / Paid at', esc(fmtDT(p.paid_at)))}
+        ${row('លេខយោង / Reference', esc(p.txn_ref || p.reference || '-'))}
+      </table>
+      <div class="sig"><div>អ្នកទទួល / Received by</div><div>អ្នកអនុម័ត / Approved by</div></div>
+      <div class="foot">លេខគណនីបង្ហាញតែ ៤ ខ្ទង់ចុងក្រោយ · បោះពុម្ពនៅ ${esc(fmtDT(new Date().toISOString()))}</div>`);
+    audit('bank_slip_print', empId, { month: curMonth, new: { round } });
+  }
+
+  // ---- ④ ផ្ទៀងផ្ទាត់ Statement ----
+  function showReconcile() {
+    if (!curRows.length) { customAlert('សូមផ្ទុកទិន្នន័យខែនេះជាមុន (បញ្ចូលពាក្យសម្ងាត់ Admin)'); return; }
+    const body = openPanel(`🧾 ផ្ទៀងផ្ទាត់ Statement — ${esc(ROUND_SHORT[curRound])} ${esc(curMonth)}`, `
+      <p class="bp-note">បិទភ្ជាប់ ឬជ្រើសឯកសារ .csv ពី statement ធនាគារ។ ត្រូវការជួរ <b>លេខគណនី</b> និង <b>ចំនួន (Amount)</b>; ជួរ <b>លេខយោង (Reference)</b> ជាជម្រើស។ ប្រព័ន្ធផ្គូផ្គងតាមលេខគណនី + ចំនួនទឹកប្រាក់នៃដងដែលកំពុងជ្រើស។</p>
+      <textarea class="bp-ta" id="rcTxt" placeholder="Account Number,Amount,Reference&#10;04421651,281.06,FT26277XXXX"></textarea>
+      <div class="bp-bar"><input type="file" id="rcFile" accept=".csv,.txt,.tsv"><button id="rcRun">🔍 ផ្ទៀងផ្ទាត់</button></div>
+      <div id="rcOut"></div>`);
+    const $ = id => body.querySelector('#' + id);
+    $('rcFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) readFileText(f, t => { $('rcTxt').value = t; $('rcRun').click(); }); });
+    $('rcRun').addEventListener('click', () => {
+      const rows = parseDelimited($('rcTxt').value);
+      if (rows.length < 2) { $('rcOut').innerHTML = '<div class="bp-warn">ត្រូវការយ៉ាងហោចណាស់ ក្បាលតារាង ១ ជួរ និងទិន្នន័យ ១ ជួរ</div>'; return; }
+      const c = findCols(rows[0]);
+      if (c.acc == null || c.amt == null) { $('rcOut').innerHTML = '<div class="bp-warn">រកមិនឃើញជួរ "Account Number" ឬ "Amount" ក្នុងក្បាលតារាង</div>'; return; }
+      const st = rows.slice(1).map(r => ({ acc: accDigits(r[c.acc]), amt: amtNum(r[c.amt]), ref: c.ref != null ? (r[c.ref] || '').trim() : '', used: false })).filter(x => x.acc && isFinite(x.amt));
+      const exp = curRows.filter(r => amountOf(r) > 0).map(r => {
+        const paid = bankPaid[pkey(curMonth, r.e.id, curRound)], inf = bankInfo[r.e.id] || {};
+        return { row: r, e: r.e, amt: amountOf(r), acc: accDigits(paid ? paid.account_no : inf.account_no), paid };
+      });
+      const res = exp.map(x => {
+        const same = st.filter(s => !s.used && x.acc && s.acc === x.acc);
+        const exact = same.find(s => Math.abs(Math.abs(s.amt) - x.amt) < 0.005);
+        if (exact) { exact.used = true; return { ...x, status: 'ok', hit: exact }; }
+        if (same.length) { same[0].used = true; return { ...x, status: 'diff', hit: same[0] }; }
+        return { ...x, status: x.acc ? 'miss' : 'noacc' };
+      });
+      const unknown = st.filter(s => !s.used);
+      const cnt = k => res.filter(r => r.status === k).length;
+      const LBL = { ok: '✓ ត្រូវគ្នា', diff: '⚠ ចំនួនខុស', miss: '✗ មិនឃើញក្នុង statement', noacc: 'ខ្វះគណនី' };
+      const CLS = { ok: 'bp-st-ok', diff: 'bp-st-warn', miss: 'bp-st-bad', noacc: 'bp-st-bad' };
+      const need = res.filter(r => r.status === 'ok' && r.paid && r.hit.ref && !r.paid.txn_ref);
+      $('rcOut').innerHTML = `<div class="bp-sub"><b class="bp-st-ok">ត្រូវគ្នា ${cnt('ok')}</b> · <b class="bp-st-warn">ចំនួនខុស ${cnt('diff')}</b> · <b class="bp-st-bad">មិនឃើញ ${cnt('miss') + cnt('noacc')}</b> · ក្នុង statement តែមិនមានក្នុងបញ្ជី ${unknown.length}
+        ${need.length ? `<button id="rcRef">🔖 កត់លេខយោង ${need.length} ពី statement</button>` : ''}</div>
+        <div class="table-wrap" style="max-height:38vh;overflow:auto"><table class="bp-tbl"><thead><tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>លេខគណនី</th><th style="text-align:right">ត្រូវបើក ($)</th><th style="text-align:right">Statement ($)</th><th>លេខយោង</th><th>លទ្ធផល</th></tr></thead><tbody>${res.map(r =>
+          `<tr><td>${esc(r.e.username || '')}</td><td>${esc(r.e.name || '')}</td><td>${esc(maskAccount(r.acc))}</td><td style="text-align:right">${money(r.amt)}</td><td style="text-align:right">${r.hit ? money(Math.abs(r.hit.amt)) : '-'}</td><td>${esc(r.hit && r.hit.ref || '')}</td><td class="${CLS[r.status]}">${LBL[r.status]}${r.paid ? '' : ' <small class="bp-no">(មិនទាន់កត់បានបើក)</small>'}</td></tr>`).join('')}
+        ${unknown.map(s => `<tr><td colspan="2" class="bp-no">មិនមានក្នុងបញ្ជី</td><td>${esc(maskAccount(s.acc))}</td><td></td><td style="text-align:right">${money(Math.abs(s.amt))}</td><td>${esc(s.ref)}</td><td class="bp-st-warn">ក្រៅបញ្ជី</td></tr>`).join('')}</tbody></table></div>`;
+      const rb = $('rcRef');
+      if (rb) rb.addEventListener('click', async () => {
+        if (!(await customConfirm(`កត់លេខយោងពី statement សម្រាប់ ${need.length} នាក់?`))) return;
+        rb.disabled = true; let ok = 0;
+        for (const r of need) { if (await setTxn(r.e.id, curRound, r.hit.ref)) ok++; else break; }
+        render();
+        await customAlert(`បានកត់លេខយោង ${ok}/${need.length}`);
+        showReconcile();
+      });
+    });
+  }
+
+  // ---- ⑤ សង្ខេបតាមធនាគារ ----
+  function bankGroups() {
+    const g = {};
+    curRows.forEach(r => {
+      const net = amountOf(r); if (net <= 0) return;
+      const paid = bankPaid[pkey(curMonth, r.e.id, curRound)], inf = bankInfo[r.e.id] || {};
+      const b = (paid ? paid.bank_name : inf.bank_name) || '(មិនទាន់មានគណនី)';
+      const x = (g[b] = g[b] || { n: 0, total: 0, np: 0, paid: 0 });
+      x.n++; x.total += net; if (paid) { x.np++; x.paid += net; }
+    });
+    return Object.keys(g).sort((a, b) => g[b].total - g[a].total).map(k => ({ bank: k, ...g[k] }));
+  }
+  function showBankSummary() {
+    if (!curRows.length) { customAlert('សូមផ្ទុកទិន្នន័យខែនេះជាមុន (បញ្ចូលពាក្យសម្ងាត់ Admin)'); return; }
+    const list = bankGroups();
+    const T = list.reduce((s, x) => ({ n: s.n + x.n, total: s.total + x.total, np: s.np + x.np, paid: s.paid + x.paid }), { n: 0, total: 0, np: 0, paid: 0 });
+    const body = openPanel(`📈 សង្ខេបតាមធនាគារ — ${esc(ROUND_SHORT[curRound])} ${esc(curMonth)}`, list.length ? `
+      <div class="bp-bar"><button class="secondary" id="bsX">📊 Export Excel</button><button class="secondary" id="bsP">🖨 បោះពុម្ព / PDF</button></div>
+      <div class="table-wrap"><table class="bp-tbl"><thead><tr><th>ធនាគារ</th><th style="text-align:right">នាក់</th><th style="text-align:right">សរុប ($)</th><th style="text-align:right">បានបើក ($)</th><th style="text-align:right">នៅសល់ ($)</th><th>វឌ្ឍនភាព</th></tr></thead><tbody>${list.map(x => {
+        const pct = x.total ? Math.round(x.paid / x.total * 100) : 0;
+        return `<tr><td>${esc(x.bank)}</td><td style="text-align:right">${x.np}/${x.n}</td><td style="text-align:right">${money(x.total)}</td><td style="text-align:right">${money(x.paid)}</td><td style="text-align:right">${money(x.total - x.paid)}</td><td><div class="bp-bar-bg"><div class="bp-bar-fg" style="width:${pct}%"></div></div><small>${pct}%</small></td></tr>`; }).join('')}</tbody>
+        <tfoot><tr style="font-weight:700"><td>សរុប</td><td style="text-align:right">${T.np}/${T.n}</td><td style="text-align:right">${money(T.total)}</td><td style="text-align:right">${money(T.paid)}</td><td style="text-align:right">${money(T.total - T.paid)}</td><td></td></tr></tfoot></table></div>`
+      : '<div class="bp-note">គ្មានទឹកប្រាក់ត្រូវបើកក្នុងដងនេះ</div>');
+    if (!list.length) return;
+    body.querySelector('#bsX').addEventListener('click', () => {
+      downloadXlsx(`bank_summary_${curMonth}_${curRound}.xlsx`, [{
+        name: 'Bank Summary',
+        columns: [{ header: 'Bank', width: 30, fmt: 'text' }, { header: 'Employees', width: 11, fmt: 'int' }, { header: 'Paid (count)', width: 12, fmt: 'int' },
+          { header: 'Total (USD)', width: 14, fmt: 'usd' }, { header: 'Paid (USD)', width: 14, fmt: 'usd' }, { header: 'Remaining (USD)', width: 16, fmt: 'usd' }],
+        rows: list.map(x => [x.bank, x.n, x.np, r2(x.total), r2(x.paid), r2(x.total - x.paid)]),
+        totals: { label: 'សរុប', labelCol: 0, sumCols: [1, 2, 3, 4, 5] },
+      }]);
+    });
+    body.querySelector('#bsP').addEventListener('click', () => {
+      openPrint('Bank Summary ' + curMonth, `<h1>សង្ខេបបើកប្រាក់ខែតាមធនាគារ · Bank Payment Summary</h1><h2>${esc(ROUND_LABEL[curRound])} · ខែ ${esc(curMonth)}</h2>
+        <table><thead><tr><th style="width:auto">ធនាគារ</th><th class="r">នាក់ (បានបើក/សរុប)</th><th class="r">សរុប ($)</th><th class="r">បានបើក ($)</th><th class="r">នៅសល់ ($)</th></tr></thead><tbody>${list.map(x =>
+          `<tr><td>${esc(x.bank)}</td><td class="r">${x.np}/${x.n}</td><td class="r">${money(x.total)}</td><td class="r">${money(x.paid)}</td><td class="r">${money(x.total - x.paid)}</td></tr>`).join('')}
+          <tr><td><b>សរុប</b></td><td class="r"><b>${T.np}/${T.n}</b></td><td class="r"><b>${money(T.total)}</b></td><td class="r"><b>${money(T.paid)}</b></td><td class="r"><b>${money(T.total - T.paid)}</b></td></tr></tbody></table>
+        <div class="foot">បោះពុម្ពនៅ ${esc(fmtDT(new Date().toISOString()))}</div>`);
+    });
   }
 
   // ---------------------------------------------------------------- init ----
