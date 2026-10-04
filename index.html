@@ -12,6 +12,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -140,6 +142,7 @@
         <button class="secondary" id="attendanceSettingsBtn">⚙ ការកំណត់</button>
         <button class="secondary" id="attendanceHolidayBtn">🎌 កំណត់ថ្ងៃបុណ្យ</button>
         <button class="secondary" id="attendancePrintBtn">🖨 ព្រីនតារាងវត្តមាន</button>
+        <button class="secondary" id="attendancePdfBtn">⬇ PDF តារាងវត្តមាន</button>
         <button class="secondary" id="exportAttendanceBtn">⬇ នាំចេញ CSV</button>
       </div>
     </div>
@@ -441,6 +444,8 @@
         <button id="monthlyRunBtn">⚡ គណនាប្រាក់កាត់យឺត/ច្បាប់ ទាំងអស់</button>
         <button class="secondary" id="monthlyPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
         <button class="secondary" id="monthlyPrintAllBtn">🖨 Payslip ទាំងអស់</button>
+        <button class="secondary" id="monthlyPdfSheetBtn">⬇ PDF តារាង</button>
+        <button class="secondary" id="monthlyPdfAllBtn">⬇ PDF Payslip ទាំងអស់</button>
         <button class="secondary" id="monthlyXlsxBtn">📊 Export Excel</button>
         <button class="secondary" id="monthlyCsvBtn">⬇️ Export CSV</button>
         <button class="secondary" id="monthlyAuditBtn">📜 ប្រវត្តិកែប្រែ</button>
@@ -510,6 +515,9 @@
         <button class="secondary" id="payrollPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
         <button class="secondary" id="payrollPrintSlipBtn">🖨 ព្រីន Payslip</button>
         <button class="secondary" id="payrollPrintAllBtn">🖨 Payslip ទាំងអស់</button>
+        <button class="secondary" id="payrollPdfSheetBtn">⬇ PDF តារាងប្រាក់ខែ</button>
+        <button class="secondary" id="payrollPdfSlipBtn">⬇ PDF Payslip</button>
+        <button class="secondary" id="payrollPdfAllBtn">⬇ PDF Payslip ទាំងអស់</button>
       </div>
       <p style="font-size:0.7rem;color:var(--text-muted);margin:0;max-width:360px;">
         *ធាតុ "ថេរ" អនុវត្តរាល់ខែដោយស្វ័យប្រវត្តិ។ ធាតុ "ប្រែប្រួល" អនុវត្តតែក្នុងខែដែលបានកំណត់ប៉ុណ្ណោះ។ ទាំងពីរនឹងបូក/ដក ចូលទៅក្នុងប្រាក់ខែសុទ្ធនៅក្នុងផ្ទាំង "តារាងវត្តមាន" ដោយស្វ័យប្រវត្តិ។
@@ -1017,6 +1025,7 @@
 <script src="bank-pay.js"></script>
 <script src="full-month.js"></script>
 <script src="script.js"></script>
+<script src="pdf-export.js"></script>
 <script src="rules-sync.js"></script>
 <script src="month-end.js"></script>
 <script src="salary-tax.js"></script>

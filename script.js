@@ -1380,7 +1380,7 @@ function renderPayrollHistory() {
       <td>−$${fmtUSD2(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD2(t.net)}</strong></td>
       <td>${fmtRiel(netRielRounded(t))} ៛</td>
-      <td><button class="secondary" onclick="adminPrintPayslipMonth('${emp.id}','${month}')">🖨 Payslip</button></td>
+      <td><button class="secondary" onclick="adminPrintPayslipMonth('${emp.id}','${month}')">🖨 Payslip</button> <button class="secondary" onclick="adminPdfPayslipMonth('${emp.id}','${month}',this)">⬇ PDF</button></td>
     </tr>`;
   }).join('');
 }
@@ -3061,6 +3061,7 @@ function renderMonthlyTab() {
       <td style="white-space:nowrap;">
         <button class="secondary" onclick="monthlyOpenEmployee('${e.id}')">📄 លម្អិត</button>
         <button class="secondary" onclick="adminPrintPayslipMonth('${e.id}','${month}')">🖨</button>
+        <button class="secondary" title="ទាញយក Payslip (PDF)" onclick="adminPdfPayslipMonth('${e.id}','${month}',this)">⬇</button>
         <button class="secondary" title="កែតម្រូវ" onclick="openAdjustModal({empId:'${e.id}',srcMonth:'${month}'})">⚖️</button>
       </td>
     </tr>`;
