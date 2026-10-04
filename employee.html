@@ -499,6 +499,7 @@ function datesInRange(startStr, endStr) {
 }
 // បង្ហាញ 2 ខ្ទង់ (ឧ. $281.06) គ្រប់កន្លែងក្នុងទំព័របុគ្គលិក — តម្លៃពិតខាងក្នុងនៅ 4 ខ្ទង់
 function fmtUSD(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtUSD4(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }); }
 function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
 // ប្រាក់ខែសុទ្ធ (ដូច admin)៖ $281.06 និង $281 + 240 ៛
 function fmtUSD2(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -1402,12 +1403,12 @@ async function renderAttendanceTabEmp() {
       <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
       <td>${STATUS_LABELS[r.status] || '-'}</td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>$${fmtUSD(r.normalPay)}</td>
+      <td>$${fmtUSD4(r.normalPay)}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>$${fmtUSD(r.otPay)}</td>
+      <td>$${fmtUSD4(r.otPay)}</td>
       <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
       <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
-      <td><strong>$${fmtUSD(r.total)}</strong></td>
+      <td><strong>$${fmtUSD4(r.total)}</strong></td>
       <td>${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
