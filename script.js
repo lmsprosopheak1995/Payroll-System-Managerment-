@@ -1308,6 +1308,12 @@ function monthsBack(endMonth, n) {
   return arr;
 }
 
+// ប្រាក់ខែសុទ្ធ (៛) គណនាពីតម្លៃបង្គត់ 2 ខ្ទង់ ($281.06 × អត្រា) ដើម្បីឱ្យត្រូវនឹង "$281 + 240 ៛" ក្នុងតារាងវត្តមាន
+function netRielRounded(t) {
+  const rate = t.exchangeRate || (t.net ? t.netRiel / t.net : 0) || settings.exchangeRate || 0;
+  return Math.round((Math.round((t.net || 0) * 100) / 100) * rate);
+}
+
 function renderPayrollHistory() {
   const body = document.getElementById('payHistoryBody');
   const empty = document.getElementById('payHistoryEmpty');
@@ -1345,7 +1351,7 @@ function renderPayrollHistory() {
       <td>+$${fmtUSD2(t.benefitsUSD)}</td>
       <td>−$${fmtUSD2(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD2(t.net)}</strong></td>
-      <td>${fmtRiel(t.netRiel)} ៛</td>
+      <td>${fmtRiel(netRielRounded(t))} ៛</td>
       <td><button class="secondary" onclick="adminPrintPayslipMonth('${emp.id}','${month}')">🖨 Payslip</button></td>
     </tr>`;
   }).join('');
@@ -3011,15 +3017,15 @@ function renderMonthlyTab() {
     g.adv += adv.amount; g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel; g.netR2 += Math.round(t.net * 100) / 100;
     const warns = [];
     if (unmarked > 0) warns.push(`⚠️ មិនទាន់កត់វត្តមាន ${unmarked} ថ្ងៃ`);
-    if (pendingDed) warns.push(`⚠️ មានប្រាក់កាត់ $${fmtUSD(dedAuto)} មិនទាន់បញ្ចូល`);
+    if (pendingDed) warns.push(`⚠️ មានប្រាក់កាត់ $${fmtUSD2(dedAuto)} មិនទាន់បញ្ចូល`);
     if (!(parseFloat(e.salary) > 0)) warns.push('⚠️ គ្មានប្រាក់ខែមូលដ្ឋាន');
     if (warns.length) g.warn++;
     return `<tr>
       <td>${i + 1}</td><td>${escapeHtml(e.username || '-')}</td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept || '-')}</td>
       <td>${t.workDays}</td><td>${t.leaveDays}</td><td>${t.otHours ? fmtHours(t.otHours) : '-'}</td>
-      <td>$${fmtUSD(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD(t.normalPay)}<br>OT $${fmtUSD(t.otPay)}<br>បាយ $${fmtUSD(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD(t.benefitsUSD)}</td><td>−$${fmtUSD(t.deductionsUSD)}</td>
+      <td>$${fmtUSD2(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD2(t.normalPay)}<br>OT $${fmtUSD2(t.otPay)}<br>បាយ $${fmtUSD2(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD2(t.benefitsUSD)}</td><td>−$${fmtUSD2(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD2(t.net)}</strong></td><td>${fmtUSDplusRiel(t.net)}</td>
-      <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
+      <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD2(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
       <td style="font-size:0.74rem;">${pcPayslipCell(e.id, month)}</td>
       <td style="font-size:0.72rem;color:#b45309;">${warns.join('<br>') || '<span style="color:#16a34a;">✓</span>'}</td>
       <td style="white-space:nowrap;">
@@ -3032,12 +3038,12 @@ function renderMonthlyTab() {
 
   document.getElementById('monthlyStats').innerHTML = `
     <div class="stat-card"><div class="num">${rows.length}</div><div class="label">បុគ្គលិកសកម្ម</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(g.total)}</div><div class="label">តាមវត្តមានសរុប</div></div>
-    <div class="stat-card"><div class="num">+$${fmtUSD(g.ben)}</div><div class="label">អត្ថប្រយោជន៍សរុប</div></div>
-    <div class="stat-card"><div class="num">-$${fmtUSD(g.ded)}</div><div class="label">ប្រាក់កាត់សរុប</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD2(g.total)}</div><div class="label">តាមវត្តមានសរុប</div></div>
+    <div class="stat-card"><div class="num">+$${fmtUSD2(g.ben)}</div><div class="label">អត្ថប្រយោជន៍សរុប</div></div>
+    <div class="stat-card"><div class="num">-$${fmtUSD2(g.ded)}</div><div class="label">ប្រាក់កាត់សរុប</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD2(g.netR2)}</div><div class="label">ត្រូវបើកសរុប ($)</div></div>
     <div class="stat-card"><div class="num">${fmtUSDplusRiel(g.netR2)}</div><div class="label">ត្រូវបើកសរុប (ដុល្លារ + រៀល)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(g.adv)}</div><div class="label">ប្រាក់ខែទី១សរុប (ទី២៥)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD2(g.adv)}</div><div class="label">ប្រាក់ខែទី១សរុប (ទី២៥)</div></div>
     <div class="stat-card"><div class="num" style="color:${g.warn ? '#b45309' : '#16a34a'};">${g.warn}</div><div class="label">ត្រូវពិនិត្យ</div></div>
   `;
 }

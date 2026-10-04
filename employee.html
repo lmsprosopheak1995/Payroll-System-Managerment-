@@ -497,7 +497,8 @@ function datesInRange(startStr, endStr) {
   }
   return dates;
 }
-function fmtUSD(n) { return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }); }
+// បង្ហាញ 2 ខ្ទង់ (ឧ. $281.06) គ្រប់កន្លែងក្នុងទំព័របុគ្គលិក — តម្លៃពិតខាងក្នុងនៅ 4 ខ្ទង់
+function fmtUSD(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtRiel(n) { return Math.round(n || 0).toLocaleString(); }
 // ប្រាក់ខែសុទ្ធ (ដូច admin)៖ $281.06 និង $281 + 240 ៛
 function fmtUSD2(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
