@@ -53,15 +53,16 @@
     if (error && /account_issue/.test(error.message)) return { error: { message: 'គណនីមានបញ្ហា — សូមប្តូរគណនីថ្មី ឬដោះស្រាយបញ្ហាជាមុន' } };
     if (error && /no_account/.test(error.message)) return { error: { message: 'បុគ្គលិកនេះមិនទាន់មានគណនីធនាគារទេ' } };
     if (error && /incomplete/.test(error.message)) return { error: { message: 'ព័ត៌មានគណនីមិនគ្រប់ (ធនាគារ + លេខគណនី + ឈ្មោះគណនី)' } };
-    if (error && /bank_(history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase — សូមបើក Supabase → SQL Editor ហើយ Run ឯកសារ bank-pay.sql ទាំងមូលម្តងទៀត រួចរង់ចាំ ១០ វិនាទី' } };
+    if (error && /bank_(load|save_info|history|set_issue|change_account|mark_paid|unmark_paid)/.test(error.message) && /does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql (v4) ក្នុង Supabase — សូមបើក Supabase → SQL Editor ហើយ Run ឯកសារ bank-pay.sql ទាំងមូលម្តងទៀត រួចរង់ចាំ ១០ វិនាទី' } };
     if (!error) adminPw = pw;
     return { data, error };
   }
 
+  let loadCancelled = false; // true = អ្នកប្រើចុច "បោះបង់" លើប្រអប់ពាក្យសម្ងាត់ (មិនមែនកំហុសប្រព័ន្ធ)
   async function loadBank(month) {
-    missing = null;
+    missing = null; loadCancelled = false;
     const { data, error, cancelled } = await bankRpc('bank_load', { p_month: month });
-    if (cancelled) { missing = 'បានបោះបង់'; return false; }
+    if (cancelled) { missing = 'បានបោះបង់'; loadCancelled = true; return false; }
     if (error) { missing = error.message; return false; }
     bankInfo = {};
     ((data && data.info) || []).forEach(r => { bankInfo[r.employee_id] = r; });
@@ -232,7 +233,12 @@
     overlay.querySelector('#bpBody').innerHTML = '<tr><td colspan="10" style="padding:16px;">កំពុងផ្ទុក...</td></tr>';
     const ok = await loadBank(curMonth);
     if (!ok) {
-      overlay.querySelector('#bpStatus').innerHTML = `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)}<br>ប្រសិនបើមិនទាន់ដំណើរការ <b>bank-pay.sql</b> (v2) ក្នុង Supabase សូមដំណើរការជាមុន។ <button class="secondary" id="bpRetry" style="margin-left:8px">↻ ព្យាយាមម្តងទៀត</button></div>`;
+      const retryBtn = '<button class="secondary" id="bpRetry" style="margin-left:8px">↻ ព្យាយាមម្តងទៀត</button>';
+      overlay.querySelector('#bpStatus').innerHTML = loadCancelled
+        // បោះបង់ពាក្យសម្ងាត់ → សារស្អាត គ្មានការណែនាំអំពី SQL (ព្រោះមិនទាន់បានហៅ Supabase)
+        ? `<div class="bp-warn" style="background:#e0f2fe;color:#075985">🔒 ត្រូវការពាក្យសម្ងាត់ Admin ដើម្បីមើលព័ត៌មានធនាគារ។ ${retryBtn}</div>`
+        // កំហុសផ្សេង (ពាក្យសម្ងាត់ខុស / SQL មិនទាន់ Run) → បង្ហាញមូលហេតុពិត · សារអំពី SQL (v4) មកពី bankRpc ស្រាប់
+        : `<div class="bp-warn">⚠️ មិនអាចផ្ទុកទិន្នន័យធនាគារបាន៖ ${esc(missing)} ${retryBtn}</div>`;
       const rt = overlay.querySelector('#bpRetry'); if (rt) rt.addEventListener('click', loadMonthView);
       overlay.querySelector('#bpBody').innerHTML = '';
       curRows = [];
