@@ -433,6 +433,11 @@
         <input type="text" id="monthlySearch" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="payCurrencyMode" title="របៀបបង្ហាញប្រាក់ខែសុទ្ធ" onchange="setPayMode(this.value)">
+          <option value="split">$ + ៛ (ដុល្លារពេញ + រៀលសល់)</option>
+          <option value="khr">៛ រៀលសរុបតែមួយ</option>
+          <option value="usd">$ ដុល្លារតែមួយ</option>
+        </select>
         <button id="monthlyRunBtn">⚡ គណនាប្រាក់កាត់យឺត/ច្បាប់ ទាំងអស់</button>
         <button class="secondary" id="monthlyPrintSheetBtn">🖨 ព្រីនតារាងប្រាក់ខែ</button>
         <button class="secondary" id="monthlyPrintAllBtn">🖨 Payslip ទាំងអស់</button>

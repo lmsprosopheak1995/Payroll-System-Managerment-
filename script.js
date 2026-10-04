@@ -580,6 +580,30 @@ function fmtUSDplusRiel(usd) {
   return `$${dollars.toLocaleString()} + ${Math.round(rem).toLocaleString()} ៛`;
 }
 
+// ===== របៀបបង្ហាញប្រាក់ខែសុទ្ធ (រក្សាទុកក្នុង browser នេះ) =====
+//  split = $281 + 240 ៛ (ដុល្លារពេញ + រៀលសល់) · khr = បូកសរុបជារៀលតែមួយ តាមអត្រាក្រុមហ៊ុន · usd = ដុល្លារតែមួយ
+const PAY_MODE_KEY = 'pay_currency_mode_v1';
+function getPayMode() {
+  try { const v = localStorage.getItem(PAY_MODE_KEY); return ['split', 'khr', 'usd'].includes(v) ? v : 'split'; }
+  catch (e) { return 'split'; }
+}
+function setPayMode(v) {
+  try { localStorage.setItem(PAY_MODE_KEY, v); } catch (e) { /* ignore */ }
+  if (typeof renderMonthlyTab === 'function') renderMonthlyTab();
+  if (typeof renderAttendanceTab === 'function') renderAttendanceTab();
+}
+function payModeLabel(base) {
+  const m = getPayMode();
+  return base + (m === 'khr' ? ' (រៀលសរុប)' : ' (ដុល្លារ + រៀល)');
+}
+// usd mode → '' (មិនបង្ហាញប្រអប់/បន្ទាត់ទីពីរ ព្រោះស្ទួនជាមួយ "$")
+function fmtNetByMode(usd) {
+  const m = getPayMode();
+  if (m === 'usd') return '';
+  if (m === 'khr') return fmtRiel(Math.round((Math.round((usd || 0) * 100) / 100) * (settings.exchangeRate || 0))) + ' ៛';
+  return fmtUSDplusRiel(usd);
+}
+
 // Riel amounts are whole numbers with thousands separators (e.g. 48,423).
 function fmtRiel(n) {
   return Math.round(n || 0).toLocaleString();
@@ -667,9 +691,7 @@ function renderAttendanceTab() {
   const net2 = v => (Math.round((v || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // ប្រាក់ខែសុទ្ធ បង្ហាញត្រឹម 2 ខ្ទង់
   // ប្រាក់ខែសុទ្ធ បំបែកជា ដុល្លារពេញ + រៀលសល់ (ពី $ ដែលបានបង្គត់ 2 ខ្ទង់ × អត្រា) ឧ. $281.06 → $281 + 240 ៛
   const netR = Math.round((netUSD || 0) * 100) / 100;
-  const netDollars = Math.floor(netR + 1e-9);
-  const netRielRem = Math.round((netR - netDollars) * (settings.exchangeRate || 0));
-  const netSplit = `$${netDollars.toLocaleString()} + ${fmtRiel(netRielRem)} ៛`;
+  const netSplit = fmtNetByMode(netR);
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
@@ -680,7 +702,7 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
     <div class="stat-card"><div class="num" style="color:#dc2626;">−$${fmtUSD(adj.deductions)}</div><div class="label">ប្រាក់កាត់</div></div>
     <div class="stat-card"><div class="num">$${net2(netUSD)}</div><div class="label">ប្រាក់ខែសុទ្ធ ($)</div></div>
-    <div class="stat-card"><div class="num">${netSplit}</div><div class="label">ប្រាក់ខែសុទ្ធ (ដុល្លារ + រៀល)</div></div>
+    ${netSplit ? `<div class="stat-card"><div class="num">${netSplit}</div><div class="label">${payModeLabel('ប្រាក់ខែសុទ្ធ')}</div></div>` : ''}
   `;
 
   // ===== តំបន់ខាងស្តាំ/ក្រោមកាតស្ថិតិ៖ ប្រអប់បំបែក + មុខងារថ្មី 4 =====
@@ -695,7 +717,7 @@ function renderAttendanceTab() {
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
-      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span></span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}${netSplit ? `<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span>` : ''}</span></div>
     </div>`;
 
   // (1) ប្រៀបធៀបខែមុន
@@ -3025,7 +3047,7 @@ function renderMonthlyTab() {
       <td>${i + 1}</td><td>${escapeHtml(e.username || '-')}</td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept || '-')}</td>
       <td>${t.workDays}</td><td>${t.leaveDays}</td><td>${t.otHours ? fmtHours(t.otHours) : '-'}</td>
       <td>$${fmtUSD2(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD2(t.normalPay)}<br>OT $${fmtUSD2(t.otPay)}<br>បាយ $${fmtUSD2(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD2(t.benefitsUSD)}</td><td>−$${fmtUSD2(t.deductionsUSD)}</td>
-      <td><strong>$${fmtUSD2(t.net)}</strong></td><td>${fmtUSDplusRiel(t.net)}</td>
+      <td><strong>$${fmtUSD2(t.net)}</strong></td><td>${fmtNetByMode(t.net) || '-'}</td>
       <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD2(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
       <td style="font-size:0.74rem;">${pcPayslipCell(e.id, month)}</td>
       <td style="font-size:0.72rem;color:#b45309;">${warns.join('<br>') || '<span style="color:#16a34a;">✓</span>'}</td>
@@ -3043,7 +3065,7 @@ function renderMonthlyTab() {
     <div class="stat-card"><div class="num">+$${fmtUSD2(g.ben)}</div><div class="label">អត្ថប្រយោជន៍សរុប</div></div>
     <div class="stat-card"><div class="num">-$${fmtUSD2(g.ded)}</div><div class="label">ប្រាក់កាត់សរុប</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD2(g.netR2)}</div><div class="label">ត្រូវបើកសរុប ($)</div></div>
-    <div class="stat-card"><div class="num">${fmtUSDplusRiel(g.netR2)}</div><div class="label">ត្រូវបើកសរុប (ដុល្លារ + រៀល)</div></div>
+    ${getPayMode() === 'usd' ? '' : `<div class="stat-card"><div class="num">${fmtNetByMode(g.netR2)}</div><div class="label">${payModeLabel('ត្រូវបើកសរុប')}</div></div>`}
     <div class="stat-card"><div class="num">$${fmtUSD2(g.adv)}</div><div class="label">ប្រាក់ខែទី១សរុប (ទី២៥)</div></div>
     <div class="stat-card"><div class="num" style="color:${g.warn ? '#b45309' : '#16a34a'};">${g.warn}</div><div class="label">ត្រូវពិនិត្យ</div></div>
   `;
@@ -3169,3 +3191,7 @@ document.getElementById('changeAdminPwBtn').addEventListener('click', changeAdmi
 
 if (typeof initFeatures === 'function') initFeatures();
 checkAdminAuthAndInit();
+
+
+// កំណត់តម្លៃដើមនៃប៊ូតុងជ្រើសរបៀបបង្ហាញប្រាក់ខែសុទ្ធ
+(function () { const el = document.getElementById('payCurrencyMode'); if (el) el.value = getPayMode(); })();
