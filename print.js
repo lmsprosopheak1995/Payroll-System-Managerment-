@@ -287,6 +287,7 @@ function printPayrollSheet() {
 // ---------------------------------------------------------------------------
 // 3) ព្រីន Payslip (បុគ្គលិកម្នាក់ ឬទាំងអស់)
 // ---------------------------------------------------------------------------
+function isStatutoryItemPrint(p) { return /^(ប\.ស\.ស|ពន្ធលើប្រាក់បៀវត្សរ៍)/.test((p && p.name) || ''); }
 function payslipPageHtml(emp, month) {
   const t = summarizeEmpMonth(emp, month);
   const I = t.info || { name: emp.name, username: emp.username, position: emp.position, salary: emp.salary };
@@ -318,7 +319,8 @@ function payslipPageHtml(emp, month) {
     <table>
       <tr><th>អត្ថប្រយោជន៍ / ប្រាក់កាត់</th><th ${R}>ចំនួន</th></tr>
       ${t.benefitItems.map(p => `<tr><td>+ ${printEsc(p.name)}</td><td ${R}>${fmtItemAmount(p)}</td></tr>`).join('')}
-      ${t.deductionItems.map(p => `<tr><td>− ${printEsc(p.name)}</td><td ${R}>${fmtItemAmount(p)}</td></tr>`).join('')}
+      ${t.deductionItems.filter(p => !isStatutoryItemPrint(p)).map(p => `<tr><td>− ${printEsc(p.name)}</td><td ${R}>${fmtItemAmount(p)}</td></tr>`).join('')}
+      ${t.deductionItems.some(isStatutoryItemPrint) ? `<tr><td colspan="2" style="font-weight:700;background:#f3f4f6;">ការកាត់តាមច្បាប់ (ប.ស.ស / ពន្ធ)</td></tr>` + t.deductionItems.filter(isStatutoryItemPrint).map(p => `<tr><td>− ${printEsc(p.name)}</td><td ${R}>${fmtItemAmount(p)}</td></tr>`).join('') : ''}
       ${(t.benefitItems.length + t.deductionItems.length) === 0 ? '<tr><td colspan="2" style="text-align:center;">មិនមាន</td></tr>' : ''}
       <tr class="ps-total-row"><td>ប្រាក់ខែសុទ្ធ</td><td ${R}>$${fmtUSD(t.net)} / ${fmtRiel(t.netRiel)} ៛</td></tr>
     </table>

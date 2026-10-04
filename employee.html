@@ -1112,7 +1112,8 @@ async function renderHomePayCards() {
         ${line('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(t.otPay))}
         ${line('ប្រាក់បាយ', fmtRiel((t.foodPay + t.foodOtPay) * rate) + ' ៛')}
         ${items(t.benefitItems, '+', 'var(--success)')}
-        ${items(t.deductionItems, '−', 'var(--danger)')}
+        ${items((t.deductionItems || []).filter(i => !isStatutoryItem(i)), '−', 'var(--danger)')}
+        ${(t.deductionItems || []).some(isStatutoryItem) ? `<div class="hp-line" style="font-weight:700;"><span>ការកាត់តាមច្បាប់ (ប.ស.ស / ពន្ធ)</span><span></span></div>` + items((t.deductionItems || []).filter(isStatutoryItem), '−', 'var(--danger)') : ''}
         <div class="hp-line hp-total"><span>ប្រាក់ខែសុទ្ធ</span><span>$${fmtUSD2(t.net)}<small>${fmtUSDplusRiel(t.net)}</small></span></div>
       </div>
       <div class="portal-card hp-card">
@@ -1779,6 +1780,8 @@ async function submitDispute(month) {
   renderDisputeBox(month);
 }
 
+// ធាតុកាត់តាមច្បាប់៖ ប.ស.ស និងពន្ធលើប្រាក់បៀវត្សរ៍ (ឈ្មោះចាប់ផ្តើមដូចខាងក្រោម)
+function isStatutoryItem(p) { return /^(ប\.ស\.ស|ពន្ធលើប្រាក់បៀវត្សរ៍)/.test((p && p.name) || ''); }
 function buildPayslipHtml(t, month) {
   return `
     <div class="ps-header">
@@ -1806,7 +1809,8 @@ function buildPayslipHtml(t, month) {
     <table>
       <tr><th>អត្ថប្រយោជន៍ / ប្រាក់កាត់</th><th style="text-align:right;">ចំនួន</th></tr>
       ${t.benefitItems.map(p => `<tr><td>+ ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
-      ${t.deductionItems.map(p => `<tr><td>− ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
+      ${t.deductionItems.filter(p => !isStatutoryItem(p)).map(p => `<tr><td>− ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('')}
+      ${t.deductionItems.some(isStatutoryItem) ? `<tr><td colspan="2" style="font-weight:700;background:#f3f4f6;">ការកាត់តាមច្បាប់ (ប.ស.ស / ពន្ធ)</td></tr>` + t.deductionItems.filter(isStatutoryItem).map(p => `<tr><td>− ${escapeHtml(p.name)}</td><td style="text-align:right;">${fmtItemAmountEmp(p)}</td></tr>`).join('') : ''}
       ${(t.benefitItems.length + t.deductionItems.length) === 0 ? '<tr><td colspan="2" style="text-align:center;">មិនមាន</td></tr>' : ''}
       <tr class="ps-total-row"><td>ប្រាក់ខែសុទ្ធ</td><td style="text-align:right;">$${fmtUSD2(t.net)} &nbsp;/&nbsp; ${fmtUSDplusRiel(t.net)}</td></tr>
     </table>

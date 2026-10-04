@@ -83,7 +83,7 @@
     if (r.empUSD <= 0) {                       // គ្មានអ្វីត្រូវកាត់ → ដកធាតុចាស់ចេញ
       if (idx !== -1) { payrollItems.splice(idx, 1); await deletePayrollItemRow(id); }
     } else {
-      const item = { id, employeeId: empId, type: 'deduction', name: ITEM_NAME, recurrence: 'variable', month, currency: 'USD', amount: r.empUSD };
+      const item = { id, employeeId: empId, type: 'deduction', name: `${ITEM_NAME} ${month} (${Math.round(r.empKHR).toLocaleString()}៛)`, recurrence: 'variable', month, currency: 'USD', amount: r.empUSD };
       if (idx !== -1) payrollItems[idx] = item; else payrollItems.push(item);
       await upsertPayrollItemRow(item);
     }
@@ -182,6 +182,59 @@
     }).join('');
   }
 
+  // ---------- របាយការណ៍ប្រចាំខែ (ប.ស.ស + ពន្ធ) ----------
+  // ពន្ធ៖ អានពីធាតុ "ពន្ធលើប្រាក់បៀវត្សរ៍" ដែលបានកាត់រួចក្នុង salary-tax.js (id auto_tos_...)
+  function taxKHRApplied(empId, month) {
+    const it = payrollItems.find(p => p.id === `auto_tos_${empId}_${month}`);
+    if (!it) return null;
+    const m = /\(([\d,]+)\s*៛\)/.exec(it.name || '');
+    if (m) return parseInt(m[1].replace(/,/g, ''), 10);
+    return Math.round((it.amount || 0) * rate());
+  }
+  function reportRows(month) {
+    return employees.filter(e => e.status === 'active').map(e => {
+      const r = calc(e, month);
+      return { e, r, tax: taxKHRApplied(e.id, month) };
+    }).filter(x => x.r.enrolled || x.tax !== null);
+  }
+  const REPORT_HEAD = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'តួនាទី', 'ប្រាក់ខែ (៛)', 'ប្រាក់ខែជាប់ ប.ស.ស (៛)', 'បុគ្គលិកបង់ ប.ស.ស (៛)', 'និយោជកបង់ ប.ស.ស (៛)', 'ប.ស.ស សរុប (៛)', 'ពន្ធលើប្រាក់បៀវត្សរ៍ (៛)'];
+  function reportMatrix(month) {
+    const rows = reportRows(month);
+    const body = rows.map(({ e, r, tax }, i) => [i + 1, e.username || '', e.name, e.position || '', Math.round(r.rawKHR), Math.round(r.baseKHR), r.empKHR, r.erKHR, r.empKHR + r.erKHR, tax === null ? '' : tax]);
+    const sum = i => body.reduce((a, row) => a + (parseFloat(row[i]) || 0), 0);
+    const total = ['', '', 'សរុប', '', sum(4), sum(5), sum(6), sum(7), sum(8), sum(9)];
+    return { body, total };
+  }
+  function exportReportCSV() {
+    const month = $('nssfMonth').value || todayStr().slice(0, 7);
+    const { body, total } = reportMatrix(month);
+    if (!body.length) { customAlert('គ្មានទិន្នន័យ ប.ស.ស/ពន្ធ សម្រាប់ខែនេះទេ (សូម "បន្ថែម" ជាមុនសិន)'); return; }
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = '\ufeff' + [REPORT_HEAD, ...body, total].map(r => r.map(q).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `nssf_tax_${month}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function printReport() {
+    const month = $('nssfMonth').value || todayStr().slice(0, 7);
+    const { body, total } = reportMatrix(month);
+    if (!body.length) { customAlert('គ្មានទិន្នន័យ ប.ស.ស/ពន្ធ សម្រាប់ខែនេះទេ (សូម "បន្ថែម" ជាមុនសិន)'); return; }
+    if (typeof openPrintWindow !== 'function') return;
+    const f = v => (v === '' ? '-' : Number(v).toLocaleString());
+    const rowHtml = r => `<tr><td>${escapeHtml(String(r[0]))}</td><td>${escapeHtml(String(r[1]))}</td><td style="text-align:left;">${escapeHtml(String(r[2]))}</td><td>${escapeHtml(String(r[3]))}</td>${[4, 5, 6, 7, 8, 9].map(i => `<td class="r">${f(r[i])}</td>`).join('')}</tr>`;
+    const html = `<div class="page">
+      <h1>របាយការណ៍ ប.ស.ស និងពន្ធលើប្រាក់បៀវត្សរ៍</h1>
+      <div class="sub">ខែ ${escapeHtml(month)} · អត្រាប្តូរប្រាក់ ${rate().toLocaleString()} ៛/$</div>
+      <table><thead><tr>${REPORT_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${body.map(rowHtml).join('')}</tbody>
+      <tfoot><tr class="total"><td colspan="4">សរុប</td>${[4, 5, 6, 7, 8, 9].map(i => `<td class="r">${f(total[i])}</td>`).join('')}</tr></tfoot></table>
+      <div style="margin-top:10px;font-size:10px;color:#6b7280;">បោះពុម្ពនៅថ្ងៃទី ${todayStr()} · ពន្ធបង្ហាញតែបុគ្គលិកដែលបាន "កាត់ពន្ធ" រួចក្នុងប្រព័ន្ធ</div>
+    </div>`;
+    openPrintWindow(`ប.ស.ស-ពន្ធ ${month}`, html, true);
+  }
+
   function buildTab() {
     if ($('nssfTab')) return;
     const div = document.createElement('div');
@@ -193,7 +246,11 @@
         <input type="month" id="nssfMonth">
         <input type="text" id="nssfSearch" placeholder="🔍 ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px;">
       </div>
-      <button id="nssfApplyAllBtn">➕ បន្ថែមទាំងអស់ទៅ "ប្រាក់កាត់"</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="nssfApplyAllBtn">➕ បន្ថែមទាំងអស់ទៅ "ប្រាក់កាត់"</button>
+        <button class="secondary" id="nssfCsvBtn">📊 Export Excel (ប.ស.ស + ពន្ធ)</button>
+        <button class="secondary" id="nssfPrintBtn">🖨 ព្រីនរបាយការណ៍</button>
+      </div>
     </div>
 
     <div class="scan-result-card" style="margin-bottom:16px;">
@@ -240,6 +297,8 @@
     $('nssfMonth').addEventListener('change', render);
     $('nssfSearch').addEventListener('input', render);
     $('nssfApplyAllBtn').addEventListener('click', applyAll);
+    $('nssfCsvBtn').addEventListener('click', exportReportCSV);
+    $('nssfPrintBtn').addEventListener('click', printReport);
     $('nssfBody').addEventListener('click', ev => {
       const month = $('nssfMonth').value || todayStr().slice(0, 7);
       const ap = ev.target.closest('[data-nssf-ap]');
