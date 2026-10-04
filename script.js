@@ -563,9 +563,10 @@ function fmt(n) {
   return (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-// USD monetary values are always shown to 4 decimal places (e.g. $8.0769).
+// USD monetary values are shown to 2 decimal places (e.g. $8.08).
+// (ការគណនាខាងក្នុងនៅតែប្រើតម្លៃពេញ — កាត់ត្រឹម 2 ខ្ទង់តែពេលបង្ហាញប៉ុណ្ណោះ)
 function fmtUSD(n) {
-  return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ប្រាក់ខែសុទ្ធ៖ បង្ហាញ 2 ខ្ទង់ ($281.06) និងបំបែកជា ដុល្លារពេញ + រៀលសល់ ($281 + 240 ៛)
