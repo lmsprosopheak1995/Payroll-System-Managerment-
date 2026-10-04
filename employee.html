@@ -1404,7 +1404,7 @@ async function renderAttendanceTabEmp() {
     if (r.status === 'leave') totals.leaveDays++;
     if (r.late) totals.lateDays++;
     return `<tr>
-      <td>${date.slice(8)}</td>
+      <td style="white-space:nowrap;">${date}</td>
       <td>${dayLabelHl(date)}</td>
       <td>${r.checkin || '-'}</td>
       <td>${r.breakOut || '-'}</td>
