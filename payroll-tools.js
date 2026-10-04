@@ -474,4 +474,5 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.openPayrollBulkEdit = openBulk;
+  window.payrollToolsVisibleIds = () => new Set(visibleIds);   // ប្រើដោយ payslip-send.js ("ជ្រើសតាមតម្រង")
 })();
