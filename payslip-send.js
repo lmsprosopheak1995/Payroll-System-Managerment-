@@ -139,9 +139,14 @@
     const $ = id => ov.querySelector('#' + id);
     $('psSel').textContent = `បានជ្រើស ${ids.length} នាក់`;
     const first = rows.find(r => ids.includes(r.e.id)) || rows[0];
-    $('psPrev').textContent = first ? (m => `${m.title}\n${m.body}`)(messageFor(first.e, first.t, $('psAmt').checked)) : '';
     const tableErr = typeof featureErrors !== 'undefined' && featureErrors.announcements;
     const push = $('psChPush').checked, ext = $('psChTg').checked;
+    // Push ប្រើជម្រើស "បញ្ចូលចំនួនទឹកប្រាក់" · Telegram តែងតែមានចំនួនទឹកប្រាក់ពេញលេញ (ផ្ញើពី server)
+    $('psPrev').textContent = first
+      ? (m => `${m.title}\n${m.body}`)(messageFor(first.e, first.t, push ? $('psAmt').checked : true))
+        + (push && ext ? '\n\n✈️ Telegram: ផ្ញើសារពេញលេញដែលមានចំនួនទឹកប្រាក់ (ព័ត៌មានឯកជន)' : '')
+      : '';
+    $('psSend').textContent = '📤 ផ្ញើ ' + ([push && 'Push', ext && 'Telegram'].filter(Boolean).join(' + ') || '—');
     $('psSend').disabled = !ids.length || (!push && !ext) || (push && (!!tableErr || !annRows()));
   }
 
