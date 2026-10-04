@@ -39,6 +39,8 @@
 .ps-opt{display:flex;gap:6px;align-items:center;font-size:.8rem;margin:0}
 .ps-prev{white-space:pre-wrap;font-size:.78rem;padding:8px 10px;border:1px dashed var(--border,#e1e8ef);border-radius:10px;margin:6px 0;min-height:2.4em}
 .ps-sum{font-size:.8rem;font-weight:600}
+.ps-ovl button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.6)}
+.ps-hint{font-size:.76rem;color:var(--text-muted,#5b6b80);margin-right:auto}
 `;
 
   // ---------------------------------------------------------------- សារ ----
@@ -83,6 +85,7 @@
           <button class="secondary" id="psUnsent" type="button">☑ ជ្រើសអ្នកមិនទាន់ផ្ញើ</button>
           <button class="secondary" id="psClear" type="button">☐ ដកទាំងអស់</button>
           <button class="secondary" id="psLink" type="button" title="បង្កើតតំណភ្ជាប់ Telegram សម្រាប់បុគ្គលិកដែលបានជ្រើស">🔗 តំណភ្ជាប់ Telegram</button>
+          <button class="secondary" id="psSetChat" type="button" title="ដាក់ Telegram chat ID ដោយដៃ (បុគ្គលិកម្នាក់)">✏️ ដាក់ Chat ID</button>
           <span class="ps-sum" id="psSel" style="margin-left:auto"></span>
         </div>
         <div class="table-wrap" style="max-height:38vh;overflow:auto">
@@ -101,6 +104,7 @@
         <div class="ps-note" style="margin-bottom:2px">ឧទាហរណ៍សារ៖</div>
         <div class="ps-prev" id="psPrev"></div>
         <div class="ps-row" style="justify-content:flex-end">
+          <span class="ps-hint" id="psHint"></span>
           <button class="secondary" id="psClose" type="button">បិទ</button>
           <button id="psSend" type="button">📤 ផ្ញើ Push</button>
         </div>
@@ -124,6 +128,7 @@
     $('psAmt').addEventListener('change', () => { $('psAmtWarn').style.display = $('psAmt').checked ? '' : 'none'; sync(); });
     $('psSend').addEventListener('click', send);
     $('psLink').addEventListener('click', makeLinks);
+    $('psSetChat').addEventListener('click', setChatId);
     $('psMonthSel').addEventListener('change', e => { if (/^\d{4}-\d{2}$/.test(e.target.value)) loadMonth(e.target.value); else e.target.value = month; });
     ['psChPush', 'psChTg'].forEach(id => $(id).addEventListener('change', () => {
       $('psPwRow').style.display = $('psChTg').checked ? '' : 'none';
@@ -146,6 +151,7 @@
       ? (m => `${m.title}\n${m.body}`)(messageFor(first.e, first.t, push ? $('psAmt').checked : true))
         + (push && ext ? '\n\n✈️ Telegram: ផ្ញើសារពេញលេញដែលមានចំនួនទឹកប្រាក់ (ព័ត៌មានឯកជន)' : '')
       : '';
+    $('psHint').textContent = !ids.length ? '← សូមធីកជ្រើសបុគ្គលិកក្នុងតារាងជាមុន' : (!push && !ext ? '← សូមជ្រើសបណ្តាញផ្ញើ' : '');
     $('psSend').textContent = '📤 ផ្ញើ ' + ([push && 'Push', ext && 'Telegram'].filter(Boolean).join(' + ') || '—');
     $('psSend').disabled = !ids.length || (!push && !ext) || (push && (!!tableErr || !annRows()));
   }
@@ -269,6 +275,22 @@
       }
     } catch (ex) { await customAlert('មានបញ្ហា៖ ' + ex.message); return; }
     showLinks(data);
+  }
+
+  // ដាក់ chat ID ដោយដៃ — server ផ្ញើសារសាកល្បងមុនរក្សាទុក
+  async function setChatId() {
+    const ids = selectedIds();
+    if (ids.length !== 1) { await customAlert('សូមធីកជ្រើសបុគ្គលិកតែម្នាក់ក្នុងតារាង ដើម្បីដាក់ Chat ID'); return; }
+    const raw = typeof customPrompt === 'function' ? await customPrompt(`បញ្ចូល Telegram Chat ID របស់ ${nameOf(ids[0])} (លេខ)។\nបុគ្គលិកត្រូវចុច Start លើ bot ជាមុន។ រក ID បានតាម @userinfobot៖`) : window.prompt('Telegram Chat ID');
+    const chatId = String(raw || '').trim();
+    if (!chatId) return;
+    if (!/^\d{5,15}$/.test(chatId)) { await customAlert('Chat ID ត្រូវតែជាលេខ (ឧ. 123456789)'); return; }
+    const pw = await askPw('បញ្ចូលពាក្យសម្ងាត់ admin៖');
+    if (!pw) return;
+    try {
+      const d = await callFn('set_chat', { employee_ids: ids, chat_id: chatId }, pw);
+      await customAlert(`✓ ភ្ជាប់ Telegram ជាមួយ ${d.name || nameOf(ids[0])} រួចរាល់ (បានផ្ញើសារសាកល្បងទៅ chat នោះ)`);
+    } catch (ex) { await customAlert('មានបញ្ហា៖ ' + ex.message); }
   }
 
   function showLinks(data) {
