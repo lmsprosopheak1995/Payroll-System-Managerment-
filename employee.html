@@ -588,6 +588,10 @@ function dayMultiplier(date) {
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
 }
+function dayKind(date) {
+  if (dayMultiplier(date) <= 1) return '';
+  return holidays[date] !== undefined ? 'hol' : 'sun';
+}
 function dayLabelHl(date) {
   const label = weekdayLabel(date);
   if (dayMultiplier(date) <= 1) return label;
@@ -1403,7 +1407,7 @@ async function renderAttendanceTabEmp() {
     if (r.status === 'present') totals.workDays++;
     if (r.status === 'leave') totals.leaveDays++;
     if (r.late) totals.lateDays++;
-    return `<tr>
+    return `<tr${dayKind(date) ? ` data-day="${dayKind(date)}"` : ''}>
       <td style="white-space:nowrap;">${date}</td>
       <td>${dayLabelHl(date)}</td>
       <td>${r.checkin || '-'}</td>
@@ -1819,6 +1823,19 @@ function printAttendanceEmp() {
   const table = document.querySelector('#attendanceTabContent .att-mini-table');
   if (!table) return;
   const sh = getEmpShift();
+  // ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ៖ ដាក់ពណ៌ផ្ទៃ (inline) ដើម្បីឱ្យលេចចេញក្នុងក្រដាសព្រីន
+  const printTable = table.cloneNode(true);
+  const HL = { sun: { bg: '#fef3c7', fg: '#92400e' }, hol: { bg: '#ffe4e6', fg: '#be123c' } };
+  printTable.querySelectorAll('tr[data-day]').forEach(tr => {
+    const c = HL[tr.dataset.day];
+    if (!c) return;
+    tr.querySelectorAll('td').forEach(td => { td.style.cssText += `;background:${c.bg} !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;`; });
+    tr.querySelectorAll('.day-hl').forEach(sp => { sp.style.cssText = `font-weight:700;color:${c.fg};`; });
+  });
+  const legend = `<div style="margin-top:8px;font-size:10px;color:#374151;display:flex;gap:16px;align-items:center;">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#fef3c7;border:1px solid #f59e0b;vertical-align:-2px;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>ថ្ងៃអាទិត្យ</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#ffe4e6;border:1px solid #f43f5e;vertical-align:-2px;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>ថ្ងៃបុណ្យ</span>
+  </div>`;
   const html = `<div class="page">
     <h1>តារាងវត្តមានការងារ</h1>
     <div class="sub">ខែ ${escapeHtml(month)}</div>
@@ -1827,7 +1844,8 @@ function printAttendanceEmp() {
       <div><strong>តួនាទី៖</strong> ${escapeHtml(currentEmployee.position || '-')}</div>
       <div><strong>វេន៖</strong> ${escapeHtml(sh.name)} (${fmtMinEmp(sh.start)}–${fmtMinEmp(sh.end)})</div>
     </div>
-    ${table.outerHTML}
+    ${printTable.outerHTML}
+    ${legend}
     <div style="margin-top:10px;font-size:10px;color:#6b7280;">បោះពុម្ពនៅថ្ងៃទី ${todayStr()}</div>
   </div>`;
   openPrintWindow(`វត្តមាន ${currentEmployee.name} ${month}`, html, true);

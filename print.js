@@ -84,7 +84,14 @@ td.r, th.r { text-align:right; }
 tr { page-break-inside: avoid; }
 thead { display: table-header-group; }
 tr.total td { font-weight:700; background:#f3f4f6; }
-tr.sun td { background:#fff7ed; }
+tr.sun td { background:#fef3c7 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+tr.hol td { background:#ffe4e6 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+tr.sun td.dn { color:#92400e; font-weight:700; }
+tr.hol td.dn { color:#be123c; font-weight:700; }
+.legend { margin-top:8px; font-size:10px; color:#374151; display:flex; gap:16px; align-items:center; }
+.legend i { display:inline-block; width:12px; height:12px; vertical-align:-2px; margin-right:4px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.legend i.sun { background:#fef3c7; border:1px solid #f59e0b; }
+.legend i.hol { background:#ffe4e6; border:1px solid #f43f5e; }
 .sum { margin-top:10px; font-size:12px; }
 .sum strong { font-size:13px; }
 .sign { display:flex; justify-content:space-around; gap:20px; margin-top:44px; text-align:center; font-size:12px; }
@@ -179,9 +186,10 @@ function attendancePrintPage(emp, month) {
     tot.normal += r.normalHours; tot.ot += r.otHours;
     tot.food += r.foodPayRiel + r.foodOtPayRiel; tot.total += r.total; tot.riel += r.riel;
     const foodRiel = r.foodPayRiel + r.foodOtPayRiel;
-    return `<tr class="${r.mult > 1 ? 'sun' : ''}">
+    const dayCls = r.mult > 1 ? (holidays[date] !== undefined ? 'hol' : 'sun') : '';
+    return `<tr class="${dayCls}">
       <td>${date.slice(8)}</td>
-      <td>${printEsc(weekdayLabel(date))}${r.mult > 1 ? ' ×' + r.mult : ''}</td>
+      <td class="dn">${printEsc(weekdayLabel(date))}</td>
       <td>${printEsc(r.checkin || '-')}</td><td>${printEsc(r.breakOut || '-')}</td>
       <td>${printEsc(r.breakIn || '-')}</td><td>${printEsc(r.checkout || '-')}</td>
       <td>${r.late ? 'យឺត' : '-'}</td>
@@ -214,6 +222,7 @@ function attendancePrintPage(emp, month) {
         <td>${fmtHours(tot.normal)}</td><td>${fmtHours(tot.ot)}</td><td>${fmtRiel(tot.food)}</td><td class="r">$${fmtUSD(tot.total)}</td>
       </tr></tfoot>
     </table>
+    <div class="legend"><span><i class="sun"></i>ថ្ងៃអាទិត្យ</span><span><i class="hol"></i>ថ្ងៃបុណ្យ</span></div>
     <div class="sum">
       <table style="width:60%;margin-left:auto;">
         <tr><td>សរុបតាមវត្តមាន</td><td class="r">$${fmtUSD(t.total)}</td></tr>
