@@ -128,6 +128,9 @@
   button.bnav-item.active { color:var(--b2); font-weight:700; }
   button.bnav-item.active .ic { filter:none; opacity:1; }
   .bnav-item .badge.inactive { position:absolute; top:0; left:calc(50% + 6px); min-width:16px; padding:0 4px; background:#e11d48; color:#fff; font-size:0.6rem; border-radius:999px; }
+  .day-hl { display:inline-block; padding:2px 10px; border-radius:8px; font-weight:600; }
+  .day-hl.sun { background:rgba(245,158,11,0.18); color:#fbbf24; box-shadow:inset 0 0 0 1px rgba(245,158,11,0.45); }
+  .day-hl.hol { background:rgba(244,63,94,0.18); color:#fb7185; box-shadow:inset 0 0 0 1px rgba(244,63,94,0.45); }
 </style>
 <link rel="stylesheet" href="employee-modern.css">
 </head>
@@ -584,6 +587,13 @@ function dayMultiplier(date) {
   if (!date) return 1;
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
+}
+function dayLabelHl(date) {
+  const label = weekdayLabel(date);
+  if (dayMultiplier(date) <= 1) return label;
+  const isHol = holidays[date] !== undefined;
+  const title = isHol ? (holidays[date] || 'ថ្ងៃបុណ្យ') : 'ថ្ងៃអាទិត្យ';
+  return `<span class="day-hl ${isHol ? 'hol' : 'sun'}" title="${escapeHtml(title)}">${label}</span>`;
 }
 function dayBadge(date) {
   const m = dayMultiplier(date);
@@ -1395,7 +1405,7 @@ async function renderAttendanceTabEmp() {
     if (r.late) totals.lateDays++;
     return `<tr>
       <td>${date.slice(8)}</td>
-      <td>${weekdayLabel(date)}${dayBadge(date)}</td>
+      <td>${dayLabelHl(date)}</td>
       <td>${r.checkin || '-'}</td>
       <td>${r.breakOut || '-'}</td>
       <td>${r.breakIn || '-'}</td>
