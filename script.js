@@ -569,6 +569,11 @@ function fmtUSD(n) {
   return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// តារាងវត្តមានប្រចាំថ្ងៃ៖ នៅបង្ហាញ 4 ខ្ទង់ដដែល (ឧ. $8.0769) — មិនកែ
+function fmtUSD4(n) {
+  return (Math.round((n || 0) * 10000) / 10000).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+}
+
 // ប្រាក់ខែសុទ្ធ៖ បង្ហាញ 2 ខ្ទង់ ($281.06) និងបំបែកជា ដុល្លារពេញ + រៀលសល់ ($281 + 240 ៛)
 function fmtUSD2(n) {
   return (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -661,12 +666,12 @@ function renderAttendanceTab() {
       <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
       <td><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select></td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>$${fmtUSD(r.normalPay)}</td>
+      <td>$${fmtUSD4(r.normalPay)}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>$${fmtUSD(r.otPay)}</td>
+      <td>$${fmtUSD4(r.otPay)}</td>
       <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
       <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
-      <td><strong>$${fmtUSD(r.total)}</strong></td>
+      <td><strong>$${fmtUSD4(r.total)}</strong></td>
       <td>${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
