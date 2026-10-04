@@ -1342,9 +1342,9 @@ function renderPayrollHistory() {
     return `<tr>
       <td>${month}</td>
       <td>${t.workDays}</td>
-      <td>+$${fmtUSD(t.benefitsUSD)}</td>
-      <td>−$${fmtUSD(t.deductionsUSD)}</td>
-      <td><strong>$${fmtUSD(t.net)}</strong></td>
+      <td>+$${fmtUSD2(t.benefitsUSD)}</td>
+      <td>−$${fmtUSD2(t.deductionsUSD)}</td>
+      <td><strong>$${fmtUSD2(t.net)}</strong></td>
       <td>${fmtRiel(t.netRiel)} ៛</td>
       <td><button class="secondary" onclick="adminPrintPayslipMonth('${emp.id}','${month}')">🖨 Payslip</button></td>
     </tr>`;
