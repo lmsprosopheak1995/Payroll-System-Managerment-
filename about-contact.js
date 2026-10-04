@@ -4,7 +4,7 @@
      <script src="about-contact.js"></script>
    - បង្ហាញប៊ូតុងតូចអណ្តែត (ⓘ) → បើកផ្ទាំង Contact + Version + Copyright
    - អាចហៅពីម៉ឺនុយណាក៏បាន៖ onclick="openAboutContact()"
-   - Version ទាញពី package.json ដោយស្វ័យប្រវត្តិ (បើអានមិនបាន ប្រើ FALLBACK_VERSION)
+   - Version ទាញពី version.json ដោយស្វ័យប្រវត្តិ (បើអានមិនបាន ប្រើ FALLBACK_VERSION)
    លុបវាចេញ → ត្រលប់ទៅដើមវិញ
    ========================================================================== */
 (function () {
@@ -92,7 +92,6 @@
   function row(icon, color, label, value, opts) {
     opts = opts || {};
     const tag = opts.href ? 'a' : 'div';
-    // តំណ http(s) បើកក្នុង browser ក្រៅ (main.js: setWindowOpenHandler → shell.openExternal)
     const ext = opts.href && /^https?:/.test(opts.href) ? ' target="_blank" rel="noopener noreferrer"' : '';
     const href = opts.href ? ` href="${esc(opts.href)}"${ext}` : '';
     const copyVal = opts.copy || value;
@@ -149,7 +148,7 @@
 
   async function loadVersion() {
     try {
-      const r = await fetch('package.json', { cache: 'no-store' });
+      const r = await fetch('/version.json', { cache: 'no-store' });
       if (!r.ok) return;
       const j = await r.json();
       if (j && j.version) version = String(j.version);
