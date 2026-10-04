@@ -19,6 +19,9 @@
   const LOCKED_COLS = new Set(['#', 'ឈ្មោះ']);       // ជួរឈរដែលមិនអនុញ្ញាតឱ្យលាក់
   const POS_KEYS = ['position', 'jobTitle', 'job_title', 'title'];
 
+  // ស្លាកខ្មែរក្នុងផ្ទាំង "ប្រវត្តិកែប្រែ" (AUDIT_LABELS មកពី payroll-close.js)
+  if (typeof AUDIT_LABELS !== 'undefined') Object.assign(AUDIT_LABELS, { bulk_item_apply: '✏️ កែប្រែជាក្រុម (បន្ថែម)', bulk_item_remove: '✏️ កែប្រែជាក្រុម (ដកចេញ)' });
+
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const money = n => r2(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));

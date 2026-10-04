@@ -14,6 +14,9 @@
 (function () {
   'use strict';
 
+  // ស្លាកខ្មែរក្នុងផ្ទាំង "ប្រវត្តិកែប្រែ" (AUDIT_LABELS មកពី payroll-close.js)
+  if (typeof AUDIT_LABELS !== 'undefined') Object.assign(AUDIT_LABELS, { payslip_push: '📤 ផ្ញើ Payslip (Push)' });
+
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const f2 = n => (typeof fmtUSD2 === 'function' ? fmtUSD2(n) : r2(n).toFixed(2));
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
