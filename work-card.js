@@ -28,6 +28,14 @@
   };
   const isMissingTable = err => !!err && (err.code === '42P01' || err.code === 'PGRST205' || /does not exist|Could not find the table|schema cache/i.test(err.message || ''));
 
+  // អនុញ្ញាតតែ data URL រូបភាព ឬ http(s) URL ដែលគ្មានសញ្ញាអក្សរគ្រោះថ្នាក់ (ការពារ stored XSS ពីតារាង employee_cards / employees.photo)
+  const safeSrc = s => {
+    s = String(s == null ? '' : s);
+    if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s)) return s;
+    if (/^https?:\/\/[^\s"'<>`]+$/i.test(s)) return s;
+    return '';
+  };
+
   const LS_COMPANY = 'wc_company', LS_NOTE = 'wc_back_note';
   const CARD_W = 324, CARD_H = 204; // px (សមាមាត្រ 85.6×54mm)
   const GRAD = 'linear-gradient(135deg,#0d9488,#0284c7)';
@@ -72,8 +80,9 @@
 
   function frontHtml(e, company) {
     const initial = esc(((e.name || '?').trim().charAt(0) || '?').toUpperCase());
-    const photo = e.photo
-      ? `<img src="${e.photo}" alt="" style="width:80px;height:98px;object-fit:cover;border-radius:8px;display:block;background:#e6f6f4">`
+    const ph = safeSrc(e.photo);
+    const photo = ph
+      ? `<img src="${ph}" alt="" style="width:80px;height:98px;object-fit:cover;border-radius:8px;display:block;background:#e6f6f4">`
       : `<div style="width:80px;height:98px;border-radius:8px;background:${GRAD};color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700">${initial}</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
       <div style="height:40px;flex:0 0 40px;background:${GRAD};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12.5px;line-height:1.5">${esc(company)}</div>
@@ -128,16 +137,24 @@
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
 
-  const fileBase = () => String(cur.emp.username || cur.emp.id).replace(/[^\w.-]+/g, '_');
+  // ឈ្មោះឯកសារ៖ ប្រើ username បើមានអក្សរឡាតាំង/លេខ បើមិនដូច្នេះប្រើ id
+  const fileBase = () => {
+    const u = String(cur.emp.username || '').replace(/[^\w.-]+/g, '_');
+    return /[A-Za-z0-9]/.test(u) ? u : String(cur.emp.id).replace(/[^\w.-]+/g, '_');
+  };
 
   async function downloadCard(side) {
+    if (!cur) return;
+    const base = fileBase();
     try {
       const el = $(side === 'front' ? 'wcFront' : 'wcBack').firstElementChild;
-      download(await cardPng(el), `work-card-${fileBase()}-${side}.png`);
+      download(await cardPng(el), `work-card-${base}-${side}.png`);
     } catch (ex) { await say('ទាញយកមិនបាន៖ ' + (ex.message || ex)); }
   }
 
   async function printCards() {
+    const c = cur;
+    if (!c) return;
     const w = window.open('', '_blank');
     if (!w) { await say('Browser បានទប់ស្កាត់បង្អួចព្រីន — សូមអនុញ្ញាត popup ឬប្រើប៊ូតុងទាញយក'); return; }
     w.document.write('<p style="font-family:sans-serif;padding:16px">កំពុងរៀបចំកាត…</p>');
@@ -145,11 +162,14 @@
       const f = await cardPng($('wcFront').firstElementChild);
       const b = await cardPng($('wcBack').firstElementChild);
       w.document.open();
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>កាតការងារ — ${esc(cur.emp.name)}</title>
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>កាតការងារ — ${esc(c.emp.name)}</title>
         <style>@page{size:A4;margin:12mm}body{margin:0}.row{display:flex;gap:8mm;flex-wrap:wrap}img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}</style></head>
         <body><div class="row"><img src="${f}"><img src="${b}"></div></body></html>`);
       w.document.close();
-      setTimeout(() => { try { w.focus(); w.print(); } catch (_) { /* ignore */ } }, 400);
+      // រង់ចាំរូបទាំងពីរផ្ទុកចប់ មុនព្រីន
+      await Promise.all(Array.from(w.document.images).map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
+      await new Promise(r => setTimeout(r, 100));
+      w.focus(); w.print();
     } catch (ex) {
       try { w.close(); } catch (_) { /* ignore */ }
       await say('ព្រីនមិនបាន៖ ' + (ex.message || ex));
@@ -162,7 +182,9 @@
     const max = 1280, k = Math.min(1, max / Math.max(w, h));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(w * k); canvas.height = Math.round(h * k);
-    canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); // PNG ថ្លា → ផ្ទៃស (មិនឲ្យខ្មៅ)
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL('image/jpeg', 0.8);
   }
 
@@ -182,32 +204,41 @@
   }
 
   const shown = side => (cur.pending[side] !== undefined ? cur.pending[side] : cur.saved[side]);
-  const dirty = () => cur.pending.front !== undefined || cur.pending.back !== undefined;
+  const dirty = () => !!cur && (cur.pending.front !== undefined || cur.pending.back !== undefined);
 
   function renderSlots() {
+    if (!cur) return;
     ['front', 'back'].forEach(side => {
-      const src = shown(side);
+      const src = safeSrc(shown(side));
       $('wcImg_' + side).innerHTML = src ? `<img src="${src}" alt="" data-zoom="1">` : 'មិនទាន់មានរូប';
     });
     $('wcSave').disabled = !dirty();
     $('wcWarn').style.display = cur.tableMissing ? 'block' : 'none';
   }
 
-  function setPending(side, dataUrl) { cur.pending[side] = dataUrl; renderSlots(); }
+  function setPending(side, dataUrl) { if (!cur) return; cur.pending[side] = dataUrl; renderSlots(); }
 
   async function startCam(side) {
     stopCam();
+    const owner = cur;
+    if (!owner) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { await say('ឧបករណ៍នេះមិនគាំទ្រកាមេរ៉ា — សូមប្រើ «ជ្រើសឯកសារ»'); return; }
+    let stream;
     try {
-      cur.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     } catch (ex) {
       await say('បើកកាមេរ៉ាមិនបាន៖ ' + (ex && ex.message || ex) + '\nសូមអនុញ្ញាតកាមេរ៉ា ឬប្រើ «ជ្រើសឯកសារ»');
       return;
     }
-    cur.camSide = side;
+    // បានបិទ dialog ពេលរង់ចាំ → បិទកាមេរ៉ា កុំឲ្យភ្លើងនៅជាប់
+    if (cur !== owner) { stream.getTracks().forEach(t => t.stop()); return; }
+    // ចុចថតពីរដងជាប់ៗ → បិទ stream មុន
+    if (owner.stream) owner.stream.getTracks().forEach(t => t.stop());
+    owner.stream = stream; owner.camSide = side;
     const v = $('wcVideo');
-    v.srcObject = cur.stream;
+    v.srcObject = stream;
     try { await v.play(); } catch (_) { /* ignore */ }
+    if (cur !== owner || owner.stream !== stream) return;
     $('wcCamTitle').textContent = side === 'front' ? 'ថតកាតខាងមុខ' : 'ថតកាតខាងក្រោយ';
     $('wcCam').style.display = 'block';
   }
@@ -218,6 +249,7 @@
   }
 
   function snap() {
+    if (!cur || !cur.camSide) return;
     const v = $('wcVideo');
     if (!v.videoWidth) { say('កាមេរ៉ាមិនទាន់ត្រៀម សូមរង់ចាំបន្តិច'); return; }
     setPending(cur.camSide, fit(v, v.videoWidth, v.videoHeight));
@@ -225,38 +257,54 @@
   }
 
   async function loadSaved() {
-    cur.saved = { front: '', back: '' }; cur.tableMissing = false;
+    const c = cur;
+    c.saved = { front: '', back: '' }; c.tableMissing = false;
     renderSlots();
-    const emp = cur.emp;
-    const { data, error } = await supabaseClient.from('employee_cards').select('front, back').eq('employee_id', String(emp.id)).maybeSingle();
-    if (!cur || cur.emp !== emp) return; // បានបិទ/ប្តូរបុគ្គលិកក្នុងពេលរង់ចាំ
+    let res;
+    try {
+      res = await supabaseClient.from('employee_cards').select('front, back').eq('employee_id', String(c.emp.id)).maybeSingle();
+    } catch (ex) { res = { error: ex }; }
+    if (cur !== c) return; // បានបិទ/ប្តូរបុគ្គលិកក្នុងពេលរង់ចាំ
+    const { data, error } = res;
     if (error) {
-      if (isMissingTable(error)) cur.tableMissing = true; else console.error('employee_cards load', error);
+      if (isMissingTable(error)) c.tableMissing = true; else console.error('employee_cards load', error);
     } else if (data) {
-      cur.saved = { front: data.front || '', back: data.back || '' };
+      c.saved = { front: data.front || '', back: data.back || '' };
     }
     renderSlots();
   }
 
   async function save() {
-    if (!dirty()) return;
-    const front = shown('front'), back = shown('back');
+    const c = cur;
+    if (!c || !dirty()) return;
     const btn = $('wcSave'); btn.disabled = true;
-    const { error } = await supabaseClient.from('employee_cards').upsert(
-      { employee_id: String(cur.emp.id), front: front || null, back: back || null, updated_at: new Date().toISOString() },
-      { onConflict: 'employee_id' });
+    // ផ្ញើតែជួរដែលបានកែ ដើម្បីកុំសរសេរជាន់រូបដែលឧបករណ៍ផ្សេងទើបរក្សាទុក
+    const row = { employee_id: String(c.emp.id), updated_at: new Date().toISOString() };
+    const sent = {};
+    ['front', 'back'].forEach(s => {
+      if (c.pending[s] !== undefined) { sent[s] = c.pending[s] || ''; row[s] = sent[s] || null; }
+    });
+    let error = null;
+    try {
+      ({ error } = await supabaseClient.from('employee_cards').upsert(row, { onConflict: 'employee_id' }));
+    } catch (ex) { error = ex; }
     if (error) {
-      if (isMissingTable(error)) { cur.tableMissing = true; renderSlots(); await say('មិនទាន់មានតារាង employee_cards — សូមដំណើរការ employee-cards.sql ក្នុង Supabase SQL Editor ជាមុន'); }
-      else { console.error('employee_cards save', error); renderSlots(); await say('រក្សាទុកមិនបាន៖ ' + error.message); }
+      const missing = isMissingTable(error);
+      if (missing) c.tableMissing = true; else console.error('employee_cards save', error);
+      if (cur === c) renderSlots();
+      await say(missing
+        ? 'មិនទាន់មានតារាង employee_cards — សូមដំណើរការ employee-cards.sql ក្នុង Supabase SQL Editor ជាមុន'
+        : 'រក្សាទុកមិនបាន៖ ' + (error.message || error));
       return;
     }
-    cur.saved = { front: front || '', back: back || '' };
-    cur.pending = {};
-    renderSlots();
+    Object.assign(c.saved, sent);
+    // លុប pending តែរូបដែលទើបផ្ញើ (បើអ្នកប្រើកែបន្ថែមពេលកំពុងរក្សាទុក នៅរក្សាទុក)
+    Object.keys(sent).forEach(s => { if (c.pending[s] === sent[s]) delete c.pending[s]; });
+    if (cur === c) renderSlots();
     if (typeof logAudit === 'function') {
-      try { logAudit('employee_card', { entity: 'employee_card', ref: String(cur.emp.id), employeeId: cur.emp.id, new: { front: !!front, back: !!back } }); } catch (_) { /* ignore */ }
+      try { logAudit('employee_card', { entity: 'employee_card', ref: String(c.emp.id), employeeId: c.emp.id, new: { front: !!c.saved.front, back: !!c.saved.back } }); } catch (_) { /* ignore */ }
     }
-    await say('✓ បានរក្សាទុករូបកាតការងាររបស់ ' + cur.emp.name);
+    await say('✓ បានរក្សាទុករូបកាតការងាររបស់ ' + c.emp.name);
   }
 
   // ---------------------------------------------------------------- UI ----
@@ -338,6 +386,8 @@
       if (e.key !== 'Escape' || !ov.classList.contains('open')) return;
       const dlg = document.getElementById('customDialogOverlay');
       if (dlg && dlg.classList.contains('open')) return; // ទុកឲ្យប្រអប់ confirm/alert ទទួល Esc
+      const zm = document.querySelector('.wc-zoom');
+      if (zm) { zm.remove(); return; } // Esc បិទ zoom មុន
       close();
     });
     $('wcTabMake').addEventListener('click', () => setTab('make'));
@@ -361,7 +411,9 @@
       if (e.target.matches('img[data-zoom]')) {
         const z = document.createElement('div');
         z.className = 'wc-zoom';
-        z.innerHTML = `<img src="${e.target.src}" alt="">`;
+        const im = new Image(); // DOM API (មិនប្រើ innerHTML) ការពារ XSS
+        im.alt = ''; im.src = e.target.src;
+        z.appendChild(im);
         z.addEventListener('click', () => z.remove());
         document.body.appendChild(z);
       }
@@ -393,6 +445,7 @@
   async function close() {
     if (!ov || !ov.classList.contains('open')) return;
     if (cur && dirty() && !(await ask('មានរូបដែលមិនទាន់រក្សាទុក — បិទដោយមិនរក្សាទុកឬ?'))) return;
+    document.querySelectorAll('.wc-zoom').forEach(z => z.remove());
     stopCam();
     ov.classList.remove('open');
     cur = null;
@@ -417,7 +470,8 @@
 
   function init() {
     const tbody = document.getElementById('tableBody');
-    if (!tbody || tbody.dataset.wcDone) return;
+    if (!tbody) return false;
+    if (tbody.dataset.wcDone) return true;
     tbody.dataset.wcDone = '1';
     tbody.addEventListener('click', e => {
       const b = e.target.closest('.wc-open');
@@ -426,8 +480,16 @@
     // renderTable() ជំនួស innerHTML ទាំងមូលរាល់ពេល → ដាក់ប៊ូតុងម្តងទៀត (មើលតែកូនផ្ទាល់ មិនបង្កឲ្យរត់ជារង្វង់)
     new MutationObserver(decorateRows).observe(tbody, { childList: true });
     decorateRows();
+    return true;
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  // បើ #tableBody មិនទាន់មាន → ព្យាយាមម្តងទៀត (រហូតដល់ ~20 វិនាទី)
+  function boot() {
+    if (init()) return;
+    let tries = 0;
+    const t = setInterval(() => { if (init() || ++tries >= 40) clearInterval(t); }, 500);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   window.openWorkCard = open;
 })();
