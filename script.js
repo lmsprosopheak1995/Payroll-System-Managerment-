@@ -463,6 +463,14 @@ function dayMultiplier(date) {
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
 }
+function dayLabelHl(date) {
+  const label = weekdayLabel(date);
+  if (dayMultiplier(date) <= 1) return label;
+  const isHol = holidays[date] !== undefined;
+  const title = isHol ? (holidays[date] || 'ថ្ងៃបុណ្យ') : 'ថ្ងៃអាទិត្យ';
+  const c = isHol ? { bg: 'rgba(244,63,94,0.18)', fg: '#fb7185', bd: 'rgba(244,63,94,0.45)' } : { bg: 'rgba(245,158,11,0.18)', fg: '#fbbf24', bd: 'rgba(245,158,11,0.45)' };
+  return `<span title="${escapeHtml(title)}" style="display:inline-block;padding:2px 10px;border-radius:8px;font-weight:600;background:${c.bg};color:${c.fg};box-shadow:inset 0 0 0 1px ${c.bd};">${label}</span>`;
+}
 function dayBadge(date) {
   const m = dayMultiplier(date);
   if (m <= 1) return '';
@@ -658,7 +666,7 @@ function renderAttendanceTab() {
     ).join('');
     return `<tr>
       <td>${date}</td>
-      <td>${weekdayLabel(date)}${dayBadge(date)}</td>
+      <td>${dayLabelHl(date)}</td>
       <td><input type="time" value="${r.checkin}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkin',this.value)" style="width:115px;"></td>
       <td><input type="time" value="${r.breakOut}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakOut',this.value)" style="width:115px;"></td>
       <td><input type="time" value="${r.breakIn}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakIn',this.value)" style="width:115px;"></td>
