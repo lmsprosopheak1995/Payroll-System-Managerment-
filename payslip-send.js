@@ -4,7 +4,7 @@
      (ប្រើតារាង announcements ស្រាប់ target_type = 'employee' — មិនត្រូវការ SQL ឬ server ថ្មី)
    • លំនាំដើម៖ សារមិនមានចំនួនទឹកប្រាក់ (ការពារភាពឯកជន) · អាចបើក "បញ្ចូលចំនួនទឹកប្រាក់" បាន
    • តាមដានអ្នកដែលបានផ្ញើរួច · ផ្ញើម្តងទៀតបាន (ចេញជាសារថ្មី) · មានកំណត់ហេតុកែប្រែ
-   • 📧 អ៊ីមែល / ✈️ Telegram ត្រូវការ server ដាច់ដោយឡែក (មិនទាន់រួមបញ្ចូលក្នុងម៉ូឌុលនេះ)
+   • ✈️ Telegram ផ្ញើតាម Edge Function 'send-payslip' (អានចំនួនទឹកប្រាក់ពី payroll_snapshots ក្នុង server) · 🔗 តំណភ្ជាប់ Telegram តាម telegram-webhook
 
    ដំឡើង៖ index.html ដាក់ក្រោម payroll-tools.js៖  <script src="payslip-send.js"></script>
    ត្រូវការ features.sql (តារាង announcements) ដែលមានស្រាប់ · លុបវាចេញ → ត្រលប់ទៅដើមវិញ
@@ -15,7 +15,7 @@
   'use strict';
 
   // ស្លាកខ្មែរក្នុងផ្ទាំង "ប្រវត្តិកែប្រែ" (AUDIT_LABELS មកពី payroll-close.js)
-  if (typeof AUDIT_LABELS !== 'undefined') Object.assign(AUDIT_LABELS, { payslip_push: '📤 ផ្ញើ Payslip (Push)' });
+  if (typeof AUDIT_LABELS !== 'undefined') Object.assign(AUDIT_LABELS, { payslip_push: '📤 ផ្ញើ Payslip (Push)', payslip_telegram: '✈️ ផ្ញើ Payslip (Telegram)' });
 
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const f2 = n => (typeof fmtUSD2 === 'function' ? fmtUSD2(n) : r2(n).toFixed(2));
@@ -73,7 +73,7 @@
     ov.innerHTML = `
       <div class="ps-box" role="dialog" aria-modal="true">
         <h2>📤 ផ្ញើ Payslip ជូនបុគ្គលិក <span id="psMonth" style="font-weight:500;color:var(--text-muted)"></span></h2>
-        <p class="ps-note">ផ្ញើជា Push Notification ក្នុងកម្មវិធីបុគ្គលិក (តាមផ្ទាំង Push Notifications)។ 📧 អ៊ីមែល និង ✈️ Telegram មិនទាន់គាំទ្រក្នុងម៉ូឌុលនេះ។</p>
+        <p class="ps-note">ជ្រើសបណ្តាញផ្ញើ៖ 🔔 Push ក្នុងកម្មវិធី · ✈️ Telegram។ Telegram ផ្ញើពី server ដោយអានចំនួនទឹកប្រាក់ពី snapshot នៃខែដែលបានបិទ (ត្រូវបិទខែជាមុន)។ បុគ្គលិកត្រូវភ្ជាប់ Telegram ជាមុន តាមប៊ូតុង 🔗។</p>
         <div id="psStatus"></div>
         <div class="ps-row">
           <input type="text" id="psQ" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px">
@@ -81,6 +81,7 @@
           <button class="secondary" id="psFromTable" type="button" title="ជ្រើសបុគ្គលិកដែលកំពុងបង្ហាញក្នុងតារាងមេ (តាមតម្រង)">☑ ជ្រើសតាមតម្រងលើតារាង</button>
           <button class="secondary" id="psUnsent" type="button">☑ ជ្រើសអ្នកមិនទាន់ផ្ញើ</button>
           <button class="secondary" id="psClear" type="button">☐ ដកទាំងអស់</button>
+          <button class="secondary" id="psLink" type="button" title="បង្កើតតំណភ្ជាប់ Telegram សម្រាប់បុគ្គលិកដែលបានជ្រើស">🔗 តំណភ្ជាប់ Telegram</button>
           <span class="ps-sum" id="psSel" style="margin-left:auto"></span>
         </div>
         <div class="table-wrap" style="max-height:38vh;overflow:auto">
@@ -90,8 +91,11 @@
           </table>
         </div>
         <div class="ps-row">
-          <label class="ps-opt"><input type="checkbox" id="psAmt"> បញ្ចូលចំនួនទឹកប្រាក់ក្នុងសារ</label>
+          <label class="ps-opt"><input type="checkbox" id="psChPush" checked> 🔔 Push</label>
+          <label class="ps-opt"><input type="checkbox" id="psChTg"> ✈️ Telegram</label>
+          <label class="ps-opt" style="margin-left:12px"><input type="checkbox" id="psAmt"> បញ្ចូលចំនួនទឹកប្រាក់ក្នុង Push</label>
         </div>
+        <div class="ps-row" id="psPwRow" style="display:none"><input type="password" id="psPw" placeholder="🔑 ពាក្យសម្ងាត់ admin (សម្រាប់ Telegram)" autocomplete="off" style="min-width:280px"></div>
         <div class="ps-warn" id="psAmtWarn" style="display:none">⚠️ ប្រកាស Push ត្រូវបានរក្សាទុកក្នុងតារាង announcements។ ប្រសិនបើ policy (RLS) របស់តារាងនេះអនុញ្ញាតឱ្យបុគ្គលិកអានជួរទាំងអស់ នោះបុគ្គលិកផ្សេងអាចឃើញចំនួនទឹកប្រាក់។ ពិនិត្យ features.sql មុនបើកជម្រើសនេះ។</div>
         <div class="ps-note" style="margin-bottom:2px">ឧទាហរណ៍សារ៖</div>
         <div class="ps-prev" id="psPrev"></div>
@@ -118,6 +122,11 @@
     });
     $('psAmt').addEventListener('change', () => { $('psAmtWarn').style.display = $('psAmt').checked ? '' : 'none'; sync(); });
     $('psSend').addEventListener('click', send);
+    $('psLink').addEventListener('click', makeLinks);
+    ['psChPush', 'psChTg'].forEach(id => $(id).addEventListener('change', () => {
+      $('psPwRow').style.display = $('psChTg').checked ? '' : 'none';
+      sync();
+    }));
   }
 
   function close() { if (ov) ov.classList.remove('open'); }
@@ -130,7 +139,8 @@
     const first = rows.find(r => ids.includes(r.e.id)) || rows[0];
     $('psPrev').textContent = first ? (m => `${m.title}\n${m.body}`)(messageFor(first.e, first.t, $('psAmt').checked)) : '';
     const tableErr = typeof featureErrors !== 'undefined' && featureErrors.announcements;
-    $('psSend').disabled = !ids.length || !!tableErr || !annRows();
+    const push = $('psChPush').checked, ext = $('psChTg').checked;
+    $('psSend').disabled = !ids.length || (!push && !ext) || (push && (!!tableErr || !annRows()));
   }
 
   function renderList() {
@@ -156,6 +166,7 @@
     $('psMonth').textContent = month;
     const depts = [...new Set(rows.map(r => r.e.dept || '').filter(Boolean))].sort((a, b) => a.localeCompare(b));
     $('psDept').innerHTML = '<option value="">ផ្នែកទាំងអស់</option>' + depts.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    $('psChPush').checked = true; $('psChTg').checked = false; $('psPw').value = ''; $('psPwRow').style.display = 'none';
     $('psQ').value = ''; $('psAmt').checked = false; $('psAmtWarn').style.display = 'none'; $('psAll').checked = false;
     const locked = typeof isMonthLocked === 'function' && isMonthLocked(month);
     const tableErr = typeof featureErrors !== 'undefined' && featureErrors.announcements;
@@ -166,22 +177,7 @@
   }
 
   // ---------------------------------------------------------------- ផ្ញើ ----
-  async function send() {
-    const $ = id => ov.querySelector('#' + id);
-    const ids = selectedIds();
-    if (!ids.length) { await customAlert('សូមជ្រើសបុគ្គលិកយ៉ាងហោចណាស់ម្នាក់'); return; }
-    if (typeof featureErrors !== 'undefined' && featureErrors.announcements) { await customAlert('មិនទាន់មានតារាង announcements — សូមដំណើរការ features.sql ជាមុន'); return; }
-    const withAmounts = $('psAmt').checked;
-    const picked = rows.filter(r => ids.includes(r.e.id));
-    const again = picked.filter(r => sentCount(r.e.id) > 0).length;
-    const locked = typeof isMonthLocked === 'function' && isMonthLocked(month);
-    const preview = picked.slice(0, 8).map(r => r.e.name).join(', ') + (picked.length > 8 ? ` …(+${picked.length - 8})` : '');
-    const msg = `ផ្ញើ Payslip ខែ ${month} ទៅ ${picked.length} នាក់ (Push)?\n${preview}`
-      + (again ? `\n\nមាន ${again} នាក់ធ្លាប់ទទួលរួចហើយ — នឹងផ្ញើជាសារថ្មីម្តងទៀត` : '')
-      + (withAmounts ? '\n\n⚠ សារមានចំនួនទឹកប្រាក់' : '')
-      + (locked ? '' : '\n\n⚠ ខែនេះមិនទាន់បិទ — ចំនួនអាចប្រែប្រួលក្រោយ');
-    if (!(await customConfirm(msg))) return;
-
+  async function sendPush(picked, withAmounts) {
     const stamp = Date.now().toString(36);
     const now = new Date().toISOString();
     const out = picked.map(({ e, t }) => {
@@ -189,8 +185,6 @@
       const id = sentCount(e.id) ? `${baseId(e.id)}_${stamp}` : baseId(e.id);
       return { id, title: m.title, body: m.body, target_type: 'employee', target_value: e.id, created_at: now };
     });
-
-    const btn = $('psSend'); btn.disabled = true;
     let okCount = 0, errMsg = '';
     try {
       for (let i = 0; i < out.length; i += 100) {
@@ -204,14 +198,115 @@
       }
     } catch (ex) {
       errMsg = String(ex && ex.message || ex);
-    } finally {
-      btn.disabled = false;
     }
     if (typeof renderAnnouncements === 'function') { try { renderAnnouncements(); } catch (e) { /* ignore */ } }
+    return errMsg
+      ? `🔔 Push: ផ្ញើបាន ${okCount}/${out.length} នាក់ — មានបញ្ហា៖ ${errMsg}`
+      : `🔔 Push: ✓ បានផ្ញើទៅ ${okCount} នាក់`;
+  }
+
+  // ---------------------------------------------------------------- Telegram ----
+  async function callFn(action, extra, pw) {
+    let data, error;
+    try {
+      ({ data, error } = await supabaseClient.functions.invoke('send-payslip', { body: { action, admin_password: pw, month, ...extra } }));
+    } catch (ex) { error = ex; }
+    if (error) {
+      let m = String(error.message || error);
+      try { const b = await error.context.json(); if (b && b.error) m = b.error; } catch (e) { /* ignore */ }
+      throw new Error(m);
+    }
+    return data || {};
+  }
+  const nameOf = id => ((rows.find(r => r.e.id === id) || {}).e || {}).name || id;
+
+  // server អានចំនួនទឹកប្រាក់ពី payroll_snapshots ខ្លួនឯង (មិនទុកចិត្តតម្លៃពី browser)
+  async function sendTelegram(ids, pw) {
+    let data;
+    try {
+      data = await callFn('send', { employee_ids: ids, request_id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) }, pw);
+    } catch (ex) { return `✈️ Telegram: មានបញ្ហា៖ ${ex.message}`; }
+    const res = data.results || [];
+    if (typeof logAudit === 'function') res.filter(r => r.ok).forEach(r => logAudit('payslip_telegram', { entity: 'payslip', ref: `${baseId(r.employee_id)}_telegram`, month, employeeId: r.employee_id, new: { channel: 'telegram' } }));
+    const ok = res.filter(r => r.ok).length, bad = res.filter(r => !r.ok);
+    return `✈️ Telegram: ផ្ញើបាន ${ok}/${res.length}`
+      + (bad.length ? '\nបរាជ័យ៖\n' + bad.slice(0, 10).map(r => `• ${nameOf(r.employee_id)}: ${r.error}`).join('\n') + (bad.length > 10 ? `\n…(+${bad.length - 10})` : '') : '');
+  }
+
+  const askPw = msg => (typeof customPrompt === 'function' ? customPrompt(msg, true) : Promise.resolve(window.prompt(msg)));
+
+  async function makeLinks() {
+    const ids = selectedIds();
+    if (!ids.length) { await customAlert('សូមជ្រើសបុគ្គលិកយ៉ាងហោចណាស់ម្នាក់'); return; }
+    const pw = await askPw('បញ្ចូលពាក្យសម្ងាត់ admin ដើម្បីបង្កើតតំណភ្ជាប់ Telegram៖');
+    if (!pw) return;
+    let data;
+    try {
+      data = await callFn('create_links', { employee_ids: ids }, pw);
+      if ((data.already_linked || []).length && await customConfirm(`មាន ${data.already_linked.length} នាក់ភ្ជាប់ Telegram រួចហើយ។ បង្កើតតំណថ្មីសម្រាប់ពួកគេដែរឬទេ? (ភ្ជាប់ម្តងទៀតនឹងជំនួស chat ដើម)`)) {
+        const again = await callFn('create_links', { employee_ids: data.already_linked, force: true }, pw);
+        data = { ...data, links: [...(data.links || []), ...(again.links || [])], already_linked: [] };
+      }
+    } catch (ex) { await customAlert('មានបញ្ហា៖ ' + ex.message); return; }
+    showLinks(data);
+  }
+
+  function showLinks(data) {
+    const links = data.links || [], linked = data.already_linked || [];
+    const text = links.map(l => `${l.name || nameOf(l.employee_id)}\t${l.url}`).join('\n');
+    const w = document.createElement('div');
+    w.className = 'ps-ovl open'; w.style.zIndex = 9973;
+    w.innerHTML = `<div class="ps-box" style="max-width:720px" role="dialog" aria-modal="true">
+      <h2>🔗 តំណភ្ជាប់ Telegram</h2>
+      <p class="ps-note">ផ្ញើតំណនីមួយៗទៅបុគ្គលិកនោះផ្ទាល់ (ប្រើបានម្តង · ផុតកំណត់ ${esc(data.expires_days || 7)} ថ្ងៃ)។ បុគ្គលិកចុចតំណ → ចុច Start លើ bot → ភ្ជាប់ដោយស្វ័យប្រវត្តិ។ កុំចែករំលែកតំណរបស់អ្នកដទៃ។</p>
+      ${linked.length ? `<div class="ps-warn">✓ ភ្ជាប់រួចហើយ (រំលង)៖ ${esc(linked.map(nameOf).join(', '))}</div>` : ''}
+      <textarea readonly style="width:100%;min-height:200px;font-size:.78rem;white-space:pre">${esc(text)}</textarea>
+      <div class="ps-row" style="justify-content:flex-end"><button class="secondary" data-act="copy" type="button" ${links.length ? '' : 'disabled'}>📋 ចម្លង</button><button data-act="close" type="button">បិទ</button></div></div>`;
+    document.body.appendChild(w);
+    const done = () => w.remove();
+    w.addEventListener('mousedown', e => { if (e.target === w) done(); });
+    w.querySelector('[data-act="close"]').addEventListener('click', done);
+    w.querySelector('[data-act="copy"]').addEventListener('click', async e => {
+      try { await navigator.clipboard.writeText(text); e.target.textContent = '✓ បានចម្លង'; } catch (x) { w.querySelector('textarea').select(); }
+    });
+  }
+
+  async function send() {
+    const $ = id => ov.querySelector('#' + id);
+    const ids = selectedIds();
+    if (!ids.length) { await customAlert('សូមជ្រើសបុគ្គលិកយ៉ាងហោចណាស់ម្នាក់'); return; }
+    const doPush = $('psChPush').checked, doTg = $('psChTg').checked;
+    if (!doPush && !doTg) { await customAlert('សូមជ្រើសបណ្តាញផ្ញើយ៉ាងហោចណាស់មួយ'); return; }
+    if (doPush && typeof featureErrors !== 'undefined' && featureErrors.announcements) { await customAlert('មិនទាន់មានតារាង announcements — សូមដំណើរការ features.sql ជាមុន'); return; }
+    const pw = $('psPw').value;
+    if (doTg && !pw) { await customAlert('សូមបញ្ចូលពាក្យសម្ងាត់ admin សម្រាប់ Telegram'); return; }
+    const locked = typeof isMonthLocked === 'function' && isMonthLocked(month);
+    if (doTg && !locked) { await customAlert(`Telegram ត្រូវការខែ ${month} ដែលបានបិទរួច (មាន snapshot)។ សូមបិទខែជាមុន។`); return; }
+
+    const withAmounts = $('psAmt').checked;
+    const picked = rows.filter(r => ids.includes(r.e.id));
+    const again = doPush ? picked.filter(r => sentCount(r.e.id) > 0).length : 0;
+    const preview = picked.slice(0, 8).map(r => r.e.name).join(', ') + (picked.length > 8 ? ` …(+${picked.length - 8})` : '');
+    const chNames = [doPush && '🔔 Push', doTg && '✈️ Telegram'].filter(Boolean).join(' + ');
+    const msg = `ផ្ញើ Payslip ខែ ${month} ទៅ ${picked.length} នាក់ (${chNames})?\n${preview}`
+      + (again ? `\n\nមាន ${again} នាក់ធ្លាប់ទទួល Push រួចហើយ — នឹងផ្ញើជាសារថ្មីម្តងទៀត` : '')
+      + (doPush && withAmounts ? '\n\n⚠ សារ Push មានចំនួនទឹកប្រាក់' : '')
+      + (locked ? '' : '\n\n⚠ ខែនេះមិនទាន់បិទ — ចំនួនអាចប្រែប្រួលក្រោយ');
+    if (!(await customConfirm(msg))) return;
+
+    const btn = $('psSend'); btn.disabled = true;
+    const parts = [];
+    try {
+      if (doPush) parts.push(await sendPush(picked, withAmounts));
+      if (doTg) parts.push(await sendTelegram(ids, pw));
+    } catch (ex) {
+      parts.push('មានបញ្ហា៖ ' + String(ex && ex.message || ex));
+    } finally {
+      $('psPw').value = '';
+      btn.disabled = false;
+    }
     renderList();
-    await customAlert(errMsg
-      ? `ផ្ញើបាន ${okCount}/${out.length} នាក់ — មានបញ្ហា៖ ${errMsg}`
-      : `✓ បានផ្ញើ Payslip ទៅ ${okCount} នាក់`);
+    await customAlert(parts.join('\n\n'));
   }
 
   // ---------------------------------------------------------------- init ----
