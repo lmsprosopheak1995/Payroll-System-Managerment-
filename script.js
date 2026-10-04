@@ -122,9 +122,17 @@ function generateWorkplaceCode() {
   return s;
 }
 // ---- Avatar (រូប profile ឬអក្សរដំបូងនៃឈ្មោះ) ----
+// អនុញ្ញាតតែ data URL រូបភាព ឬ http(s) URL ស្អាត (ការពារ stored XSS ពី employees.photo)
+function safeImgSrc(s) {
+  s = String(s == null ? '' : s);
+  if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s)) return s;
+  if (/^https?:\/\/[^\s"'<>`]+$/i.test(s)) return s;
+  return '';
+}
 function avatarInner(e) {
-  return e && e.photo
-    ? `<img src="${e.photo}" alt="">`
+  const photoSrc = safeImgSrc(e && e.photo);
+  return photoSrc
+    ? `<img src="${photoSrc}" alt="">`
     : escapeHtml(((e && e.name) || '?').trim().charAt(0).toUpperCase() || '?');
 }
 function avatarHtml(e, cls) {
@@ -2088,7 +2096,7 @@ let pendingPhoto; // undefined = មិនប្តូរ, '' = លុប, 'data
 
 function setPhotoPreview(e) {
   const box = document.getElementById('empPhotoPreview');
-  const src = pendingPhoto !== undefined ? pendingPhoto : (e && e.photo) || '';
+  const src = safeImgSrc(pendingPhoto !== undefined ? pendingPhoto : (e && e.photo) || '');
   box.innerHTML = src ? `<img src="${src}" alt="">` : escapeHtml(((document.getElementById('empName').value || (e && e.name) || '?').trim().charAt(0) || '?').toUpperCase());
 }
 
