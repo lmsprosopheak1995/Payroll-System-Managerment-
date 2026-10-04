@@ -324,3 +324,8 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 @media (min-width: 1400px) {
   #dashTodayStats .num, #dashMonthStats .num { font-size: 1.2rem; }
 }
+
+/* ---------- 11) ប្រអប់ prompt / alert / confirm ត្រូវនៅលើ Dialog Payslip ----------
+   Dialog Payslip (payslip-send.js) ប្រើ z-index 9972 / 9973 ហើយ .modal-overlay ក្នុង style.css មានតែ 100
+   → ប្រអប់ customPrompt/customAlert/customConfirm លោតនៅក្រោយ។ លុប section នេះចេញ ទើបត្រលប់ទៅដើមវិញ។ */
+#customDialogOverlay { z-index: 10050; }
