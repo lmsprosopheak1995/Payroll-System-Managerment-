@@ -76,6 +76,7 @@
         <p class="ps-note">ជ្រើសបណ្តាញផ្ញើ៖ 🔔 Push ក្នុងកម្មវិធី · ✈️ Telegram។ Telegram ផ្ញើពី server ដោយអានចំនួនទឹកប្រាក់ពី snapshot នៃខែដែលបានបិទ (ត្រូវបិទខែជាមុន)។ បុគ្គលិកត្រូវភ្ជាប់ Telegram ជាមុន តាមប៊ូតុង 🔗។</p>
         <div id="psStatus"></div>
         <div class="ps-row">
+          <input type="month" id="psMonthSel" title="ជ្រើសរើសខែ" style="font-size:.8rem;padding:6px 8px">
           <input type="text" id="psQ" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px">
           <select id="psDept"></select>
           <button class="secondary" id="psFromTable" type="button" title="ជ្រើសបុគ្គលិកដែលកំពុងបង្ហាញក្នុងតារាងមេ (តាមតម្រង)">☑ ជ្រើសតាមតម្រងលើតារាង</button>
@@ -123,6 +124,7 @@
     $('psAmt').addEventListener('change', () => { $('psAmtWarn').style.display = $('psAmt').checked ? '' : 'none'; sync(); });
     $('psSend').addEventListener('click', send);
     $('psLink').addEventListener('click', makeLinks);
+    $('psMonthSel').addEventListener('change', e => { if (/^\d{4}-\d{2}$/.test(e.target.value)) loadMonth(e.target.value); else e.target.value = month; });
     ['psChPush', 'psChTg'].forEach(id => $(id).addEventListener('change', () => {
       $('psPwRow').style.display = $('psChTg').checked ? '' : 'none';
       sync();
@@ -155,24 +157,37 @@
     sync();
   }
 
-  function open() {
-    if (!ov) build();
-    month = curMonth();
+  // ផ្ទុកបុគ្គលិក + ចំនួនសម្រាប់ខែដែលបានជ្រើស (ខែបិទរួច → ប្រើលេខពី Snapshot ដូចអ្វីដែល server នឹងផ្ញើ)
+  function loadMonth(m) {
+    month = m;
     const $ = id => ov.querySelector('#' + id);
+    const locked = typeof isMonthLocked === 'function' && isMonthLocked(month);
     let emps = [];
     try { emps = payrollEmployeesForMonth(month); } catch (e) { emps = []; }
-    rows = emps.map(e => { let t = {}; try { t = summarizeEmpMonth(e, month) || {}; } catch (x) { /* ignore */ } return { e, t }; })
-      .sort((a, b) => (a.e.dept || '').localeCompare(b.e.dept || '') || (a.e.name || '').localeCompare(b.e.name || ''));
+    rows = emps.map(e => {
+      let t = null;
+      if (locked && typeof getLockedSnapshot === 'function') { try { t = getLockedSnapshot(e.id, month); } catch (x) { t = null; } }
+      if (!t) { try { t = summarizeEmpMonth(e, month) || {}; } catch (x) { t = {}; } }
+      return { e, t };
+    }).sort((a, b) => (a.e.dept || '').localeCompare(b.e.dept || '') || (a.e.name || '').localeCompare(b.e.name || ''));
     $('psMonth').textContent = month;
+    $('psMonthSel').value = month;
     const depts = [...new Set(rows.map(r => r.e.dept || '').filter(Boolean))].sort((a, b) => a.localeCompare(b));
     $('psDept').innerHTML = '<option value="">ផ្នែកទាំងអស់</option>' + depts.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
-    $('psChPush').checked = true; $('psChTg').checked = false; $('psPw').value = ''; $('psPwRow').style.display = 'none';
-    $('psQ').value = ''; $('psAmt').checked = false; $('psAmtWarn').style.display = 'none'; $('psAll').checked = false;
-    const locked = typeof isMonthLocked === 'function' && isMonthLocked(month);
+    $('psQ').value = ''; $('psAll').checked = false;   // ប្តូរខែ → ដកការជ្រើសរើសចាស់
     const tableErr = typeof featureErrors !== 'undefined' && featureErrors.announcements;
     $('psStatus').innerHTML = (tableErr ? '<div class="ps-warn">⚠️ មិនទាន់មានតារាង "announcements" ក្នុង Supabase — សូមដំណើរការ features.sql ជាមុន។</div>' : '')
-      + (locked ? '' : `<div class="ps-warn">🔓 ខែ ${esc(month)} មិនទាន់បិទ — ចំនួនអាចប្រែប្រួល។ គួរបិទខែជាមុនសិន មុនផ្ញើ Payslip។</div>`);
+      + (locked ? '' : `<div class="ps-warn">🔓 ខែ ${esc(month)} មិនទាន់បិទ — ចំនួនអាចប្រែប្រួល។ គួរបិទខែជាមុនសិន មុនផ្ញើ Payslip (Telegram ត្រូវការខែដែលបិទរួច)។</div>`);
+    ov.querySelectorAll('#psBody .ps-chk').forEach(c => { c.checked = false; });
     renderList();
+  }
+
+  function open() {
+    if (!ov) build();
+    const $ = id => ov.querySelector('#' + id);
+    $('psChPush').checked = true; $('psChTg').checked = false; $('psPw').value = ''; $('psPwRow').style.display = 'none';
+    $('psAmt').checked = false; $('psAmtWarn').style.display = 'none';
+    loadMonth(curMonth());
     ov.classList.add('open');
   }
 
