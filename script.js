@@ -1093,7 +1093,7 @@ function partialLeaveInfo(empId, date) {
 }
 
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', maternity: 'ច្បាប់សម្រាលកូន', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 
 async function loadLeaveRequests() {
   const { data, error } = await fetchAllRows('leave_requests', [{ col: 'created_at', asc: false }, { col: 'id' }]);
@@ -2493,7 +2493,7 @@ function stopScanner() {
 
 // ==== យឺត / ច្បាប់ → កាត់លុយ ====
 const DEDUCT_RULES_KEY = 'deduct_rules_v1';
-const DEDUCT_DEFAULTS = { graceMinutes: 16, latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false };
+const DEDUCT_DEFAULTS = { graceMinutes: 16, latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false, maternityPayPct: 50 };
 
 function loadDeductRules() {
   try {
@@ -2513,6 +2513,8 @@ function readDeductControls() {
   deductRules.latePerDay = parseFloat(document.getElementById('dedLatePerDay').value) || 0;
   deductRules.latePerMin = parseFloat(document.getElementById('dedLatePerMin').value) || 0;
   deductRules.leaveFood = document.getElementById('dedLeaveFood').checked;
+  const mpEl = document.getElementById('dedMaternityPct');
+  if (mpEl) { const mp = parseFloat(mpEl.value); deductRules.maternityPayPct = isNaN(mp) ? 50 : Math.min(100, Math.max(0, mp)); }
   deductRules.leaveTypes = [...document.querySelectorAll('.ded-leave-type')].filter(c => c.checked).map(c => c.value);
   saveDeductRules();
 }
@@ -2521,6 +2523,8 @@ function initDeductControls() {
   document.getElementById('dedLatePerDay').value = deductRules.latePerDay;
   document.getElementById('dedLatePerMin').value = deductRules.latePerMin;
   document.getElementById('dedLeaveFood').checked = !!deductRules.leaveFood;
+  const mpEl = document.getElementById('dedMaternityPct');
+  if (mpEl) mpEl.value = deductRules.maternityPayPct;
   document.querySelectorAll('.ded-leave-type').forEach(c => { c.checked = deductRules.leaveTypes.includes(c.value); });
   document.getElementById('dedMonth').value = todayStr().slice(0, 7);
 }
@@ -2536,7 +2540,10 @@ function calcDeductionRow(emp, month) {
   const approved = leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved');
 
   const shift = getEmpShift(emp.id);
-  let lateDays = 0, lateMinutes = 0, earlyDays = 0, earlyMinutes = 0, violDays = 0, leaveDays = 0, deductibleLeaveDays = 0;
+  let lateDays = 0, lateMinutes = 0, earlyDays = 0, earlyMinutes = 0, violDays = 0, leaveDays = 0, deductibleLeaveDays = 0, maternityDays = 0, maternityDeductDays = 0;
+  // ច្បាប់សម្រាលកូន៖ ថ្ងៃធ្វើការបើកតាម % (លំនាំដើម 50%) → កាត់ (100−%) ; ថ្ងៃអាទិត្យ/បុណ្យ មិនបើក → កាត់ 100%
+  const matPay = Math.min(1, Math.max(0, (deductRules.maternityPayPct === undefined ? 50 : deductRules.maternityPayPct) / 100));
+  const matFrac = date => (dayMultiplier(date) > 1 ? 1 : 1 - matPay);
   const lateDates = [], leaveDates = [];
 
   const stdH = settings.standardHours > 0 ? settings.standardHours : 8;
@@ -2547,7 +2554,8 @@ function calcDeductionRow(emp, month) {
       const w = h / stdH;
       leaveDays += w;
       const isSubstP = (rq.reason || '').includes(SUBST_TAG);
-      if (rq.leave_type !== 'unpaid' && deductRules.leaveTypes.includes(rq.leave_type) && !isSubstP) deductibleLeaveDays += w;
+      if (rq.leave_type === 'maternity') { maternityDays += w; maternityDeductDays += w * matFrac(date); }
+      else if (rq.leave_type !== 'unpaid' && deductRules.leaveTypes.includes(rq.leave_type) && !isSubstP) deductibleLeaveDays += w;
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[rq.leave_type] || rq.leave_type} ${leaveUnitLabel(rq)})`);
     });
     const rec = attendance[date] && attendance[date][emp.id];
@@ -2571,7 +2579,8 @@ function calcDeductionRow(emp, month) {
       const type = req && LEAVE_TYPE_LABELS[req.leave_type] ? req.leave_type : 'other';
       leaveDays++;
       const isSubst = !!(req && (req.reason || '').includes(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
-      if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
+      if (type === 'maternity') { maternityDays++; maternityDeductDays += matFrac(date); }
+      else if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }
   });
@@ -2584,8 +2593,8 @@ function calcDeductionRow(emp, month) {
   const exceeded = violMinutes > grace;
   const excessMinutes = exceeded ? violMinutes - grace : 0;
   const lateDeduct = exceeded ? round4(violDays * deductRules.latePerDay + excessMinutes * deductRules.latePerMin) : 0;
-  const leaveDeduct = round4(deductibleLeaveDays * perLeaveDay);
-  return { lateDays, lateMinutes, earlyDays, earlyMinutes, violDays, violMinutes, grace, exceeded, excessMinutes, leaveDays, deductibleLeaveDays, lateDates, leaveDates, lateDeduct, leaveDeduct, total: round4(lateDeduct + leaveDeduct) };
+  const leaveDeduct = round4((deductibleLeaveDays + maternityDeductDays) * perLeaveDay);
+  return { lateDays, lateMinutes, earlyDays, earlyMinutes, violDays, violMinutes, grace, exceeded, excessMinutes, leaveDays, deductibleLeaveDays, maternityDays, maternityDeductDays, lateDates, leaveDates, lateDeduct, leaveDeduct, total: round4(lateDeduct + leaveDeduct) };
 }
 
 function renderDeductTab() {
@@ -3170,7 +3179,7 @@ initLbControls();
 initDeductControls();
 ['dedMonth', 'dedFilter'].forEach(id => document.getElementById(id).addEventListener('change', renderDeductTab));
 document.getElementById('dedSearch').addEventListener('input', renderDeductTab);
-['dedGrace', 'dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
+['dedGrace', 'dedLatePerDay', 'dedLatePerMin', 'dedLeaveFood', 'dedMaternityPct'].forEach(id => document.getElementById(id).addEventListener('input', () => { readDeductControls(); renderDeductTab(); }));
 document.querySelectorAll('.ded-leave-type').forEach(c => c.addEventListener('change', () => { readDeductControls(); renderDeductTab(); }));
 document.getElementById('dedApplyAllBtn').addEventListener('click', applyAllDeductions);
 initBonusControls();

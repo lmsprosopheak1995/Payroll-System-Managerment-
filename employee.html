@@ -260,6 +260,7 @@
             <option value="annual">ច្បាប់ប្រចាំឆ្នាំ</option>
             <option value="paid">ច្បាប់មានប្រាក់ខែ (ពិសេស)</option>
             <option value="sick">ច្បាប់ឈឺ</option>
+            <option value="maternity">ច្បាប់សម្រាលកូន</option>
             <option value="unpaid">ច្បាប់គ្មានប្រាក់ខែ</option>
             <option value="other">ផ្សេងៗ</option>
           </select>
@@ -462,7 +463,7 @@ async function loadMyPartialLeaves() {
   });
 }
 
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', maternity: 'ច្បាប់សម្រាលកូន', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
 const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
@@ -887,6 +888,9 @@ function updateLeaveTypeHint() {
   if (t === 'paid') {
     el.style.display = 'block';
     el.textContent = 'សម្រាប់ឧប្បត្តិហេតុពិសេស (រៀបការ, ពិធីបុណ្យ, សម្រាលកូន...) — បង់ប្រាក់ពេញ មានកូតាដាច់ដោយឡែក។ សូមបញ្ជាក់មូលហេតុ និងភ្ជាប់រូបភាពបញ្ជាក់។';
+  } else if (t === 'maternity') {
+    el.style.display = 'block';
+    el.textContent = 'ច្បាប់សម្រាលកូនតាមច្បាប់ការងារ — រហូតដល់ 90 ថ្ងៃ បើកប្រាក់ខែតាមអត្រាក្រុមហ៊ុន (ជាទូទៅ 50%)។ សូមភ្ជាប់ឯកសារបញ្ជាក់ពីមន្ទីរពេទ្យ។';
   } else {
     el.style.display = 'none';
   }

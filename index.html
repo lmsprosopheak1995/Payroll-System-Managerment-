@@ -72,6 +72,7 @@
         <button class="nav-item" data-tab="payroll"><span class="dot"></span><span class="lbl">អត្ថប្រយោជន៍ & ប្រាក់កាត់</span></button>
         <button class="nav-item" data-tab="deduct"><span class="dot"></span><span class="lbl">យឺត/ច្បាប់ → កាត់លុយ</span></button>
         <button class="nav-item" data-tab="bonus"><span class="dot"></span><span class="lbl">បំណាច់ឆ្នាំ</span></button>
+        <button class="nav-item" data-tab="nssf"><span class="dot"></span><span class="lbl">ប.ស.ស (NSSF)</span></button>
       </div>
     </div>
     <button class="nav-item" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI ជំនួយការ</span></button>
@@ -346,6 +347,10 @@
         <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;">
           <input type="checkbox" id="dedLeaveFood"> កាត់ប្រាក់បាយថ្ងៃច្បាប់ផងដែរ
         </label>
+        <div class="form-group" style="margin:0;">
+          <label>ច្បាប់សម្រាលកូន៖ បើកប្រាក់ (% នៃប្រាក់ខែ) — 90 ថ្ងៃ</label>
+          <input type="number" id="dedMaternityPct" min="0" max="100" step="1" style="width:150px;">
+        </div>
       </div>
       <p class="scan-hint">*ចូលយឺត និងចេញមុនម៉ោង ត្រូវបូកបញ្ចូលគ្នាក្នុងមួយខែ។ បើសរុបមិនលើសនាទី "ទុកឥតកាត់" (លំនាំដើម 16 នាទី) នោះមិនកាត់ទេ។ បើលើស ទើបកាត់៖ (ចំនួនថ្ងៃដែលយឺត/ចេញមុន × ថ្លៃក្នុងមួយថ្ងៃ) + (នាទីដែលលើស × ថ្លៃក្នុងមួយនាទី)។ ម៉ោងធ្វើការដែលខ្វះ ត្រូវបានដកចេញពីប្រាក់ខែក្នុងតារាងវត្តមានរួចហើយ ដូច្នេះចំនួននេះជាការពិន័យបន្ថែម — ទុក 0 បើមិនចង់ពិន័យបន្ថែម។ ថ្ងៃច្បាប់ក្នុងតារាងវត្តមានត្រូវបានបង់ប្រាក់ពេញថ្ងៃ ដូច្នេះការកាត់ច្បាប់នៅទីនេះនឹងដកវាចេញវិញ។</p>
     </div>
@@ -1029,6 +1034,7 @@
 <script src="rules-sync.js"></script>
 <script src="month-end.js"></script>
 <script src="salary-tax.js"></script>
+<script src="nssf.js"></script>
 <script src="ui-modern.js"></script>
 <script src="about-contact.js"></script>
 </body>
