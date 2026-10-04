@@ -274,6 +274,7 @@ function renderDashboard() {
   const pendLeave = leaveRequests.filter(r => r.status === 'pending').length;
   const pendOT = overtimeRequests.filter(r => r.status === 'pending').length;
   const newFb = feedbackRows.filter(r => r.status === 'new').length;
+  renderDashPending();
   byId('dashAlerts').innerHTML = `
     <h3 class="sec-title" style="margin-top:0;">🔔 ត្រូវធ្វើ</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -281,6 +282,66 @@ function renderDashboard() {
       <button class="secondary" onclick="showTab('feedback')">💬 Feedback ថ្មី: <strong>${newFb}</strong></button>
       <button class="secondary" onclick="showTab('deduct')">⏰ យឺត/ច្បាប់ ក្នុងខែ: <strong>${lateDays + leaveDays}</strong></button>
     </div>`;
+}
+
+// ---------------------------------------------- Dashboard: សំណើរង់ចាំអនុម័ត --
+// ប្រើ approve/reject ដែលមានស្រាប់ (Leave + OT) — ចុចបានភ្លាមៗ មិនចាំបាច់ចូលផ្ទាំងសំណើ
+let dashPendFilter = 'all';          // all | leave | ot
+const DASH_PEND_LIMIT = 8;
+
+function setDashPendFilter(f) { dashPendFilter = f; renderDashPending(); }
+
+function renderDashPending() {
+  const box = byId('dashPending');
+  if (!box) return;
+  const leaves = leaveRequests.filter(r => r.status === 'pending');
+  const ots = overtimeRequests.filter(r => r.status === 'pending');
+  const disputes = (typeof pendingDisputeCount === 'function') ? pendingDisputeCount() : 0;
+
+  let items = [];
+  if (dashPendFilter !== 'ot') items = items.concat(leaves.map(r => ({ kind: 'leave', r })));
+  if (dashPendFilter !== 'leave') items = items.concat(ots.map(r => ({ kind: 'ot', r })));
+  items.sort((a, b) => String(b.r.created_at || '').localeCompare(String(a.r.created_at || '')));
+  const shown = items.slice(0, DASH_PEND_LIMIT);
+
+  const tab = (key, label, n) =>
+    `<button class="${dashPendFilter === key ? '' : 'secondary'}" style="padding:5px 12px;font-size:0.82rem;" onclick="setDashPendFilter('${key}')">${label} (${n})</button>`;
+
+  const rowHtml = ({ kind, r }) => {
+    const isLeave = kind === 'leave';
+    const title = isLeave
+      ? `${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)} · ${r.start_date}${r.end_date !== r.start_date ? ' → ' + r.end_date : ''}`
+      : `ថែមម៉ោង · ${r.work_date} · ${r.start_time} - ${r.end_time}`;
+    const sub = isLeave ? leaveUnitLabel(r) : '';
+    const reason = escapeHtml((isLeave ? stripUnitTag(r.reason) : r.reason) || '').trim();
+    const fnA = isLeave ? 'approveLeaveRequest' : 'approveOTRequest';
+    const fnR = isLeave ? 'rejectLeaveRequest' : 'rejectOTRequest';
+    return `<div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">
+      <div style="min-width:200px;flex:1 1 240px;">
+        <div style="font-weight:600;">${escapeHtml(empName(r.employee_id))}</div>
+        <div style="font-size:0.86rem;">${title}${sub ? ` <span style="color:var(--text-muted);font-size:0.78rem;">${escapeHtml(sub)}</span>` : ''}</div>
+        ${reason ? `<div style="font-size:0.78rem;color:var(--text-muted);white-space:normal;">${reason}</div>` : ''}
+      </div>
+      <div class="row-actions" style="display:flex;gap:8px;">
+        <button class="secondary" onclick="${fnA}('${r.id}')">✓ អនុម័ត</button>
+        <button class="danger" onclick="${fnR}('${r.id}')">✕ បដិសេធ</button>
+      </div>
+    </div>`;
+  };
+
+  const more = items.length - shown.length;
+  box.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <h3 class="sec-title" style="margin:0;">📝 សំណើរង់ចាំអនុម័ត (${leaves.length + ots.length})</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${tab('all', 'ទាំងអស់', leaves.length + ots.length)}${tab('leave', 'ច្បាប់', leaves.length)}${tab('ot', 'ថែមម៉ោង', ots.length)}
+      </div>
+    </div>
+    ${shown.length ? shown.map(rowHtml).join('') : '<div style="padding:14px 0;text-align:center;color:var(--text-muted);border-top:1px solid var(--border);">✓ គ្មានសំណើរង់ចាំទេ</div>'}
+    ${(more > 0 || disputes > 0) ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      ${more > 0 ? `<button class="secondary" onclick="showTab('requests')">មើលទាំងអស់ (នៅសល់ ${more}) ›</button>` : ''}
+      ${disputes > 0 ? `<button class="secondary" onclick="showTab('requests')">⚖️ ការតវ៉ាប្រាក់ខែរង់ចាំ: <strong>${disputes}</strong> ›</button>` : ''}
+    </div>` : ''}`;
 }
 
 // ---------------------------------------------- Push Notifications (admin) --

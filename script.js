@@ -1530,6 +1530,7 @@ async function refreshRequests(opts) {
     if (active || !(opts && opts.silent)) renderRequestsTab();
     else { const b = document.getElementById('pendingReqBadge'); if (b) { const n = leaveRequests.filter(r => r.status === 'pending').length + overtimeRequests.filter(r => r.status === 'pending').length + pendingDisputeCount(); b.textContent = n > 0 ? `(${n})` : ''; } }
   }
+  if (changed && typeof renderDashPending === 'function') renderDashPending();
 }
 setInterval(() => { if (!document.hidden && employees.length > 0) refreshRequests({ silent: true }); }, 60000);
 
@@ -1591,6 +1592,7 @@ function renderRequestsTab() {
         </td>
       </tr>`).join('');
   }
+  if (typeof renderDashPending === 'function') renderDashPending();
 }
 
 async function approveLeaveRequest(id) {
