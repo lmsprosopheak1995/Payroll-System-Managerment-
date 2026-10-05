@@ -38,6 +38,15 @@
 
   const LS_COMPANY = 'wc_company', LS_NOTE = 'wc_back_note';
   const CARD_W = 324, CARD_H = 204; // px (សមាមាត្រ 85.6×54mm)
+  // អត្ថបទថេរខាងក្រោយកាត (កែបានតាមចិត្ត)
+  const CARD_TERMS = [
+    'កាតនេះមិនអាចផ្ទេរទៅបុគ្គលផ្សេងបានទេ។',
+    'ក្រុមហ៊ុនរក្សាសិទ្ធិក្នុងការដកហូតកាតត្រឡប់មកវិញក្នុងករណីចាំបាច់។',
+    'នៅពេលបញ្ចប់កិច្ចសន្យាជាមួយក្រុមហ៊ុន កម្មករនិងបុគ្គលិក ត្រូវប្រគល់កាតមកកាន់ផ្នែកធនធានមនុស្ស។',
+    'ក្នុងករណីបាត់កាត ត្រូវរាយការណ៍ជាបន្ទាន់មកផ្នែកធនធានមនុស្ស។'
+  ];
+  const CARD_ADDRESS = 'ផ្លូវជាតិលេខ៣ ភូមិព្រៃសីលា សង្កាត់ក្រាំងធ្នង់ ខណ្ឌដង្កោ រាជធានីភ្នំពេញ ប្រទេសកម្ពុជា។';
+  const KH_DIGITS = ['១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
   const GRAD = 'linear-gradient(135deg,#0d9488,#0284c7)';
   const FONT = "'Kantumruy Pro','Noto Sans Khmer',sans-serif";
 
@@ -78,6 +87,9 @@
     try { const q = qrcode(0, 'M'); q.addData(String(text)); q.make(); return q.createDataURL(5, 0); } catch (_) { return ''; }
   }
 
+  // ជួរព័ត៌មានទ្វេភាសា ដូចកាតការងារពិត (ស្លាក / Label : តម្លៃ)
+  const infoRow = (label, value, accent) => `<div style="display:flex;gap:4px;font-size:11px;line-height:1.7;align-items:baseline"><span style="flex:0 0 70px;font-size:9px;color:#5b6b80">${label}</span><span style="flex:0 0 4px">:</span><span style="flex:1;min-width:0;font-weight:700;word-break:break-word;${accent ? 'color:#0f766e' : ''}">${esc(value)}</span></div>`;
+
   function frontHtml(e, company) {
     const initial = esc(((e.name || '?').trim().charAt(0) || '?').toUpperCase());
     const ph = safeSrc(e.photo);
@@ -89,10 +101,10 @@
       <div style="flex:1;display:flex;gap:12px;padding:12px;align-items:flex-start;min-height:0">
         ${photo}
         <div style="flex:1;min-width:0">
-          <div style="font-size:15px;font-weight:700;line-height:1.5;word-break:break-word">${esc(e.name)}</div>
-          <div style="font-size:11.5px;color:#0d9488;font-weight:600;line-height:1.5;margin-top:2px">${esc(e.position)}</div>
-          <div style="font-size:11px;color:#5b6b80;line-height:1.5">${esc(e.dept)}</div>
-          <div style="margin-top:8px;display:inline-block;background:#e6f6f4;color:#0f766e;border-radius:6px;padding:2px 8px;font-size:11.5px;font-weight:700;line-height:1.5">ID: ${esc(e.username || e.id)}</div>
+          ${infoRow('លេខកាត / I.D', e.username || e.id, true)}
+          ${infoRow('ឈ្មោះ / Name', e.name)}
+          ${infoRow('ផ្នែក / Dept', e.dept)}
+          ${infoRow('មុខងារ / Posit', e.position)}
         </div>
       </div>
       <div style="height:6px;flex:0 0 6px;background:${GRAD}"></div>
@@ -102,15 +114,20 @@
   function backHtml(e, company, note) {
     const qr = qrDataUrl(e.id);
     const qrBox = qr
-      ? `<img src="${qr}" alt="QR" style="width:104px;height:104px;display:block;image-rendering:pixelated">`
-      : `<div style="width:104px;height:104px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#be123c;text-align:center">មិនអាចបង្កើត QR</div>`;
+      ? `<img src="${qr}" alt="QR" style="width:76px;height:76px;display:block;image-rendering:pixelated">`
+      : `<div style="width:76px;height:76px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#be123c;text-align:center">មិនអាចបង្កើត QR</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
       <div style="height:28px;flex:0 0 28px;background:${GRAD};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${esc(company)}</div>
-      <div style="flex:1;display:flex;gap:14px;padding:12px;align-items:center;min-height:0">
-        <div style="padding:5px;border:1px solid #e1e8ef;border-radius:8px;background:#fff">${qrBox}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:700;line-height:1.5">ស្កេន QR ដើម្បីកត់វត្តមាន</div>
-          <div style="font-size:10.5px;color:#5b6b80;line-height:1.5;margin-top:4px;white-space:pre-wrap;word-break:break-word">${esc(note)}</div>
+      <div style="flex:1;display:flex;gap:10px;padding:8px 10px;align-items:flex-start;min-height:0">
+        <div style="flex:0 0 auto;text-align:center">
+          <div style="padding:4px;border:1px solid #e1e8ef;border-radius:8px;background:#fff">${qrBox}</div>
+          <div style="font-size:7.5px;color:#5b6b80;line-height:1.5;margin-top:3px;width:84px">ស្កេន QR ដើម្បីកត់វត្តមាន</div>
+        </div>
+        <div style="flex:1;min-width:0;font-size:7.5px;line-height:1.5">
+          <div style="font-size:9px;font-weight:700;color:#0f766e">លក្ខខណ្ឌ</div>
+          ${CARD_TERMS.map((t, k) => `<div style="display:flex;gap:3px"><span style="flex:0 0 8px">${KH_DIGITS[k]}.</span><span style="flex:1;min-width:0">${esc(t)}</span></div>`).join('')}
+          <div style="margin-top:2px"><b>អាស័យដ្ឋាន៖</b> ${esc(CARD_ADDRESS)}</div>
+          ${note ? `<div style="margin-top:2px;color:#0f766e;font-weight:700;white-space:pre-wrap;word-break:break-word">${esc(note)}</div>` : ''}
         </div>
       </div>
       <div style="height:6px;flex:0 0 6px;background:${GRAD}"></div>
