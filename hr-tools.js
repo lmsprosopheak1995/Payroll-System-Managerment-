@@ -36,7 +36,7 @@
     }
     kids.flat().forEach(c => {
       if (c == null || c === false) return;
-      el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
     });
     return el;
   }
@@ -311,7 +311,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
     { t: 'employee_cards', o: [{ col: 'employee_id' }], optional: true, images: true }
   ];
 
-  async function runBackup(withImages, onProgress) {
+  async function runBackup(withImages, onProgress = () => {}) {
     if (typeof supabaseClient === 'undefined' || typeof fetchAllRows !== 'function') throw new Error('មិនឃើញការតភ្ជាប់ Supabase');
     const meta = { app: 'employee-management', createdAt: new Date().toISOString(), includesImages: !!withImages, counts: {}, warnings: [], skipped: [] };
     const tables = {};
@@ -328,7 +328,9 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
         if (def.optional) { meta.skipped.push(def.t + ' (មិនមានតារាង)'); continue; }
         meta.warnings.push(`${def.t}៖ រាប់ជួរមិនបាន — ${ex.message || ex}`);
       }
-      const res = await fetchAllRows(def.t, def.o);
+      let res;
+      try { res = await fetchAllRows(def.t, def.o); }
+      catch (ex) { res = { error: ex }; }
       if (res.error) {
         if (def.optional) { meta.skipped.push(def.t + ' (មិនមានតារាង)'); continue; }
         meta.warnings.push(`${def.t}៖ ទាញយកមិនបាន — ${res.error.message || res.error}`);
@@ -399,6 +401,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
 
   // ------------------------------------------------------------ ស្វែងរកលឿន (Ctrl+K) ----
   let pal = null, palInput = null, palList = null, palItems = [], palSel = 0;
+  const appVisible = () => { const m = document.getElementById('mainContainer'); return !!m && getComputedStyle(m).display !== 'none'; };
 
   function paletteItems(q) {
     q = q.trim().toLowerCase();
@@ -429,6 +432,8 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
       row.addEventListener('click', () => runPalette(i));
       palList.appendChild(row);
     });
+    const cur = palList.children[palSel];
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
 
   function runPalette(i) {
@@ -439,8 +444,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
   }
 
   function openPalette() {
-    const main = document.getElementById('mainContainer');
-    if (!main || main.style.display === 'none') return; // មិនទាន់ចូលគណនី
+    if (!appVisible()) return; // មិនទាន់ចូលគណនី
     if (!pal) {
       pal = h('div', { class: 'hrt-pal' });
       palInput = h('input', { type: 'text', placeholder: '🔎 ស្វែងរកទំព័រ ឬបុគ្គលិក (ឈ្មោះ/អត្តលេខ/ទូរស័ព្ទ/ផ្នែក)…', autocomplete: 'off' });
@@ -450,6 +454,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
       pal.addEventListener('mousedown', e => { if (e.target === pal) closePalette(); });
       palInput.addEventListener('input', () => { palSel = 0; renderPalette(); });
       palInput.addEventListener('keydown', e => {
+        if (e.isComposing || e.keyCode === 229) return;
         if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); renderPalette(); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); renderPalette(); }
         else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }
@@ -493,6 +498,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
     }
     document.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && String(e.key).toLowerCase() === 'k') {
+        if (!appVisible()) return;
         e.preventDefault();
         if (pal && pal.classList.contains('open')) closePalette(); else openPalette();
       }
