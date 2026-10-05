@@ -72,6 +72,88 @@
     if (k < 0) { k = 0; for (const ch of d) k = (k * 31 + ch.codePointAt(0)) >>> 0; }
     return PALETTE[k % PALETTE.length];
   };
+  // ជម្រើសកាត៖ ឡូហ្គោ ថ្ងៃចេញកាត/ផុតកំណត់ បង្ហាញទូរស័ព្ទ (ចងចាំក្នុង localStorage)
+  const LS_OPTS = 'wc_opts';
+  const getOpts = () => { try { const o = JSON.parse(lsGet(LS_OPTS, '{}')); return (o && typeof o === 'object') ? o : {}; } catch (_) { return {}; } };
+  const setOpt = (k, v) => { const o = getOpts(); o[k] = v; lsSet(LS_OPTS, JSON.stringify(o)); };
+  const fmtDate = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+  const optsUi = {}; // prefix → sync()
+  const logoHtml = h => {
+    const lg = safeSrc(getOpts().logo);
+    return lg ? `<img src="${lg}" alt="" style="height:${h}px;width:auto;max-width:64px;object-fit:contain;background:#fff;border-radius:4px;padding:2px;margin-right:8px;box-sizing:content-box;flex:0 0 auto">` : '';
+  };
+  const datesHtml = () => {
+    const o = getOpts();
+    if (!o.showDates) return '';
+    const a = fmtDate(o.issue), b = fmtDate(o.expiry);
+    if (!a && !b) return '';
+    return `<div style="margin-top:3px;font-size:8.5px;line-height:1.5;color:#5b6b80">${a ? 'ចេញកាត៖ ' + a : ''}${a && b ? ' · ' : ''}${b ? 'ផុតកំណត់៖ ' + b : ''}</div>`;
+  };
+  const optsHtml = p => `
+          <div class="wc-row">
+            <span style="font-size:.8rem;color:var(--text-muted,#5b6b80)">ឡូហ្គោ</span>
+            <button class="secondary" type="button" id="${p}LogoBtn">📁 ជ្រើស</button>
+            <button class="secondary" type="button" id="${p}LogoClr" title="លុបឡូហ្គោ">🗑</button>
+            <input type="file" accept="image/*" id="${p}LogoFile" style="display:none">
+            <span id="${p}LogoPrev"></span>
+            <label>ថ្ងៃចេញកាត <input type="date" id="${p}Issue"></label>
+            <label>ផុតកំណត់ <input type="date" id="${p}Expiry"></label>
+            <label><input type="checkbox" id="${p}ShowDates"> បង្ហាញថ្ងៃលើកាត</label>
+            <label><input type="checkbox" id="${p}ShowPhone"> បង្ហាញទូរស័ព្ទខាងក្រោយ</label>
+          </div>`;
+
+  function logoFromFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !/^image\//.test(file.type)) { reject(new Error('សូមជ្រើសរើសឯកសាររូបភាព')); return; }
+      if (file.size > 8 * 1024 * 1024) { reject(new Error('ឯកសារធំពេក (លើស 8MB)')); return; }
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (!img.naturalWidth || !img.naturalHeight) { reject(new Error('អានទំហំរូបភាពមិនបាន')); return; }
+        const k = Math.min(1, 240 / img.naturalWidth, 96 / img.naturalHeight);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.naturalWidth * k));
+        c.height = Math.max(1, Math.round(img.naturalHeight * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/png')); // PNG រក្សាផ្ទៃថ្លា
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('អានរូបភាពមិនបាន')); };
+      img.src = url;
+    });
+  }
+
+  // ភ្ជាប់ប្រអប់ជម្រើស (q = ឧបករណ៍រក element តាម id) → ត្រឡប់ sync() សម្រាប់ហៅពេលបើកប្រអប់
+  function wireOpts(q, p, onChange) {
+    const sync = () => {
+      const o = getOpts();
+      q(p + 'Issue').value = o.issue || '';
+      q(p + 'Expiry').value = o.expiry || '';
+      q(p + 'ShowDates').checked = !!o.showDates;
+      q(p + 'ShowPhone').checked = !!o.showPhone;
+      const lg = safeSrc(o.logo);
+      q(p + 'LogoPrev').innerHTML = lg ? `<img src="${lg}" alt="" style="height:22px;vertical-align:middle;background:#e5e7eb;border-radius:4px">` : '';
+    };
+    q(p + 'Issue').addEventListener('change', e => { setOpt('issue', e.target.value); onChange(); });
+    q(p + 'Expiry').addEventListener('change', e => { setOpt('expiry', e.target.value); onChange(); });
+    q(p + 'ShowDates').addEventListener('change', e => { setOpt('showDates', e.target.checked); onChange(); });
+    q(p + 'ShowPhone').addEventListener('change', e => { setOpt('showPhone', e.target.checked); onChange(); });
+    q(p + 'LogoBtn').addEventListener('click', () => q(p + 'LogoFile').click());
+    q(p + 'LogoClr').addEventListener('click', () => { setOpt('logo', ''); sync(); onChange(); });
+    q(p + 'LogoFile').addEventListener('change', async e => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      try {
+        setOpt('logo', await logoFromFile(f));
+        if (!safeSrc(getOpts().logo)) throw new Error('រក្សាទុកឡូហ្គោមិនបាន (ទំហំចងចាំពេញ)');
+        sync(); onChange();
+      } catch (ex) { await say('ឡូហ្គោមិនបាន៖ ' + (ex.message || ex)); }
+    });
+    sync();
+    return sync;
+  }
+
   // ពិនិត្យទិន្នន័យមុនព្រីន
   const issuesOf = e => {
     const r = [];
@@ -137,7 +219,7 @@
       ? `<img src="${ph}" alt="" style="width:80px;height:98px;object-fit:cover;border-radius:8px;display:block;background:#e6f6f4">`
       : `<div style="width:80px;height:98px;border-radius:8px;background:${T.grad};color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700">${initial}</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
-      <div style="height:40px;flex:0 0 40px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12.5px;line-height:1.5">${esc(company)}</div>
+      <div style="height:40px;flex:0 0 40px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12.5px;line-height:1.5">${logoHtml(24)}<span>${esc(company)}</span></div>
       <div style="flex:1;display:flex;gap:12px;padding:12px;align-items:flex-start;min-height:0">
         ${photo}
         <div style="flex:1;min-width:0">
@@ -145,6 +227,7 @@
           ${infoRow('ឈ្មោះ / Name', e.name)}
           ${infoRow('ផ្នែក / Dept', e.dept)}
           ${infoRow('មុខងារ / Posit', e.position)}
+          ${datesHtml()}
         </div>
       </div>
       <div style="height:6px;flex:0 0 6px;background:${T.grad}"></div>
@@ -158,11 +241,12 @@
       ? `<img src="${qr}" alt="QR" style="width:76px;height:76px;display:block;image-rendering:pixelated">`
       : `<div style="width:76px;height:76px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#be123c;text-align:center">មិនអាចបង្កើត QR</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
-      <div style="height:28px;flex:0 0 28px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${esc(company)}</div>
+      <div style="height:28px;flex:0 0 28px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${logoHtml(18)}<span>${esc(company)}</span></div>
       <div style="flex:1;display:flex;gap:10px;padding:8px 10px;align-items:flex-start;min-height:0">
         <div style="flex:0 0 auto;text-align:center">
           <div style="padding:4px;border:1px solid #e1e8ef;border-radius:8px;background:#fff">${qrBox}</div>
           <div style="font-size:7.5px;color:#5b6b80;line-height:1.5;margin-top:3px;width:84px">ស្កេន QR ដើម្បីកត់វត្តមាន</div>
+          ${(getOpts().showPhone && e.phone) ? `<div style="font-size:7.5px;line-height:1.5;margin-top:2px;width:84px;word-break:break-all"><b>ទូរស័ព្ទ៖</b> ${esc(e.phone)}</div>` : ''}
         </div>
         <div style="flex:1;min-width:0;font-size:7.5px;line-height:1.5">
           <div style="font-size:9px;font-weight:700;color:${T.accent}">លក្ខខណ្ឌ</div>
@@ -397,6 +481,7 @@
             <label><input type="checkbox" id="wcDeptColor"> ពណ៌កាតតាមផ្នែក</label>
           </div>
           <p class="wc-note">ឈ្មោះក្រុមហ៊ុន និងសារត្រូវបានចងចាំក្នុងកម្មវិធីនេះ។ រូបថត ឈ្មោះ តួនាទី ផ្នែក ត្រូវបានយកពីទម្រង់បុគ្គលិក (កែតាមប៊ូតុង «✏️ កែ»)។</p>
+          ${optsHtml('wc')}
           <div class="wc-cards">
             <div class="wc-cardwrap"><div>ខាងមុខ</div><div id="wcFront"></div></div>
             <div class="wc-cardwrap"><div>ខាងក្រោយ (QR វត្តមាន)</div><div id="wcBack"></div></div>
@@ -454,6 +539,7 @@
     $('wcCompany').addEventListener('input', () => { lsSet(LS_COMPANY, $('wcCompany').value); renderCards(); });
     $('wcNote').addEventListener('input', () => { lsSet(LS_NOTE, $('wcNote').value); renderCards(); });
     $('wcDeptColor').addEventListener('change', () => { lsSet(LS_DEPT, $('wcDeptColor').checked ? '1' : '0'); renderCards(); });
+    optsUi.wc = wireOpts($, 'wc', renderCards);
     $('wcDlFront').addEventListener('click', () => downloadCard('front'));
     $('wcDlBack').addEventListener('click', () => downloadCard('back'));
     $('wcPrint').addEventListener('click', printCards);
@@ -496,6 +582,7 @@
     $('wcCompany').value = lsGet(LS_COMPANY, '') || defaultCompany();
     $('wcNote').value = lsGet(LS_NOTE, '');
     $('wcDeptColor').checked = deptColorOn();
+    if (optsUi.wc) optsUi.wc();
     setTab('make');
     renderCards();
     renderSlots();
@@ -569,6 +656,7 @@
           <label><input type="checkbox" id="wcbActive" checked> តែបុគ្គលិកកំពុងបម្រើការ</label>
           <label><input type="checkbox" id="wcbIssues"> ⚠ តែអ្នកខ្វះទិន្នន័យ</label>
           <label><input type="checkbox" id="wcbDeptColor"> ពណ៌តាមផ្នែក</label>
+          <label><input type="checkbox" id="wcbDuplex"> ព្រីនពីរមុខ (duplex)</label>
         </div>
         <div class="wc-row">
           <label><input type="checkbox" id="wcbAll"> ជ្រើសទាំងអស់ក្នុងបញ្ជី</label>
@@ -579,6 +667,7 @@
           <label>ឈ្មោះក្រុមហ៊ុន <input type="text" id="wcbCompany"></label>
           <label>សារខាងក្រោយកាត <input type="text" id="wcbNote" style="min-width:260px"></label>
         </div>
+        ${optsHtml('wcb')}
         <p class="wc-note" id="wcbProg">ព្រីន ឬទាញយក PDF លើក្រដាស A4 — ១ ទំព័រ = ៤ នាក់ (មុខ + ក្រោយ)។ ការជ្រើសនៅតែនៅពេលប្តូរតម្រង។ មុនចាប់ផ្តើម កម្មវិធីនឹងព្រមានបើមានអ្នកខ្វះរូប/ផ្នែក/មុខងារ។</p>
         <div class="wc-actions">
           <button id="wcbPrint" type="button" disabled>🖨 ព្រីនកាតដែលបានជ្រើស</button>
@@ -606,6 +695,7 @@
     $b('wcbNote').addEventListener('input', () => lsSet(LS_NOTE, $b('wcbNote').value));
     $b('wcbIssues').addEventListener('change', renderBatchList);
     $b('wcbDeptColor').addEventListener('change', () => { lsSet(LS_DEPT, $b('wcbDeptColor').checked ? '1' : '0'); renderBatchList(); });
+    optsUi.wcb = wireOpts($b, 'wcb', () => {});
     $b('wcbPrint').addEventListener('click', () => { if (bBusy) bCancel = true; else batchRun('print'); });
     $b('wcbPdf').addEventListener('click', () => { if (bBusy) bCancel = true; else batchRun('pdf'); });
     $b('wcbClose').addEventListener('click', closeBatch);
@@ -631,6 +721,8 @@
     $b('wcbActive').checked = true;
     $b('wcbIssues').checked = false;
     $b('wcbDeptColor').checked = deptColorOn();
+    $b('wcbDuplex').checked = false;
+    if (optsUi.wcb) optsUi.wcb();
     $b('wcbCompany').value = lsGet(LS_COMPANY, '') || defaultCompany();
     $b('wcbNote').value = lsGet(LS_NOTE, '');
     bsel.clear();
@@ -664,6 +756,7 @@
 
     const company = $b('wcbCompany').value.trim() || defaultCompany();
     const note = $b('wcbNote').value;
+    const duplex = $b('wcbDuplex').checked;
     const active = mode === 'print' ? $b('wcbPrint') : $b('wcbPdf');
     const other = mode === 'print' ? $b('wcbPdf') : $b('wcbPrint');
     const prog = $b('wcbProg');
@@ -692,30 +785,61 @@
         const cw = 85.6, ch = cw * CARD_H / CARD_W, gap = 8, rowGap = 6, top = 10;
         const x0 = (210 - (cw * 2 + gap)) / 2;
         const perPage = Math.floor((297 - top * 2 + rowGap) / (ch + rowGap)); // = 4
-        pairs.forEach((p, i) => {
-          const r = i % perPage;
-          if (i > 0 && r === 0) doc.addPage();
-          const y = top + r * (ch + rowGap);
-          doc.addImage(p.f, 'PNG', x0, y, cw, ch, undefined, 'FAST');
-          doc.addImage(p.b, 'PNG', x0 + cw + gap, y, cw, ch, undefined, 'FAST');
+        const put = (img, col, row) => {
+          const x = x0 + col * (cw + gap), y = top + row * (ch + rowGap);
+          doc.addImage(img, 'PNG', x, y, cw, ch, undefined, 'FAST');
           doc.setDrawColor(187, 187, 187); doc.setLineWidth(0.2); doc.setLineDashPattern([1, 1], 0);
-          doc.rect(x0, y, cw, ch); doc.rect(x0 + cw + gap, y, cw, ch);
-        });
+          doc.rect(x, y, cw, ch);
+        };
+        if (duplex) {
+          // ទំព័រមុខ៖ កាត ២ ជួរឈរ × ៤ ជួរដេក (៨ នាក់) / ទំព័រក្រោយ៖ ជួរឈរបញ្ច្រាស ដើម្បីត្រូវគ្នាពេលព្រីនពីរមុខ (flip ជ្រុងវែង)
+          const per = perPage * 2;
+          for (let st = 0; st < pairs.length; st += per) {
+            const c = pairs.slice(st, st + per);
+            if (st > 0) doc.addPage();
+            c.forEach((p, k) => put(p.f, k % 2, Math.floor(k / 2)));
+            doc.addPage();
+            c.forEach((p, k) => put(p.b, 1 - (k % 2), Math.floor(k / 2)));
+          }
+        } else {
+          pairs.forEach((p, i) => {
+            const r = i % perPage;
+            if (i > 0 && r === 0) doc.addPage();
+            put(p.f, 0, r); put(p.b, 1, r);
+          });
+        }
         const d = new Date(), z = n => String(n).padStart(2, '0');
         doc.save(`work-cards-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}.pdf`);
-        prog.textContent = `✓ បានទាញយក PDF ${pairs.length} នាក់ (១ ទំព័រ = ៤ នាក់)`;
+        prog.textContent = `✓ បានទាញយក PDF ${pairs.length} នាក់ ` + (duplex ? '(ពីរមុខ៖ ៨ នាក់/សន្លឹក — ព្រីន Two-sided flip on long edge)' : '(១ ទំព័រ = ៤ នាក់)');
         return;
       }
 
+      let body;
+      if (duplex) {
+        const sheets = [];
+        for (let i = 0; i < pairs.length; i += 8) {
+          const c = pairs.slice(i, i + 8);
+          const fronts = c.map(p => `<img src="${p.f}">`).join('');
+          const backs = [];
+          // ខាងក្រោយ៖ បញ្ច្រាសកាតក្នុងជួរនីមួយៗ ដើម្បីត្រូវគ្នាពេលព្រីនពីរមុខ (flip ជ្រុងវែង)
+          for (let r = 0; r < c.length; r += 2) backs.push(c[r + 1] ? `<img src="${c[r + 1].b}">` : '<div></div>', `<img src="${c[r].b}">`);
+          sheets.push(`<div class="sheet">${fronts}</div><div class="sheet">${backs.join('')}</div>`);
+        }
+        body = sheets.join('');
+      } else {
+        body = pairs.map(p => `<div class="pair"><img src="${p.f}"><img src="${p.b}"></div>`).join('');
+      }
       w.document.open();
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>កាតការងារ — ${pairs.length} នាក់</title>
-        <style>@page{size:A4;margin:10mm}body{margin:0}.pair{display:flex;gap:8mm;justify-content:center;margin:0 0 6mm;break-inside:avoid;page-break-inside:avoid}.pair img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}</style></head>
-        <body>${pairs.map(p => `<div class="pair"><img src="${p.f}"><img src="${p.b}"></div>`).join('')}</body></html>`);
+        <style>@page{size:A4;margin:10mm}body{margin:0}
+        .pair{display:flex;gap:8mm;justify-content:center;margin:0 0 6mm;break-inside:avoid;page-break-inside:avoid}.pair img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}
+        .sheet{display:grid;grid-template-columns:repeat(2,85.6mm);gap:6mm 8mm;justify-content:center;align-content:start;break-after:page;page-break-after:always}.sheet:last-child{break-after:auto;page-break-after:auto}.sheet img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}</style></head>
+        <body>${body}</body></html>`);
       w.document.close();
       await Promise.all(Array.from(w.document.images).map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
       await new Promise(r => setTimeout(r, 150));
       w.focus(); w.print();
-      prog.textContent = `✓ រៀបចំរួច ${pairs.length} នាក់ — ព្រីនលើក្រដាស A4 (១ ទំព័រ = ៤ នាក់)`;
+      prog.textContent = `✓ រៀបចំរួច ${pairs.length} នាក់ — ` + (duplex ? 'ក្នុងប្រអប់ព្រីន សូមជ្រើស «Two-sided / flip on long edge» (ព្រីនពីរមុខ ជ្រុងវែង)' : 'ព្រីនលើក្រដាស A4 (១ ទំព័រ = ៤ នាក់)');
     } catch (ex) {
       closeW();
       prog.textContent = '';
