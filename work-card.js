@@ -79,6 +79,11 @@
 .wc-zoom{position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
 .wc-zoom img{max-width:100%;max-height:100%;border-radius:8px}
 .wc-ovl button:disabled{opacity:.4;cursor:not-allowed}
+.wcb-list{max-height:44vh;overflow:auto;border:1px solid var(--border,#e1e8ef);border-radius:10px}
+.wcb-item{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border,#e1e8ef);font-size:.85rem;cursor:pointer}
+.wcb-item:last-child{border-bottom:0}
+.wcb-item:hover{background:rgba(13,148,136,.07)}
+.wcb-sub{margin-left:auto;font-size:.74rem;color:var(--text-muted,#5b6b80);text-align:right}
 `;
 
   // ---------------------------------------------------------------- កាត ----
@@ -142,9 +147,9 @@
     $('wcBack').innerHTML = backHtml(cur.emp, company, note);
   }
 
-  async function cardPng(el) {
+  async function cardPng(el, scale) {
     if (typeof html2canvas === 'undefined') throw new Error('មិនអាចផ្ទុកម៉ូឌុល html2canvas បានទេ (សូមពិនិត្យអ៊ីនធឺណិត)');
-    const canvas = await html2canvas(el, { scale: 4, backgroundColor: null, useCORS: true, logging: false });
+    const canvas = await html2canvas(el, { scale: scale || 4, backgroundColor: null, useCORS: true, logging: false });
     return canvas.toDataURL('image/png');
   }
 
@@ -338,7 +343,7 @@
 
   function build() {
     if (ov) return;
-    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+    injectCss();
     ov = document.createElement('div');
     ov.className = 'wc-ovl';
     ov.innerHTML = `
@@ -468,6 +473,184 @@
     cur = null;
   }
 
+  // ------------------------------------------------------- ព្រីនកាតច្រើន ----
+  let bov = null, bView = [], bBusy = false, bCancel = false;
+  const bsel = new Set(); // id (string) របស់បុគ្គលិកដែលបានជ្រើស
+  const $b = id => bov.querySelector('#' + id);
+
+  function injectCss() {
+    if (document.getElementById('wcStyle')) return;
+    const st = document.createElement('style'); st.id = 'wcStyle'; st.textContent = CSS; document.head.appendChild(st);
+  }
+
+  function updateBatchCount() {
+    const inView = bView.filter(e => bsel.has(String(e.id))).length;
+    const all = $b('wcbAll');
+    all.checked = bView.length > 0 && inView === bView.length;
+    all.indeterminate = inView > 0 && inView < bView.length;
+    $b('wcbCount').textContent = `បានជ្រើស ${bsel.size} នាក់ (ក្នុងបញ្ជី ${bView.length})`;
+    if (!bBusy) $b('wcbPrint').disabled = bsel.size === 0;
+  }
+
+  function renderBatchList() {
+    const q = $b('wcbSearch').value.trim().toLowerCase();
+    const dept = $b('wcbDept').value;
+    const onlyActive = $b('wcbActive').checked;
+    bView = employees.filter(e =>
+      (!onlyActive || e.status === 'active') &&
+      (!dept || e.dept === dept) &&
+      (!q || String(e.name || '').toLowerCase().includes(q) || String(e.username || '').toLowerCase().includes(q) || String(e.id).toLowerCase().includes(q)));
+    // data-i = លេខរៀបក្នុងបញ្ជី (មិនដាក់ id ក្នុង attribute ដើម្បីការពារ XSS)
+    $b('wcbList').innerHTML = bView.length
+      ? bView.map((e, i) => `<label class="wcb-item"><input type="checkbox" data-i="${i}" ${bsel.has(String(e.id)) ? 'checked' : ''}><span>${esc(e.name)}</span><span class="wcb-sub">${esc(e.username || e.id)}${e.dept ? ' · ' + esc(e.dept) : ''}</span></label>`).join('')
+      : '<div class="wc-note" style="padding:14px;text-align:center">រកមិនឃើញបុគ្គលិក</div>';
+    updateBatchCount();
+  }
+
+  function closeBatch() {
+    if (bBusy || !bov) return;
+    bov.classList.remove('open');
+  }
+
+  function buildBatch() {
+    if (bov) return;
+    injectCss();
+    bov = document.createElement('div');
+    bov.className = 'wc-ovl';
+    bov.innerHTML = `
+      <div class="wc-box" style="max-width:640px" role="dialog" aria-modal="true">
+        <h2>🪪 ព្រីនកាតការងារច្រើន</h2>
+        <div class="wc-row">
+          <input type="text" id="wcbSearch" placeholder="🔍 ស្វែងរកឈ្មោះ ឬអត្តលេខ..." style="flex:1;min-width:180px">
+          <select id="wcbDept"><option value="">គ្រប់ផ្នែក</option></select>
+          <label><input type="checkbox" id="wcbActive" checked> តែបុគ្គលិកកំពុងបម្រើការ</label>
+        </div>
+        <div class="wc-row">
+          <label><input type="checkbox" id="wcbAll"> ជ្រើសទាំងអស់ក្នុងបញ្ជី</label>
+          <span class="wc-note" id="wcbCount" style="margin:0 0 0 auto"></span>
+        </div>
+        <div class="wcb-list" id="wcbList"></div>
+        <div class="wc-row">
+          <label>ឈ្មោះក្រុមហ៊ុន <input type="text" id="wcbCompany"></label>
+          <label>សារខាងក្រោយកាត <input type="text" id="wcbNote" style="min-width:260px"></label>
+        </div>
+        <p class="wc-note" id="wcbProg">ព្រីនលើក្រដាស A4 — ១ ទំព័រ = ៤ នាក់ (មុខ + ក្រោយ)។ ការជ្រើសនៅតែនៅពេលប្តូរតម្រង។</p>
+        <div class="wc-actions">
+          <button id="wcbPrint" type="button" disabled>🖨 ព្រីនកាតដែលបានជ្រើស</button>
+          <button class="secondary" id="wcbClose" type="button">បិទ</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bov);
+
+    $b('wcbSearch').addEventListener('input', renderBatchList);
+    $b('wcbDept').addEventListener('change', renderBatchList);
+    $b('wcbActive').addEventListener('change', renderBatchList);
+    $b('wcbList').addEventListener('change', e => {
+      const cb = e.target.closest('input[data-i]');
+      const emp = cb && bView[+cb.dataset.i];
+      if (!emp) return;
+      if (cb.checked) bsel.add(String(emp.id)); else bsel.delete(String(emp.id));
+      updateBatchCount();
+    });
+    $b('wcbAll').addEventListener('change', e => {
+      bView.forEach(emp => { if (e.target.checked) bsel.add(String(emp.id)); else bsel.delete(String(emp.id)); });
+      renderBatchList();
+    });
+    $b('wcbCompany').addEventListener('input', () => lsSet(LS_COMPANY, $b('wcbCompany').value));
+    $b('wcbNote').addEventListener('input', () => lsSet(LS_NOTE, $b('wcbNote').value));
+    $b('wcbPrint').addEventListener('click', () => { if (bBusy) bCancel = true; else batchPrint(); });
+    $b('wcbClose').addEventListener('click', closeBatch);
+    bov.addEventListener('mousedown', e => { if (e.target === bov) closeBatch(); });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || !bov.classList.contains('open')) return;
+      const dlg = document.getElementById('customDialogOverlay');
+      if (dlg && dlg.classList.contains('open')) return;
+      closeBatch();
+    });
+  }
+
+  function openBatch() {
+    if (typeof employees === 'undefined' || !Array.isArray(employees) || !employees.length) { say('មិនទាន់មានបុគ្គលិកក្នុងបញ្ជីទេ'); return; }
+    buildBatch();
+    const sel = $b('wcbDept');
+    sel.length = 1;
+    Array.from(new Set(employees.map(e => e.dept).filter(Boolean))).sort().forEach(d => {
+      const o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o);
+    });
+    sel.value = '';
+    $b('wcbSearch').value = '';
+    $b('wcbActive').checked = true;
+    $b('wcbCompany').value = lsGet(LS_COMPANY, '') || defaultCompany();
+    $b('wcbNote').value = lsGet(LS_NOTE, '');
+    bsel.clear();
+    renderBatchList();
+    bov.classList.add('open');
+  }
+
+  async function batchPrint() {
+    const list = employees.filter(e => bsel.has(String(e.id)));
+    if (!list.length) return;
+    // បើកបង្អួចភ្លាមៗ (ក្នុងសកម្មភាពចុចរបស់អ្នកប្រើ) ដើម្បីកុំឲ្យ browser ទប់ស្កាត់ popup
+    const w = window.open('', '_blank');
+    if (!w) { await say('Browser បានទប់ស្កាត់បង្អួចព្រីន — សូមអនុញ្ញាត popup'); return; }
+    w.document.write('<p style="font-family:sans-serif;padding:16px">កំពុងរៀបចំកាត…</p>');
+    const company = $b('wcbCompany').value.trim() || defaultCompany();
+    const note = $b('wcbNote').value;
+    const btn = $b('wcbPrint'), prog = $b('wcbProg');
+    bBusy = true; bCancel = false;
+    btn.textContent = '⏹ បោះបង់'; btn.disabled = false;
+    // កន្លែងបង្កើតកាតបណ្តោះអាសន្ន (នៅក្រោយទំព័រ មើលមិនឃើញ) សម្រាប់ html2canvas
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;z-index:-1;pointer-events:none';
+    document.body.appendChild(host);
+    const pairs = [];
+    try {
+      for (let i = 0; i < list.length; i++) {
+        if (bCancel || w.closed) break;
+        prog.textContent = `កំពុងរៀបចំ ${i + 1} / ${list.length} — ${list[i].name || ''}`;
+        host.innerHTML = `<div>${frontHtml(list[i], company)}</div><div>${backHtml(list[i], company, note)}</div>`;
+        const f = await cardPng(host.children[0].firstElementChild, 3);
+        const b = await cardPng(host.children[1].firstElementChild, 3);
+        pairs.push(`<div class="pair"><img src="${f}"><img src="${b}"></div>`);
+      }
+      if (bCancel || w.closed) {
+        try { w.close(); } catch (_) { /* ignore */ }
+        prog.textContent = 'បានបោះបង់';
+        return;
+      }
+      w.document.open();
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>កាតការងារ — ${pairs.length} នាក់</title>
+        <style>@page{size:A4;margin:10mm}body{margin:0}.pair{display:flex;gap:8mm;justify-content:center;margin:0 0 6mm;break-inside:avoid;page-break-inside:avoid}.pair img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}</style></head>
+        <body>${pairs.join('')}</body></html>`);
+      w.document.close();
+      await Promise.all(Array.from(w.document.images).map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
+      await new Promise(r => setTimeout(r, 150));
+      w.focus(); w.print();
+      prog.textContent = `✓ រៀបចំរួច ${pairs.length} នាក់ — ព្រីនលើក្រដាស A4 (១ ទំព័រ = ៤ នាក់)`;
+    } catch (ex) {
+      try { w.close(); } catch (_) { /* ignore */ }
+      prog.textContent = '';
+      await say('ព្រីនមិនបាន៖ ' + (ex.message || ex));
+    } finally {
+      host.remove();
+      bBusy = false; bCancel = false;
+      btn.textContent = '🖨 ព្រីនកាតដែលបានជ្រើស';
+      updateBatchCount();
+    }
+  }
+
+  function addBatchButton() {
+    const bar = document.querySelector('#employeesTab .toolbar');
+    if (!bar || document.getElementById('wcBatchBtn')) return;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'secondary'; b.id = 'wcBatchBtn';
+    b.title = 'ជ្រើសបុគ្គលិកច្រើននាក់ ហើយព្រីនកាតការងារម្តងទាំងអស់';
+    b.textContent = '🪪 ព្រីនកាតច្រើន';
+    b.addEventListener('click', openBatch);
+    const exp = document.getElementById('exportBtn');
+    if (exp && exp.parentNode === bar) exp.after(b); else bar.appendChild(b);
+  }
+
   // ---------------------------------------------------------------- ប៊ូតុងក្នុងតារាងបុគ្គលិក ----
   function decorateRows() {
     const tbody = document.getElementById('tableBody');
@@ -488,6 +671,7 @@
   function init() {
     const tbody = document.getElementById('tableBody');
     if (!tbody) return false;
+    addBatchButton();
     if (tbody.dataset.wcDone) return true;
     tbody.dataset.wcDone = '1';
     tbody.addEventListener('click', e => {
@@ -509,4 +693,5 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   window.openWorkCard = open;
+  window.openWorkCardBatch = openBatch;
 })();
