@@ -36,7 +36,7 @@
     return '';
   };
 
-  const LS_COMPANY = 'wc_company', LS_NOTE = 'wc_back_note';
+  const LS_COMPANY = 'wc_company', LS_NOTE = 'wc_back_note', LS_DEPT = 'wc_dept_color';
   const CARD_W = 324, CARD_H = 204; // px (សមាមាត្រ 85.6×54mm)
   // អត្ថបទថេរខាងក្រោយកាត (កែបានតាមចិត្ត)
   const CARD_TERMS = [
@@ -49,6 +49,38 @@
   const KH_DIGITS = ['១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
   const GRAD = 'linear-gradient(135deg,#0d9488,#0284c7)';
   const FONT = "'Kantumruy Pro','Noto Sans Khmer',sans-serif";
+
+  // ពណ៌កាតតាមផ្នែក (ផ្នែកដូចគ្នា → ពណ៌ដូចគ្នាជានិច្ច ដោយគណនាពីឈ្មោះផ្នែក)
+  const PALETTE = [
+    { grad: GRAD, accent: '#0f766e' },
+    { grad: 'linear-gradient(135deg,#2563eb,#7c3aed)', accent: '#4338ca' },
+    { grad: 'linear-gradient(135deg,#ea580c,#dc2626)', accent: '#c2410c' },
+    { grad: 'linear-gradient(135deg,#16a34a,#65a30d)', accent: '#15803d' },
+    { grad: 'linear-gradient(135deg,#db2777,#9333ea)', accent: '#be185d' },
+    { grad: 'linear-gradient(135deg,#0891b2,#1d4ed8)', accent: '#0e7490' },
+    { grad: 'linear-gradient(135deg,#ca8a04,#ea580c)', accent: '#a16207' },
+    { grad: 'linear-gradient(135deg,#475569,#0f172a)', accent: '#334155' }
+  ];
+  const deptColorOn = () => lsGet(LS_DEPT, '0') === '1';
+  const theme = e => {
+    const d = e ? String(e.dept || '').trim() : '';
+    if (!deptColorOn() || !d) return PALETTE[0];
+    // តម្រៀបឈ្មោះផ្នែកទាំងអស់តាមអក្ខរក្រម → ផ្នែកខុសគ្នាបានពណ៌ខុសគ្នា (ដល់ ៨ ផ្នែក) ហើយដូចគ្នាលើគ្រប់ឧបករណ៍
+    const all = (typeof employees !== 'undefined' && Array.isArray(employees)) ? employees : [];
+    const depts = Array.from(new Set(all.map(x => String(x.dept || '').trim()).filter(Boolean))).sort();
+    let k = depts.indexOf(d);
+    if (k < 0) { k = 0; for (const ch of d) k = (k * 31 + ch.codePointAt(0)) >>> 0; }
+    return PALETTE[k % PALETTE.length];
+  };
+  // ពិនិត្យទិន្នន័យមុនព្រីន
+  const issuesOf = e => {
+    const r = [];
+    if (!safeSrc(e.photo)) r.push('ខ្វះរូប');
+    if (!String(e.dept || '').trim()) r.push('ខ្វះផ្នែក');
+    if (!String(e.position || '').trim()) r.push('ខ្វះមុខងារ');
+    if (e.status && e.status !== 'active') r.push('ឈប់បម្រើការ');
+    return r;
+  };
 
   let ov = null;
   let cur = null; // { emp, tab, pending:{front,back}, saved:{front,back}, stream, camSide, tableMissing }
@@ -83,6 +115,8 @@
 .wcb-item{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border,#e1e8ef);font-size:.85rem;cursor:pointer}
 .wcb-item:last-child{border-bottom:0}
 .wcb-item:hover{background:rgba(13,148,136,.07)}
+.wcb-warn{font-size:.7rem;color:#b45309;background:#fef3c7;border-radius:6px;padding:1px 6px;white-space:nowrap}
+.wcb-dot{width:10px;height:10px;flex:0 0 10px;border-radius:50%}
 .wcb-sub{margin-left:auto;font-size:.74rem;color:var(--text-muted,#5b6b80);text-align:right}
 `;
 
@@ -93,49 +127,51 @@
   }
 
   // ជួរព័ត៌មានទ្វេភាសា ដូចកាតការងារពិត (ស្លាក / Label : តម្លៃ)
-  const infoRow = (label, value, accent) => `<div style="display:flex;gap:4px;font-size:11px;line-height:1.7;align-items:baseline"><span style="flex:0 0 70px;font-size:9px;color:#5b6b80">${label}</span><span style="flex:0 0 4px">:</span><span style="flex:1;min-width:0;font-weight:700;word-break:break-word;${accent ? 'color:#0f766e' : ''}">${esc(value)}</span></div>`;
+  const infoRow = (label, value, accent) => `<div style="display:flex;gap:4px;font-size:11px;line-height:1.7;align-items:baseline"><span style="flex:0 0 70px;font-size:9px;color:#5b6b80">${label}</span><span style="flex:0 0 4px">:</span><span style="flex:1;min-width:0;font-weight:700;word-break:break-word;${accent ? 'color:' + accent : ''}">${esc(value)}</span></div>`;
 
   function frontHtml(e, company) {
+    const T = theme(e);
     const initial = esc(((e.name || '?').trim().charAt(0) || '?').toUpperCase());
     const ph = safeSrc(e.photo);
     const photo = ph
       ? `<img src="${ph}" alt="" style="width:80px;height:98px;object-fit:cover;border-radius:8px;display:block;background:#e6f6f4">`
-      : `<div style="width:80px;height:98px;border-radius:8px;background:${GRAD};color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700">${initial}</div>`;
+      : `<div style="width:80px;height:98px;border-radius:8px;background:${T.grad};color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700">${initial}</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
-      <div style="height:40px;flex:0 0 40px;background:${GRAD};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12.5px;line-height:1.5">${esc(company)}</div>
+      <div style="height:40px;flex:0 0 40px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12.5px;line-height:1.5">${esc(company)}</div>
       <div style="flex:1;display:flex;gap:12px;padding:12px;align-items:flex-start;min-height:0">
         ${photo}
         <div style="flex:1;min-width:0">
-          ${infoRow('លេខកាត / I.D', e.username || e.id, true)}
+          ${infoRow('លេខកាត / I.D', e.username || e.id, T.accent)}
           ${infoRow('ឈ្មោះ / Name', e.name)}
           ${infoRow('ផ្នែក / Dept', e.dept)}
           ${infoRow('មុខងារ / Posit', e.position)}
         </div>
       </div>
-      <div style="height:6px;flex:0 0 6px;background:${GRAD}"></div>
+      <div style="height:6px;flex:0 0 6px;background:${T.grad}"></div>
     </div>`;
   }
 
   function backHtml(e, company, note) {
+    const T = theme(e);
     const qr = qrDataUrl(e.id);
     const qrBox = qr
       ? `<img src="${qr}" alt="QR" style="width:76px;height:76px;display:block;image-rendering:pixelated">`
       : `<div style="width:76px;height:76px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#be123c;text-align:center">មិនអាចបង្កើត QR</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
-      <div style="height:28px;flex:0 0 28px;background:${GRAD};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${esc(company)}</div>
+      <div style="height:28px;flex:0 0 28px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${esc(company)}</div>
       <div style="flex:1;display:flex;gap:10px;padding:8px 10px;align-items:flex-start;min-height:0">
         <div style="flex:0 0 auto;text-align:center">
           <div style="padding:4px;border:1px solid #e1e8ef;border-radius:8px;background:#fff">${qrBox}</div>
           <div style="font-size:7.5px;color:#5b6b80;line-height:1.5;margin-top:3px;width:84px">ស្កេន QR ដើម្បីកត់វត្តមាន</div>
         </div>
         <div style="flex:1;min-width:0;font-size:7.5px;line-height:1.5">
-          <div style="font-size:9px;font-weight:700;color:#0f766e">លក្ខខណ្ឌ</div>
+          <div style="font-size:9px;font-weight:700;color:${T.accent}">លក្ខខណ្ឌ</div>
           ${CARD_TERMS.map((t, k) => `<div style="display:flex;gap:3px"><span style="flex:0 0 8px">${KH_DIGITS[k]}.</span><span style="flex:1;min-width:0">${esc(t)}</span></div>`).join('')}
           <div style="margin-top:2px"><b>អាស័យដ្ឋាន៖</b> ${esc(CARD_ADDRESS)}</div>
-          ${note ? `<div style="margin-top:2px;color:#0f766e;font-weight:700;white-space:pre-wrap;word-break:break-word">${esc(note)}</div>` : ''}
+          ${note ? `<div style="margin-top:2px;color:${T.accent};font-weight:700;white-space:pre-wrap;word-break:break-word">${esc(note)}</div>` : ''}
         </div>
       </div>
-      <div style="height:6px;flex:0 0 6px;background:${GRAD}"></div>
+      <div style="height:6px;flex:0 0 6px;background:${T.grad}"></div>
     </div>`;
   }
 
@@ -358,6 +394,7 @@
           <div class="wc-row">
             <label>ឈ្មោះក្រុមហ៊ុន <input type="text" id="wcCompany"></label>
             <label>សារខាងក្រោយកាត <input type="text" id="wcNote" placeholder="ឧ. បើរកឃើញកាតនេះ សូមទូរស័ព្ទ 012 345 678" style="min-width:300px"></label>
+            <label><input type="checkbox" id="wcDeptColor"> ពណ៌កាតតាមផ្នែក</label>
           </div>
           <p class="wc-note">ឈ្មោះក្រុមហ៊ុន និងសារត្រូវបានចងចាំក្នុងកម្មវិធីនេះ។ រូបថត ឈ្មោះ តួនាទី ផ្នែក ត្រូវបានយកពីទម្រង់បុគ្គលិក (កែតាមប៊ូតុង «✏️ កែ»)។</p>
           <div class="wc-cards">
@@ -416,6 +453,7 @@
     $('wcTabShoot').addEventListener('click', () => setTab('shoot'));
     $('wcCompany').addEventListener('input', () => { lsSet(LS_COMPANY, $('wcCompany').value); renderCards(); });
     $('wcNote').addEventListener('input', () => { lsSet(LS_NOTE, $('wcNote').value); renderCards(); });
+    $('wcDeptColor').addEventListener('change', () => { lsSet(LS_DEPT, $('wcDeptColor').checked ? '1' : '0'); renderCards(); });
     $('wcDlFront').addEventListener('click', () => downloadCard('front'));
     $('wcDlBack').addEventListener('click', () => downloadCard('back'));
     $('wcPrint').addEventListener('click', printCards);
@@ -457,6 +495,7 @@
     $('wcName').textContent = emp.name;
     $('wcCompany').value = lsGet(LS_COMPANY, '') || defaultCompany();
     $('wcNote').value = lsGet(LS_NOTE, '');
+    $('wcDeptColor').checked = deptColorOn();
     setTab('make');
     renderCards();
     renderSlots();
@@ -488,21 +527,25 @@
     const all = $b('wcbAll');
     all.checked = bView.length > 0 && inView === bView.length;
     all.indeterminate = inView > 0 && inView < bView.length;
-    $b('wcbCount').textContent = `បានជ្រើស ${bsel.size} នាក់ (ក្នុងបញ្ជី ${bView.length})`;
-    if (!bBusy) $b('wcbPrint').disabled = bsel.size === 0;
+    const selBad = employees.filter(e => bsel.has(String(e.id)) && issuesOf(e).length).length;
+    $b('wcbCount').textContent = `បានជ្រើស ${bsel.size} នាក់ (ក្នុងបញ្ជី ${bView.length})` + (selBad ? ` · ⚠ ខ្វះទិន្នន័យ ${selBad}` : '');
+    if (!bBusy) { $b('wcbPrint').disabled = bsel.size === 0; $b('wcbPdf').disabled = bsel.size === 0; }
   }
 
   function renderBatchList() {
     const q = $b('wcbSearch').value.trim().toLowerCase();
     const dept = $b('wcbDept').value;
     const onlyActive = $b('wcbActive').checked;
+    const onlyIssues = $b('wcbIssues').checked;
+    const colored = deptColorOn();
     bView = employees.filter(e =>
       (!onlyActive || e.status === 'active') &&
+      (!onlyIssues || issuesOf(e).length > 0) &&
       (!dept || e.dept === dept) &&
       (!q || String(e.name || '').toLowerCase().includes(q) || String(e.username || '').toLowerCase().includes(q) || String(e.id).toLowerCase().includes(q)));
     // data-i = លេខរៀបក្នុងបញ្ជី (មិនដាក់ id ក្នុង attribute ដើម្បីការពារ XSS)
     $b('wcbList').innerHTML = bView.length
-      ? bView.map((e, i) => `<label class="wcb-item"><input type="checkbox" data-i="${i}" ${bsel.has(String(e.id)) ? 'checked' : ''}><span>${esc(e.name)}</span><span class="wcb-sub">${esc(e.username || e.id)}${e.dept ? ' · ' + esc(e.dept) : ''}</span></label>`).join('')
+      ? bView.map((e, i) => `<label class="wcb-item"><input type="checkbox" data-i="${i}" ${bsel.has(String(e.id)) ? 'checked' : ''}>${colored ? `<span class="wcb-dot" style="background:${theme(e).grad}"></span>` : ''}<span>${esc(e.name)}</span>${issuesOf(e).length ? `<span class="wcb-warn">⚠ ${esc(issuesOf(e).join(', '))}</span>` : ''}<span class="wcb-sub">${esc(e.username || e.id)}${e.dept ? ' · ' + esc(e.dept) : ''}</span></label>`).join('')
       : '<div class="wc-note" style="padding:14px;text-align:center">រកមិនឃើញបុគ្គលិក</div>';
     updateBatchCount();
   }
@@ -524,6 +567,8 @@
           <input type="text" id="wcbSearch" placeholder="🔍 ស្វែងរកឈ្មោះ ឬអត្តលេខ..." style="flex:1;min-width:180px">
           <select id="wcbDept"><option value="">គ្រប់ផ្នែក</option></select>
           <label><input type="checkbox" id="wcbActive" checked> តែបុគ្គលិកកំពុងបម្រើការ</label>
+          <label><input type="checkbox" id="wcbIssues"> ⚠ តែអ្នកខ្វះទិន្នន័យ</label>
+          <label><input type="checkbox" id="wcbDeptColor"> ពណ៌តាមផ្នែក</label>
         </div>
         <div class="wc-row">
           <label><input type="checkbox" id="wcbAll"> ជ្រើសទាំងអស់ក្នុងបញ្ជី</label>
@@ -534,9 +579,10 @@
           <label>ឈ្មោះក្រុមហ៊ុន <input type="text" id="wcbCompany"></label>
           <label>សារខាងក្រោយកាត <input type="text" id="wcbNote" style="min-width:260px"></label>
         </div>
-        <p class="wc-note" id="wcbProg">ព្រីនលើក្រដាស A4 — ១ ទំព័រ = ៤ នាក់ (មុខ + ក្រោយ)។ ការជ្រើសនៅតែនៅពេលប្តូរតម្រង។</p>
+        <p class="wc-note" id="wcbProg">ព្រីន ឬទាញយក PDF លើក្រដាស A4 — ១ ទំព័រ = ៤ នាក់ (មុខ + ក្រោយ)។ ការជ្រើសនៅតែនៅពេលប្តូរតម្រង។ មុនចាប់ផ្តើម កម្មវិធីនឹងព្រមានបើមានអ្នកខ្វះរូប/ផ្នែក/មុខងារ។</p>
         <div class="wc-actions">
           <button id="wcbPrint" type="button" disabled>🖨 ព្រីនកាតដែលបានជ្រើស</button>
+          <button id="wcbPdf" type="button" disabled>⬇ ទាញយក PDF</button>
           <button class="secondary" id="wcbClose" type="button">បិទ</button>
         </div>
       </div>`;
@@ -558,7 +604,10 @@
     });
     $b('wcbCompany').addEventListener('input', () => lsSet(LS_COMPANY, $b('wcbCompany').value));
     $b('wcbNote').addEventListener('input', () => lsSet(LS_NOTE, $b('wcbNote').value));
-    $b('wcbPrint').addEventListener('click', () => { if (bBusy) bCancel = true; else batchPrint(); });
+    $b('wcbIssues').addEventListener('change', renderBatchList);
+    $b('wcbDeptColor').addEventListener('change', () => { lsSet(LS_DEPT, $b('wcbDeptColor').checked ? '1' : '0'); renderBatchList(); });
+    $b('wcbPrint').addEventListener('click', () => { if (bBusy) bCancel = true; else batchRun('print'); });
+    $b('wcbPdf').addEventListener('click', () => { if (bBusy) bCancel = true; else batchRun('pdf'); });
     $b('wcbClose').addEventListener('click', closeBatch);
     bov.addEventListener('mousedown', e => { if (e.target === bov) closeBatch(); });
     document.addEventListener('keydown', e => {
@@ -580,6 +629,8 @@
     sel.value = '';
     $b('wcbSearch').value = '';
     $b('wcbActive').checked = true;
+    $b('wcbIssues').checked = false;
+    $b('wcbDeptColor').checked = deptColorOn();
     $b('wcbCompany').value = lsGet(LS_COMPANY, '') || defaultCompany();
     $b('wcbNote').value = lsGet(LS_NOTE, '');
     bsel.clear();
@@ -587,18 +638,38 @@
     bov.classList.add('open');
   }
 
-  async function batchPrint() {
+  async function batchRun(mode) {
     const list = employees.filter(e => bsel.has(String(e.id)));
     if (!list.length) return;
-    // បើកបង្អួចភ្លាមៗ (ក្នុងសកម្មភាពចុចរបស់អ្នកប្រើ) ដើម្បីកុំឲ្យ browser ទប់ស្កាត់ popup
-    const w = window.open('', '_blank');
-    if (!w) { await say('Browser បានទប់ស្កាត់បង្អួចព្រីន — សូមអនុញ្ញាត popup'); return; }
-    w.document.write('<p style="font-family:sans-serif;padding:16px">កំពុងរៀបចំកាត…</p>');
+    let w = null;
+    if (mode === 'print') {
+      // បើកបង្អួចភ្លាមៗ (ក្នុងសកម្មភាពចុចរបស់អ្នកប្រើ) ដើម្បីកុំឲ្យ browser ទប់ស្កាត់ popup
+      w = window.open('', '_blank');
+      if (!w) { await say('Browser បានទប់ស្កាត់បង្អួចព្រីន — សូមអនុញ្ញាត popup'); return; }
+      w.document.write('<p style="font-family:sans-serif;padding:16px">កំពុងរៀបចំកាត…</p>');
+    }
+    const closeW = () => { if (w) { try { w.close(); } catch (_) { /* ignore */ } } };
+    if (mode === 'pdf' && !(window.jspdf && window.jspdf.jsPDF)) {
+      await say('មិនអាចផ្ទុកម៉ូឌុល jsPDF បានទេ (សូមពិនិត្យអ៊ីនធឺណិត)');
+      return;
+    }
+
+    // ពិនិត្យទិន្នន័យមុនចាប់ផ្តើម
+    const bad = list.map(e => ({ e, iss: issuesOf(e) })).filter(x => x.iss.length);
+    if (bad.length) {
+      const shown = bad.slice(0, 8).map(x => `• ${x.e.name || x.e.id} — ${x.iss.join(', ')}`).join('\n');
+      const more = bad.length > 8 ? `\n… និង ${bad.length - 8} នាក់ទៀត` : '';
+      if (!(await ask(`មានបុគ្គលិក ${bad.length} នាក់ ខ្វះទិន្នន័យ ឬស្ថានភាពមិនប្រក្រតី៖\n${shown}${more}\n\nបន្តដែរឬទេ?`))) { closeW(); return; }
+    }
+
     const company = $b('wcbCompany').value.trim() || defaultCompany();
     const note = $b('wcbNote').value;
-    const btn = $b('wcbPrint'), prog = $b('wcbProg');
+    const active = mode === 'print' ? $b('wcbPrint') : $b('wcbPdf');
+    const other = mode === 'print' ? $b('wcbPdf') : $b('wcbPrint');
+    const prog = $b('wcbProg');
+    const activeText = active.textContent;
     bBusy = true; bCancel = false;
-    btn.textContent = '⏹ បោះបង់'; btn.disabled = false;
+    active.textContent = '⏹ បោះបង់'; active.disabled = false; other.disabled = true;
     // កន្លែងបង្កើតកាតបណ្តោះអាសន្ន (នៅក្រោយទំព័រ មើលមិនឃើញ) សម្រាប់ html2canvas
     const host = document.createElement('div');
     host.style.cssText = 'position:fixed;left:0;top:0;z-index:-1;pointer-events:none';
@@ -606,35 +677,53 @@
     const pairs = [];
     try {
       for (let i = 0; i < list.length; i++) {
-        if (bCancel || w.closed) break;
+        if (bCancel || (w && w.closed)) break;
         prog.textContent = `កំពុងរៀបចំ ${i + 1} / ${list.length} — ${list[i].name || ''}`;
         host.innerHTML = `<div>${frontHtml(list[i], company)}</div><div>${backHtml(list[i], company, note)}</div>`;
         const f = await cardPng(host.children[0].firstElementChild, 3);
         const b = await cardPng(host.children[1].firstElementChild, 3);
-        pairs.push(`<div class="pair"><img src="${f}"><img src="${b}"></div>`);
+        pairs.push({ f, b });
       }
-      if (bCancel || w.closed) {
-        try { w.close(); } catch (_) { /* ignore */ }
-        prog.textContent = 'បានបោះបង់';
+      if (bCancel || (w && w.closed)) { closeW(); prog.textContent = 'បានបោះបង់'; return; }
+
+      if (mode === 'pdf') {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        const cw = 85.6, ch = cw * CARD_H / CARD_W, gap = 8, rowGap = 6, top = 10;
+        const x0 = (210 - (cw * 2 + gap)) / 2;
+        const perPage = Math.floor((297 - top * 2 + rowGap) / (ch + rowGap)); // = 4
+        pairs.forEach((p, i) => {
+          const r = i % perPage;
+          if (i > 0 && r === 0) doc.addPage();
+          const y = top + r * (ch + rowGap);
+          doc.addImage(p.f, 'PNG', x0, y, cw, ch, undefined, 'FAST');
+          doc.addImage(p.b, 'PNG', x0 + cw + gap, y, cw, ch, undefined, 'FAST');
+          doc.setDrawColor(187, 187, 187); doc.setLineWidth(0.2); doc.setLineDashPattern([1, 1], 0);
+          doc.rect(x0, y, cw, ch); doc.rect(x0 + cw + gap, y, cw, ch);
+        });
+        const d = new Date(), z = n => String(n).padStart(2, '0');
+        doc.save(`work-cards-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}.pdf`);
+        prog.textContent = `✓ បានទាញយក PDF ${pairs.length} នាក់ (១ ទំព័រ = ៤ នាក់)`;
         return;
       }
+
       w.document.open();
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>កាតការងារ — ${pairs.length} នាក់</title>
         <style>@page{size:A4;margin:10mm}body{margin:0}.pair{display:flex;gap:8mm;justify-content:center;margin:0 0 6mm;break-inside:avoid;page-break-inside:avoid}.pair img{width:85.6mm;height:auto;display:block;outline:0.2mm dashed #bbb}</style></head>
-        <body>${pairs.join('')}</body></html>`);
+        <body>${pairs.map(p => `<div class="pair"><img src="${p.f}"><img src="${p.b}"></div>`).join('')}</body></html>`);
       w.document.close();
       await Promise.all(Array.from(w.document.images).map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
       await new Promise(r => setTimeout(r, 150));
       w.focus(); w.print();
       prog.textContent = `✓ រៀបចំរួច ${pairs.length} នាក់ — ព្រីនលើក្រដាស A4 (១ ទំព័រ = ៤ នាក់)`;
     } catch (ex) {
-      try { w.close(); } catch (_) { /* ignore */ }
+      closeW();
       prog.textContent = '';
-      await say('ព្រីនមិនបាន៖ ' + (ex.message || ex));
+      await say((mode === 'pdf' ? 'ទាញយក PDF មិនបាន៖ ' : 'ព្រីនមិនបាន៖ ') + (ex.message || ex));
     } finally {
       host.remove();
       bBusy = false; bCancel = false;
-      btn.textContent = '🖨 ព្រីនកាតដែលបានជ្រើស';
+      active.textContent = activeText;
       updateBatchCount();
     }
   }
