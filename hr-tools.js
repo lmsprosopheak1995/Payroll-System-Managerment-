@@ -5,6 +5,14 @@
  *      🔔 ការរំលឹក   — ខួបចូលធ្វើការ (៣០ ថ្ងៃខាងមុខ) និងជិតផុតសាកល្បង
  *      🧹 ពិនិត្យទិន្នន័យ — ស្ទួន (ឈ្មោះ/ទូរស័ព្ទ/username/email) និងវាលខ្វះ ឬខុសទម្រង់
  *      📈 ស្ថិតិ     — ចំនួន ភាពចាស់ (tenure) តាមផ្នែក ការជួលបុគ្គលិក ១២ ខែចុងក្រោយ
+ *      📅 ប្រតិទិន    — ថ្ងៃបុណ្យ ខួបចូលធ្វើការ និងច្បាប់ក្នុងមួយខែ
+ *      📊 វត្តមាន    — យឺត/អវត្តមាន/ភ្លេចស្កេនចេញ/អវត្តមានជាប់ៗ/វត្តមានល្អឥតខ្ចោះ + CSV
+ *      🌴 ច្បាប់      — ឈប់ថ្ងៃនេះ ១៤ ថ្ងៃខាងមុខ រង់ចាំអនុម័ត ស្ថិតិប្រចាំឆ្នាំ
+ *      📄 លិខិតបញ្ជាក់ — បង្កើតលិខិតបញ្ជាក់ការងារ (ព្រីន/PDF)
+ *      ✉️ គំរូសារ    — សារជូនពរ/ស្វាគមន៍/រំលឹក ចម្លងទៅ Telegram
+ *      💹 ឡើងប្រាក់ខែ — ក្លែងធ្វើការឡើងប្រាក់ខែ (គណនាតែប៉ុណ្ណោះ)
+ *      🔁 កែច្រើន     — ប្តូរឈ្មោះផ្នែក/មុខងារ និងស្ថានភាព/ផ្នែកច្រើននាក់ (សរសេរទៅ Supabase)
+ *      📤 នាំចេញ     — CSV និង vCard (.vcf)
  *      💾 បម្រុងទុក  — ទាញយកទិន្នន័យ Supabase ជាឯកសារ JSON (អានតែប៉ុណ្ណោះ មិនកែអ្វីទេ)
  *
  * ដំឡើង៖ ដាក់ឯកសារនេះក្នុងថតតែមួយជាមួយ index.html ហើយបន្ថែមបន្ទាត់នេះក្រោម script.js
@@ -36,7 +44,7 @@
     }
     kids.flat().forEach(c => {
       if (c == null || c === false) return;
-      el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+      el.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
     });
     return el;
   }
@@ -174,6 +182,18 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
 .hrt-item.sel{background:rgba(13,148,136,.13)}
 .hrt-item small{margin-left:auto;color:var(--text-muted,#5b6b80);text-align:right}
 .hrt-hint{padding:8px 16px;font-size:.72rem;color:var(--text-muted,#5b6b80);border-top:1px solid var(--border,#e1e8ef)}
+.hrt-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:8px 0}
+.hrt-cal .h{font-size:.72rem;text-align:center;color:var(--text-muted,#5b6b80)}
+.hrt-day{min-height:62px;border:1px solid var(--border,#e1e8ef);border-radius:8px;padding:4px 6px;font-size:.78rem;cursor:pointer;background:var(--card-bg,#fff);overflow:hidden}
+.hrt-day.hol{background:rgba(239,68,68,.14)}
+.hrt-day.today{outline:2px solid #0d9488}
+.hrt-day.sel{box-shadow:0 0 0 2px #0284c7}
+.hrt-day .m{display:block;font-size:.66rem;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+textarea.hrt-ta{width:100%;min-height:150px;box-sizing:border-box;margin:8px 0;padding:10px 12px;border:1px solid var(--border,#e1e8ef);border-radius:10px;background:transparent;color:inherit;font:inherit;line-height:1.7}
+.hrt-link{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1px solid var(--border,#e1e8ef);border-radius:8px;text-decoration:none;color:inherit;font-size:.82rem}
+.wcb-list-like{max-height:40vh;overflow:auto;border:1px solid var(--border,#e1e8ef);border-radius:10px;margin:8px 0}
+.hrt-pick{display:flex;gap:10px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border,#e1e8ef);font-size:.85rem;cursor:pointer}
+.hrt-pick small{margin-left:auto;color:var(--text-muted,#5b6b80)}
 `;
 
   let cssDone = false;
@@ -311,7 +331,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
     { t: 'employee_cards', o: [{ col: 'employee_id' }], optional: true, images: true }
   ];
 
-  async function runBackup(withImages, onProgress = () => {}) {
+  async function runBackup(withImages, onProgress) {
     if (typeof supabaseClient === 'undefined' || typeof fetchAllRows !== 'function') throw new Error('មិនឃើញការតភ្ជាប់ Supabase');
     const meta = { app: 'employee-management', createdAt: new Date().toISOString(), includesImages: !!withImages, counts: {}, warnings: [], skipped: [] };
     const tables = {};
@@ -328,9 +348,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
         if (def.optional) { meta.skipped.push(def.t + ' (មិនមានតារាង)'); continue; }
         meta.warnings.push(`${def.t}៖ រាប់ជួរមិនបាន — ${ex.message || ex}`);
       }
-      let res;
-      try { res = await fetchAllRows(def.t, def.o); }
-      catch (ex) { res = { error: ex }; }
+      const res = await fetchAllRows(def.t, def.o);
       if (res.error) {
         if (def.optional) { meta.skipped.push(def.t + ' (មិនមានតារាង)'); continue; }
         meta.warnings.push(`${def.t}៖ ទាញយកមិនបាន — ${res.error.message || res.error}`);
@@ -381,11 +399,533 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
       h('p', { class: 'hrt-muted', text: 'ការស្ដារ (restore) មិនមានក្នុងមុខងារនេះទេ ដើម្បីជៀសវាងការសរសេរជាន់ទិន្នន័យដោយចៃដន្យ។' })));
   }
 
+  // ============================================================ មុខងារបន្ថែម (ផ្នែកទី ២) ====
+  const KH_DIG = '០១២៣៤៥៦៧៨៩';
+  const toKh = s => String(s).replace(/\d/g, d => KH_DIG[+d]);
+  const KH_MONTHS = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+  const KH_WD = ['អា', 'ច', 'អ', 'ពុ', 'ព្រ', 'សុ', 'ស'];
+  const khDate = d => `ថ្ងៃទី${toKh(d.getDate())} ខែ${KH_MONTHS[d.getMonth()]} ឆ្នាំ${toKh(d.getFullYear())}`;
+  const ymKey = d => `${d.getFullYear()}-${z2(d.getMonth() + 1)}`;
+  const hm = t => { const m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const distinct = arr => Array.from(new Set(arr.map(x => String(x == null ? '' : x).trim()).filter(Boolean)));
+  const escHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const csvCell = v => { v = String(v == null ? '' : v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const toCsv = rows => '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const getJson = (k, d) => { try { const v = JSON.parse(lsGet(k, '')); return (v && typeof v === 'object') ? v : d; } catch (_) { return d; } };
+  const ask = m => (typeof customConfirm === 'function' ? customConfirm(m) : Promise.resolve(window.confirm(m)));
+  const sortedEmps = () => emps().slice().sort((a, b) => ((b.status === 'active') - (a.status === 'active')) || String(a.name).localeCompare(String(b.name)));
+
+  function download(name, text, type) {
+    const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  // ជំនួយ UI
+  const card = (title, ...kids) => h('div', { class: 'hrt-card' }, h('h3', { text: title }), ...kids);
+  const rowEl = (...kids) => h('div', { class: 'hrt-row' }, ...kids);
+  const lab = (text, ctrl) => h('label', null, text, ctrl);
+  const btn = (text, onclick, cls) => h('button', { type: 'button', class: cls === undefined ? 'secondary' : cls, text, onclick });
+  const statEl = (v, l) => h('div', { class: 'hrt-stat' }, h('b', { text: v }), h('span', { text: l }));
+  const leaveLabel = k => (typeof LEAVE_TYPE_LABELS !== 'undefined' && LEAVE_TYPE_LABELS[k]) || k || '-';
+
+  // ------------------------------------------------------------ ការគណនា (pure) ----
+  function lateStartOf(empId) {
+    try {
+      if (typeof getEmpShift === 'function' && typeof lateStartMinutes === 'function') {
+        const m = lateStartMinutes(getEmpShift(empId));
+        if (typeof m === 'number' && isFinite(m)) return m;
+      }
+    } catch (_) { /* ignore */ }
+    return 7 * 60;
+  }
+
+  function computeAttendance(list, att, ym, now, lateStartFn) {
+    const t = now || today0();
+    const rows = list.filter(e => e.status === 'active').map(e => ({ e, present: 0, absent: 0, leave: 0, late: 0, lateMin: 0, noOut: 0, streak: 0, run: 0 }));
+    const dates = Object.keys(att || {}).filter(d => d.indexOf(ym) === 0).sort();
+    const totals = { present: 0, absent: 0, leave: 0, late: 0, lateMin: 0 };
+    dates.forEach(d => {
+      const dd = parseYMD(d), past = !!dd && dd < t, day = att[d] || {};
+      rows.forEach(r => {
+        const rec = day[String(r.e.id)];
+        if (!rec) return;
+        const st = String(rec.status || '');
+        if (st === 'present') {
+          r.present++; totals.present++; r.run = 0;
+          const m = hm(rec.checkin);
+          if (m != null) { const lm = m - lateStartFn(r.e.id); if (lm > 0) { r.late++; r.lateMin += lm; totals.late++; totals.lateMin += lm; } }
+          if (past && rec.checkin && !rec.checkout) r.noOut++;
+        } else if (st === 'absent') {
+          r.absent++; totals.absent++; r.run++; if (r.run > r.streak) r.streak = r.run;
+        } else if (st.indexOf('leave') === 0) {
+          r.leave++; totals.leave++; r.run = 0;
+        }
+      });
+    });
+    return { rows, totals, days: dates.length };
+  }
+
+  const leaveDays = (s, en) => Math.max(1, dayDiff(en, s) + 1);
+
+  function computeLeave(list, reqs, now) {
+    const t = now || today0();
+    const byId = new Map(list.map(e => [String(e.id), e]));
+    const norm = reqs.filter(r => r && r.status === 'approved').map(r => ({ r, e: byId.get(String(r.employee_id)), s: parseYMD(r.start_date), en: parseYMD(r.end_date || r.start_date) })).filter(x => x.e && x.s && x.en);
+    const today = norm.filter(x => x.s <= t && x.en >= t);
+    const upcoming = norm.filter(x => x.s > t && dayDiff(x.s, t) <= 14).sort((a, b) => a.s - b.s);
+    const pending = reqs.filter(r => r && r.status === 'pending').map(r => ({ r, e: byId.get(String(r.employee_id)) })).filter(x => x.e);
+    const yr = t.getFullYear(), y0 = new Date(yr, 0, 1), y1 = new Date(yr, 11, 31);
+    const usage = new Map(), byType = new Map();
+    norm.forEach(x => {
+      const s = x.s < y0 ? y0 : x.s, en = x.en > y1 ? y1 : x.en;
+      if (en < s) return;
+      const days = leaveDays(s, en);
+      const k = String(x.e.id);
+      if (!usage.has(k)) usage.set(k, { e: x.e, days: 0, n: 0 });
+      const u = usage.get(k); u.days += days; u.n++;
+      const ty = x.r.leave_type || '-';
+      byType.set(ty, (byType.get(ty) || 0) + days);
+    });
+    return {
+      today, upcoming, pending,
+      usage: Array.from(usage.values()).sort((a, b) => b.days - a.days),
+      byType: Array.from(byType.entries()).sort((a, b) => b[1] - a[1])
+    };
+  }
+
+  function computeCalendar(list, reqs, hol, year, month0) {
+    const n = new Date(year, month0 + 1, 0).getDate();
+    const days = [];
+    for (let d = 1; d <= n; d++) days.push({ d, hol: '', annivs: [], leaves: [] });
+    Object.keys(hol || {}).forEach(k => {
+      const dt = parseYMD(k);
+      if (dt && dt.getFullYear() === year && dt.getMonth() === month0) days[dt.getDate() - 1].hol = String(hol[k] || 'ថ្ងៃឈប់សម្រាក');
+    });
+    const byId = new Map(list.map(e => [String(e.id), e]));
+    list.filter(e => e.status === 'active').forEach(e => {
+      const sd = parseYMD(e.startDate);
+      if (sd && sd.getMonth() === month0 && sd.getFullYear() < year) days[Math.min(sd.getDate(), n) - 1].annivs.push({ e, years: year - sd.getFullYear() });
+    });
+    const first = new Date(year, month0, 1), last = new Date(year, month0, n);
+    reqs.filter(r => r && r.status === 'approved').forEach(r => {
+      const e = byId.get(String(r.employee_id)), s = parseYMD(r.start_date), en = parseYMD(r.end_date || r.start_date);
+      if (!e || !s || !en || en < first || s > last) return;
+      const a = s < first ? first : s, b = en > last ? last : en;
+      for (let d = a.getDate(); d <= b.getDate(); d++) days[d - 1].leaves.push({ e, type: r.leave_type });
+    });
+    return days;
+  }
+
+  function computeRaise(list, o) {
+    const t = o.now || today0();
+    const v = Number(o.value) || 0, minY = Number(o.minYears) || 0, rnd = Number(o.round) || 0;
+    const rows = [];
+    list.filter(e => e.status === 'active' && (!o.dept || String(e.dept || '').trim() === o.dept)).forEach(e => {
+      const old = Number(e.salary);
+      if (!isFinite(old) || old <= 0) return;
+      const sd = parseYMD(e.startDate);
+      const yrs = sd && sd <= t ? (t - sd) / (365.25 * 86400000) : 0;
+      if (minY > 0 && yrs < minY) return;
+      let nw = o.mode === 'fixed' ? old + v : old * (1 + v / 100);
+      nw = rnd > 0 ? Math.round(nw / rnd) * rnd : Math.round(nw * 100) / 100;
+      rows.push({ e, old, nw, diff: nw - old, years: yrs });
+    });
+    const oldSum = rows.reduce((a, r) => a + r.old, 0), newSum = rows.reduce((a, r) => a + r.nw, 0);
+    return { rows, oldSum, newSum, diff: newSum - oldSum, n: rows.length };
+  }
+
+  function fillTpl(text, e, v) {
+    const sd = parseYMD(e.startDate), t = today0();
+    const years = sd && sd <= t ? Math.floor((t - sd) / (365.25 * 86400000)) : 0;
+    const map = { name: e.name || '', position: e.position || '', dept: e.dept || '', username: e.username || e.id || '', years: String(years), startDate: sd ? fmt(sd) : '', company: (v && v.company) || 'ក្រុមហ៊ុន', today: fmt(t) };
+    return String(text).replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(map, k) ? map[k] : m));
+  }
+
+  const intlPhone = p => { const d = normPhone(p); return (d && phoneOk(p)) ? '+855' + d.slice(1) : ''; };
+  const vEsc = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+  function toVcf(list, company) {
+    return list.map(e => [
+      'BEGIN:VCARD', 'VERSION:3.0', `FN:${vEsc(e.name)}`, `N:${vEsc(e.name)};;;;`,
+      (e.phone ? `TEL;TYPE=CELL:${intlPhone(e.phone) || vEsc(e.phone)}` : ''),
+      (e.email ? `EMAIL:${vEsc(e.email)}` : ''),
+      `ORG:${vEsc(company || '')};${vEsc(e.dept || '')}`,
+      (e.position ? `TITLE:${vEsc(e.position)}` : ''),
+      'END:VCARD'].filter(Boolean).join('\r\n')).join('\r\n') + '\r\n';
+  }
+
+  function certificateHtml(e, o) {
+    const issue = o.issue || today0();
+    const sd = parseYMD(e.startDate);
+    const active = e.status === 'active';
+    const co = escHtml(o.company || '………………………………');
+    const rows = [
+      ['ឈ្មោះ', e.name], ['អត្តលេខ', e.username || e.id], ['មុខងារ', e.position || '-'], ['ផ្នែក', e.dept || '-'],
+      ['ថ្ងៃចូលធ្វើការ', sd ? khDate(sd) : '-'], ['ស្ថានភាព', active ? 'កំពុងបម្រើការ' : 'ឈប់បម្រើការ']
+    ];
+    if (o.withSalary && Number(e.salary) > 0) rows.push(['ប្រាក់ខែគោល', money(e.salary) + ' ដុល្លារអាមេរិក ក្នុងមួយខែ']);
+    const intro = o.signer
+      ? `ខ្ញុំបាទ/នាងខ្ញុំ ឈ្មោះ <b>${escHtml(o.signer)}</b> ${o.title ? 'មុខតំណែង <b>' + escHtml(o.title) + '</b> ' : ''}នៃ <b>${co}</b> សូមបញ្ជាក់ថា៖`
+      : `<b>${co}</b> សូមបញ្ជាក់ថា៖`;
+    const stmt = active
+      ? `${escHtml(e.name)} បានបម្រើការងារនៅក្រុមហ៊ុនយើងខ្ញុំ${sd ? ' ចាប់ពី' + khDate(sd) : ''} រហូតមកដល់បច្ចុប្បន្ន។`
+      : `${escHtml(e.name)} បានធ្លាប់បម្រើការងារនៅក្រុមហ៊ុនយើងខ្ញុំ${sd ? ' ចាប់ពី' + khDate(sd) : ''}។`;
+    const font = /^https:\/\/fonts\.googleapis\.com\//.test(o.fontHref || '') ? `<link rel="stylesheet" href="${escHtml(o.fontHref)}">` : '';
+    return `<!doctype html><html lang="km"><head><meta charset="utf-8"><title>លិខិតបញ្ជាក់ការងារ — ${escHtml(e.name)}</title>${font}
+<style>@page{size:A4;margin:22mm 20mm}body{font-family:'Kantumruy Pro','Noto Sans Khmer','Khmer OS Battambang',sans-serif;color:#111;font-size:12pt;line-height:1.9;margin:0}
+.nat{text-align:center;font-weight:700}.co{margin-top:14mm;text-align:left}h1{text-align:center;font-size:17pt;margin:12mm 0 8mm}
+table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;vertical-align:top}td:first-child{width:42mm}
+.sig{margin-top:14mm;text-align:right;padding-right:10mm}.sig .box{display:inline-block;text-align:center;min-width:60mm}.sp{height:24mm}</style></head><body>
+<div class="nat">ព្រះរាជាណាចក្រកម្ពុជា<br>ជាតិ សាសនា ព្រះមហាក្សត្រ</div>
+<div class="co"><b>${co}</b>${o.address ? '<br>' + escHtml(o.address) : ''}</div>
+<h1>លិខិតបញ្ជាក់ការងារ</h1>
+<p>${intro}</p>
+<table>${rows.map(r => `<tr><td>${escHtml(r[0])}</td><td>៖ ${escHtml(r[1])}</td></tr>`).join('')}</table>
+<p>${stmt}</p>
+<p>លិខិតនេះចេញជូនដើម្បី${escHtml(o.purpose || 'ប្រើប្រាស់តាមការចាំបាច់')}។</p>
+<div class="sig"><div class="box">${escHtml(o.place || '')}${o.place ? ', ' : ''}${khDate(issue)}<br><b>${escHtml(o.title || 'តំណាងក្រុមហ៊ុន')}</b><div class="sp"></div>${escHtml(o.signer || '')}</div></div>
+</body></html>`;
+  }
+
+  function openPrint(html) {
+    const w = window.open('', '_blank');
+    if (!w) { say('Browser បានទប់ស្កាត់បង្អួច — សូមអនុញ្ញាត popup'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    const go = () => { try { w.focus(); w.print(); } catch (_) { /* ignore */ } };
+    if (w.document.fonts && w.document.fonts.ready) w.document.fonts.ready.then(() => setTimeout(go, 150)); else setTimeout(go, 700);
+  }
+
+  // ជ្រើសបុគ្គលិក (ស្វែងរក + បញ្ជីជ្រើស)
+  let pickedId = null;
+  function empPicker(onChange) {
+    const q = h('input', { type: 'text', placeholder: '🔍 ស្វែងរកបុគ្គលិក…', style: 'min-width:170px' });
+    const sel = h('select', { style: 'min-width:240px;max-width:100%' });
+    let shown = [];
+    const get = () => shown[+sel.value] || null;
+    const rebuild = () => {
+      const s = q.value.trim().toLowerCase();
+      shown = sortedEmps().filter(e => !s || [e.name, e.username, e.id].some(x => String(x == null ? '' : x).toLowerCase().indexOf(s) >= 0)).slice(0, 300);
+      sel.textContent = '';
+      shown.forEach((e, i) => sel.appendChild(h('option', { value: String(i), text: `${e.name || e.id}${e.username ? ' · ' + e.username : ''}${e.status === 'active' ? '' : ' (ឈប់)'}` })));
+      const k = shown.findIndex(e => e.id === pickedId);
+      if (k >= 0) sel.value = String(k);
+    };
+    q.addEventListener('input', () => { rebuild(); const e = get(); if (e) pickedId = e.id; onChange(e); });
+    sel.addEventListener('change', () => { const e = get(); if (e) pickedId = e.id; onChange(e); });
+    rebuild();
+    return { el: rowEl(q, sel), get };
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ វត្តមាន ----
+  let attYM = '';
+  function paneAttendance(body) {
+    if (!attYM) attYM = ymKey(today0());
+    const mi = h('input', { type: 'month', value: attYM });
+    mi.addEventListener('change', () => { if (mi.value) { attYM = mi.value; renderBody(); } });
+    const att = (typeof attendance !== 'undefined' && attendance) ? attendance : {};
+    const r = computeAttendance(emps(), att, attYM, null, lateStartOf);
+    const rows = r.rows.slice().sort((a, b) => String(a.e.name).localeCompare(String(b.e.name)));
+    const heads = ['ឈ្មោះ', 'ផ្នែក', 'មកធ្វើការ', 'អវត្តមាន', 'ច្បាប់', 'យឺត (ដង)', 'យឺត (នាទី)', 'ភ្លេចស្កេនចេញ'];
+    const cells = x => [x.e.name, x.e.dept || '-', x.present, x.absent, x.leave, x.late, x.lateMin, x.noOut];
+    body.appendChild(rowEl(lab('ខែ ', mi),
+      btn('⬇ CSV', () => download(`attendance-${attYM}.csv`, toCsv([['អត្តលេខ'].concat(heads)].concat(rows.map(x => [x.e.username || x.e.id].concat(cells(x))))), 'text/csv;charset=utf-8'))));
+    if (!r.days) { body.appendChild(empty('គ្មានទិន្នន័យវត្តមានក្នុងខែនេះ')); return; }
+    body.appendChild(h('div', { class: 'hrt-grid' },
+      statEl(String(rows.length), 'បុគ្គលិកកំពុងបម្រើការ'), statEl(String(r.days), 'ថ្ងៃដែលមានកត់ត្រា'),
+      statEl(String(r.totals.present), 'ចំនួនមកធ្វើការ (ថ្ងៃ·នាក់)'), statEl(String(r.totals.absent), 'អវត្តមាន'),
+      statEl(String(r.totals.leave), 'ច្បាប់'), statEl(`${r.totals.late} ដង`, `យឺតសរុប ${r.totals.lateMin} នាទី`)));
+    const top = (title, arr, cols, fn) => { if (arr.length) body.appendChild(card(title, mkTable(cols, arr.map(fn)))); };
+    top('⏰ យឺតច្រើនជាងគេ (១០ នាក់)', rows.filter(x => x.late > 0).sort((a, b) => b.lateMin - a.lateMin || b.late - a.late).slice(0, 10), ['ឈ្មោះ', 'ផ្នែក', 'ដង', 'នាទី', ''], x => [x.e.name, x.e.dept || '-', String(x.late), String(x.lateMin), editBtn(x.e)]);
+    top('🚫 អវត្តមានច្រើនជាងគេ (១០ នាក់)', rows.filter(x => x.absent > 0).sort((a, b) => b.absent - a.absent).slice(0, 10), ['ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃ', ''], x => [x.e.name, x.e.dept || '-', String(x.absent), editBtn(x.e)]);
+    top('⚠️ អវត្តមានជាប់ៗគ្នា ៣ ថ្ងៃឡើង', rows.filter(x => x.streak >= 3).sort((a, b) => b.streak - a.streak), ['ឈ្មោះ', 'ផ្នែក', 'ជាប់ៗគ្នា (ថ្ងៃ)', ''], x => [x.e.name, x.e.dept || '-', String(x.streak), editBtn(x.e)]);
+    top('📌 ភ្លេចស្កេនចេញ (ថ្ងៃកន្លងមក)', rows.filter(x => x.noOut > 0).sort((a, b) => b.noOut - a.noOut), ['ឈ្មោះ', 'ផ្នែក', 'ដង', ''], x => [x.e.name, x.e.dept || '-', String(x.noOut), editBtn(x.e)]);
+    const perfect = rows.filter(x => x.present > 0 && !x.absent && !x.late && !x.leave);
+    body.appendChild(card(`🏆 វត្តមានល្អឥតខ្ចោះ (${perfect.length})`, perfect.length ? h('div', { class: 'hrt-row' }, perfect.map(x => badge(x.e.name))) : empty('មិនមាន')));
+    body.appendChild(card('តារាងលម្អិត', mkTable(heads.concat(['']), rows.map(x => cells(x).map(String).concat([editBtn(x.e)])))));
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'យឺត = ស្កេនចូលក្រោយម៉ោងចូលវេនរបស់បុគ្គលិកនោះ (ការអនុគ្រោះមិនគិត)។ ថ្ងៃដែលមិនបានកត់ត្រា (ឧ. ថ្ងៃអាទិត្យ/បុណ្យ) មិនត្រូវបានរាប់។' }));
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ ច្បាប់ ----
+  function paneLeave(body) {
+    const reqs = (typeof leaveRequests !== 'undefined' && Array.isArray(leaveRequests)) ? leaveRequests : [];
+    if (!reqs.length) body.appendChild(empty('មិនទាន់មានទិន្នន័យសំណើច្បាប់ (ឬមិនទាន់ផ្ទុក)។ សូមបើកផ្ទាំង Leave / Overtime ម្តងសិន។'));
+    const d = computeLeave(emps(), reqs, null);
+    body.appendChild(h('div', { class: 'hrt-grid' },
+      statEl(String(d.today.length), 'ឈប់ច្បាប់ថ្ងៃនេះ'), statEl(String(d.upcoming.length), 'ចាប់ផ្តើមក្នុង ១៤ ថ្ងៃខាងមុខ'), statEl(String(d.pending.length), 'រង់ចាំអនុម័ត')));
+    const range = x => (x.s.getTime() === x.en.getTime() ? fmt(x.s) : `${fmt(x.s)} → ${fmt(x.en)}`);
+    body.appendChild(card('🌴 ឈប់ច្បាប់ថ្ងៃនេះ', d.today.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.today.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type), range(x), editBtn(x.e)])) : empty('គ្មាននរណាឈប់ច្បាប់ថ្ងៃនេះ')));
+    body.appendChild(card('📆 នឹងឈប់ក្នុង ១៤ ថ្ងៃខាងមុខ', d.upcoming.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.upcoming.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type), range(x), editBtn(x.e)])) : empty('គ្មាន')));
+    body.appendChild(card(`⏳ រង់ចាំអនុម័ត (${d.pending.length})`,
+      d.pending.length ? mkTable(['ឈ្មោះ', 'ប្រភេទ', 'ពីថ្ងៃ', 'ដល់ថ្ងៃ', 'មូលហេតុ'], d.pending.map(x => [x.e.name, leaveLabel(x.r.leave_type), x.r.start_date || '-', x.r.end_date || x.r.start_date || '-', x.r.reason || '-'])) : empty('គ្មានសំណើរង់ចាំ'),
+      d.pending.length ? rowEl(btn('➡ ទៅផ្ទាំង Leave / Overtime', () => { if (typeof showTab === 'function') showTab('requests'); })) : null));
+    const yr = today0().getFullYear();
+    body.appendChild(card(`📊 ថ្ងៃឈប់ច្បាប់ដែលបានអនុម័តក្នុងឆ្នាំ ${yr} (ថ្ងៃតាមប្រតិទិន)`,
+      d.usage.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'សំណើ', 'សរុប (ថ្ងៃ)'], d.usage.slice(0, 15).map(u => [u.e.name, u.e.dept || '-', String(u.n), String(u.days)])) : empty('មិនទាន់មាន'),
+      d.byType.length ? mkTable(['ប្រភេទ', 'ថ្ងៃសរុប'], d.byType.map(x => [leaveLabel(x[0]), String(x[1])])) : null));
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ការរាប់ថ្ងៃគិតតាមចន្លោះ «ពីថ្ងៃ–ដល់ថ្ងៃ» (រួមទាំងថ្ងៃអាទិត្យ/បុណ្យ) ដូច្នេះជាតម្លៃប្រហែល មិនមែនសមតុល្យច្បាប់ផ្លូវការទេ — សូមមើលផ្ទាំង «ច្បាប់ប្រចាំឆ្នាំ» សម្រាប់សមតុល្យ។' }));
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ ប្រតិទិន ----
+  let calY = null, calM = 0, calSel = null;
+  function paneCalendar(body) {
+    const t = today0();
+    if (calY == null) { calY = t.getFullYear(); calM = t.getMonth(); }
+    const reqs = (typeof leaveRequests !== 'undefined' && Array.isArray(leaveRequests)) ? leaveRequests : [];
+    const hol = (typeof holidays !== 'undefined' && holidays) ? holidays : {};
+    const days = computeCalendar(emps(), reqs, hol, calY, calM);
+    const go = dm => { calM += dm; if (calM < 0) { calM = 11; calY--; } else if (calM > 11) { calM = 0; calY++; } calSel = null; renderBody(); };
+    body.appendChild(rowEl(btn('‹', () => go(-1)), h('b', { text: `ខែ${KH_MONTHS[calM]} ${toKh(calY)}` }), btn('›', () => go(1)),
+      btn('ថ្ងៃនេះ', () => { calY = t.getFullYear(); calM = t.getMonth(); calSel = t.getDate(); renderBody(); })));
+    const grid = h('div', { class: 'hrt-cal' }, KH_WD.map(w => h('div', { class: 'h', text: w })));
+    for (let i = 0; i < new Date(calY, calM, 1).getDay(); i++) grid.appendChild(h('div'));
+    days.forEach(x => {
+      const isToday = calY === t.getFullYear() && calM === t.getMonth() && x.d === t.getDate();
+      const c = h('div', { class: 'hrt-day' + (x.hol ? ' hol' : '') + (isToday ? ' today' : '') + (calSel === x.d ? ' sel' : '') },
+        h('b', { text: String(x.d) }),
+        x.hol ? h('span', { class: 'm', text: x.hol }) : null,
+        x.annivs.length ? h('span', { class: 'm', text: `🎂 ${x.annivs.length}` }) : null,
+        x.leaves.length ? h('span', { class: 'm', text: `🌴 ${x.leaves.length}` }) : null);
+      c.addEventListener('click', () => { calSel = x.d; renderBody(); });
+      grid.appendChild(c);
+    });
+    body.appendChild(grid);
+    const sel = calSel && days[calSel - 1];
+    if (sel) {
+      const kids = [];
+      if (sel.hol) kids.push(h('p', null, badge('ថ្ងៃឈប់សម្រាក', 'late'), ' ' + sel.hol));
+      if (sel.annivs.length) kids.push(mkTable(['🎂 ខួបចូលធ្វើការ', 'ឆ្នាំ', ''], sel.annivs.map(a => [a.e.name, `${a.years} ឆ្នាំ`, editBtn(a.e)])));
+      if (sel.leaves.length) kids.push(mkTable(['🌴 ឈប់ច្បាប់', 'ប្រភេទ', ''], sel.leaves.map(l => [l.e.name, leaveLabel(l.type), editBtn(l.e)])));
+      if (!kids.length) kids.push(empty('គ្មានព្រឹត្តិការណ៍'));
+      body.appendChild(card(`ថ្ងៃទី ${sel.d} ${KH_MONTHS[calM]} ${calY}`, ...kids));
+    }
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'បង្ហាញថ្ងៃបុណ្យ (ពីផ្ទាំងការកំណត់) ខួបចូលធ្វើការ និងច្បាប់ដែលបានអនុម័ត។ ចុចលើថ្ងៃដើម្បីមើលលម្អិត។' }));
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ លិខិតបញ្ជាក់ការងារ ----
+  function paneCert(body) {
+    const d0 = getJson('hrt_cert', {});
+    const brand = (document.querySelector('.sidebar-brand') || {}).textContent || '';
+    const S = {
+      company: d0.company || lsGet('wc_company', '') || brand.replace(/^[^\p{L}\p{N}]+/u, '').trim(),
+      address: d0.address || '', signer: d0.signer || '', title: d0.title || '', place: d0.place || 'ភ្នំពេញ', purpose: d0.purpose || '', withSalary: !!d0.withSalary
+    };
+    const save = () => lsSet('hrt_cert', JSON.stringify(S));
+    const txt = (key, ph, w) => { const i = h('input', { type: 'text', value: S[key], placeholder: ph || '', style: `min-width:${w || 180}px` }); i.addEventListener('input', () => { S[key] = i.value; save(); }); return i; };
+    const issue = h('input', { type: 'date', value: `${today0().getFullYear()}-${z2(today0().getMonth() + 1)}-${z2(today0().getDate())}` });
+    const sal = h('input', { type: 'checkbox' }); sal.checked = S.withSalary;
+    sal.addEventListener('change', () => { S.withSalary = sal.checked; save(); });
+    const pick = empPicker(() => { /* គ្មានអ្វីត្រូវធ្វើ */ });
+    body.appendChild(card('📄 លិខិតបញ្ជាក់ការងារ (ព្រីន/រក្សាទុកជា PDF)',
+      rowEl(lab('បុគ្គលិក ', pick.el)),
+      rowEl(lab('ក្រុមហ៊ុន ', txt('company', 'ឈ្មោះក្រុមហ៊ុន', 240)), lab('អាសយដ្ឋាន ', txt('address', 'អាសយដ្ឋានក្រុមហ៊ុន', 300))),
+      rowEl(lab('អ្នកចុះហត្ថលេខា ', txt('signer', 'ឈ្មោះ', 160)), lab('មុខតំណែង ', txt('title', 'ឧ. នាយកធនធានមនុស្ស', 180)), lab('ទីកន្លែង ', txt('place', 'ភ្នំពេញ', 100))),
+      rowEl(lab('គោលបំណង ', txt('purpose', 'ឧ. ដាក់ពាក្យសុំទិដ្ឋាការ / ស្នើសុំប្រាក់កម្ចី', 320))),
+      rowEl(lab('ថ្ងៃចេញលិខិត ', issue), h('label', null, sal, ' បញ្ចូលប្រាក់ខែគោល')),
+      rowEl(btn('🖨 បើក / ព្រីន', () => {
+        const e = pick.get();
+        if (!e) { say('សូមជ្រើសបុគ្គលិកសិន'); return; }
+        const lk = document.querySelector('link[href*="fonts.googleapis.com"]');
+        openPrint(certificateHtml(e, Object.assign({}, S, { issue: parseYMD(issue.value) || today0(), fontHref: lk ? lk.href : '' })));
+      }, ''))));
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ក្នុងបង្អួចព្រីនអាចជ្រើស «Save as PDF»។ សូមពិនិត្យអត្ថបទមុនចុះហត្ថលេខា និងបោះត្រា។ អត្តលេខយកពី username (បើគ្មាន ប្រើ id)។ ព័ត៌មានដែលបានបំពេញត្រូវបានចងចាំលើ browser នេះ។' }));
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ គំរូសារ ----
+  const TPLS = [
+    { id: 'anniv', label: '🎉 ជូនពរខួបចូលធ្វើការ', text: '🎉 សូមអបអរសាទរ {name}! ថ្ងៃនេះគឺជាខួបចូលធ្វើការគម្រប់ {years} ឆ្នាំរបស់អ្នកនៅ {company}។ សូមអរគុណចំពោះការខិតខំប្រឹងប្រែង និងការលះបង់របស់អ្នកក្នុងតួនាទី {position} នៃផ្នែក {dept}។ សូមជូនពរឲ្យអ្នកមានសុខភាពល្អ និងទទួលបានជោគជ័យបន្តទៀត! 🙏' },
+    { id: 'welcome', label: '👋 ស្វាគមន៍បុគ្គលិកថ្មី', text: '👋 សូមស្វាគមន៍ {name} មកកាន់ក្រុមគ្រួសារ {company}! អ្នកចាប់ផ្តើមការងារក្នុងតួនាទី {position} នៃផ្នែក {dept} ចាប់ពីថ្ងៃទី {startDate}។ បើមានសំណួរ សូមទាក់ទងផ្នែកធនធានមនុស្សបានគ្រប់ពេល។' },
+    { id: 'probation', label: '⏳ ជូនដំណឹងវាយតម្លៃការសាកល្បង', text: 'ជម្រាបសួរ {name}, ការសាកល្បងការងាររបស់អ្នកក្នុងតួនាទី {position} ជិតដល់ពេលវាយតម្លៃហើយ។ ផ្នែកធនធានមនុស្សនឹងទាក់ទងអ្នក និងអ្នកគ្រប់គ្រង ដើម្បីកំណត់ពេលជួបពិភាក្សា។ សូមអរគុណ។' },
+    { id: 'late', label: '⏰ រំលឹកការមកយឺត', text: 'ជម្រាបសួរ {name}, យើងសង្កេតឃើញថាអ្នកមកធ្វើការយឺតញឹកញាប់ជាងមុន។ សូមខិតខំមកឲ្យទាន់ម៉ោងតាមវេនការងារ។ បើមានបញ្ហាអ្វី សូមប្រាប់ផ្នែកធនធានមនុស្ស ដើម្បីជួយរកដំណោះស្រាយ។ សូមអរគុណ។' },
+    { id: 'absent', label: '📞 សួរនាំពេលអវត្តមាន', text: 'ជម្រាបសួរ {name}, ថ្ងៃនេះ ({today}) អ្នកមិនទាន់មកធ្វើការ ហើយយើងមិនទាន់ទទួលបានព័ត៌មានអំពីច្បាប់ទេ។ សូមជួយទាក់ទងមកវិញ ឬជូនដំណឹងអំពីស្ថានភាពរបស់អ្នក។ សូមអរគុណ។' },
+    { id: 'thanks', label: '🙏 សូមអរគុណ/សរសើរ', text: '🙏 សូមអរគុណ {name} សម្រាប់ការខិតខំប្រឹងប្រែងដ៏ល្អប្រសើរក្នុងតួនាទី {position}។ {company} ឱ្យតម្លៃចំពោះការរួមចំណែករបស់អ្នកខ្លាំងណាស់។' }
+  ];
+
+  function paneTemplates(body) {
+    const company = () => lsGet('wc_company', '') || getJson('hrt_cert', {}).company || 'ក្រុមហ៊ុន';
+    const tsel = h('select', null, TPLS.map(t => h('option', { value: t.id, text: t.label })));
+    const tpl = h('textarea', { class: 'hrt-ta', style: 'min-height:90px' });
+    const out = h('textarea', { class: 'hrt-ta' });
+    const tel = h('a', { class: 'hrt-link', target: '_blank', rel: 'noopener', text: '📞 ហៅ' });
+    const tg = h('a', { class: 'hrt-link', target: '_blank', rel: 'noopener', text: '💬 Telegram' });
+    const cur = () => TPLS.find(t => t.id === tsel.value) || TPLS[0];
+    const loadTpl = () => { tpl.value = lsGet('hrt_tpl_' + cur().id, '') || cur().text; };
+    const refresh = () => {
+      const e = pick.get();
+      out.value = e ? fillTpl(tpl.value, e, { company: company() }) : '';
+      const p = e ? intlPhone(e.phone) : '';
+      tel.style.display = tg.style.display = p ? '' : 'none';
+      if (p) { tel.href = 'tel:' + p; tg.href = 'https://t.me/' + p; }
+    };
+    const pick = empPicker(refresh);
+    tsel.addEventListener('change', () => { loadTpl(); refresh(); });
+    tpl.addEventListener('input', refresh);
+    loadTpl();
+    body.appendChild(card('✉️ គំរូសារ (ចម្លងទៅ Telegram/SMS)',
+      rowEl(lab('បុគ្គលិក ', pick.el)),
+      rowEl(lab('គំរូ ', tsel)),
+      h('details', { class: 'hrt-d' }, h('summary', { text: 'កែគំរូ (អថេរ៖ {name} {position} {dept} {years} {startDate} {company} {today} {username})' }), tpl,
+        rowEl(btn('💾 រក្សាទុកគំរូនេះ', () => { lsSet('hrt_tpl_' + cur().id, tpl.value); say('✓ បានរក្សាទុកគំរូ'); }),
+          btn('↩ ត្រឡប់ទៅដើម', () => { lsSet('hrt_tpl_' + cur().id, ''); loadTpl(); refresh(); }))),
+      out,
+      rowEl(btn('📋 ចម្លងសារ', async () => { try { await navigator.clipboard.writeText(out.value); await say('✓ បានចម្លងរួច'); } catch (_) { out.select(); await say('ចម្លងមិនបាន — សូមចម្លងដោយដៃ (Ctrl+C)'); } }, ''), tel, tg)));
+    refresh();
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ ឡើងប្រាក់ខែ (ក្លែងធ្វើ) ----
+  const raiseState = { dept: '', mode: 'pct', value: '5', minYears: '0', round: '1' };
+  function paneRaise(body) {
+    const out = h('div');
+    const calc = () => computeRaise(emps(), raiseState);
+    const renderOut = () => {
+      out.textContent = '';
+      const r = calc();
+      if (!r.n) { out.appendChild(empty('គ្មានបុគ្គលិកត្រូវតាមលក្ខខណ្ឌ (ឬមិនទាន់មានប្រាក់ខែ)')); return; }
+      out.appendChild(h('div', { class: 'hrt-grid' },
+        statEl(String(r.n), 'បុគ្គលិកដែលរងផលប៉ះពាល់'), statEl('$' + money(r.oldSum), 'ប្រាក់ខែសរុបបច្ចុប្បន្ន'),
+        statEl('$' + money(r.newSum), 'ប្រាក់ខែសរុបថ្មី'), statEl('+$' + money(r.diff), 'ចំណាយបន្ថែមក្នុងមួយខែ'), statEl('+$' + money(r.diff * 12), 'ចំណាយបន្ថែមក្នុងមួយឆ្នាំ')));
+      const rows = r.rows.slice().sort((a, b) => String(a.e.name).localeCompare(String(b.e.name)));
+      out.appendChild(mkTable(['ឈ្មោះ', 'ផ្នែក', 'ឆ្នាំការងារ', 'ប្រាក់ខែចាស់ ($)', 'ប្រាក់ខែថ្មី ($)', 'ឡើង ($)'],
+        rows.map(x => [x.e.name, x.e.dept || '-', x.years.toFixed(1), money(x.old), money(x.nw), (x.diff >= 0 ? '+' : '') + money(x.diff)])));
+      out.appendChild(rowEl(btn('⬇ CSV', () => download('salary-simulation.csv', toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ឡើង']].concat(rows.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, x.diff]))), 'text/csv;charset=utf-8'))));
+    };
+    const depts = distinct(emps().map(e => e.dept)).sort();
+    const selDept = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d, text: d })));
+    selDept.value = raiseState.dept;
+    const selMode = h('select', null, h('option', { value: 'pct', text: 'ភាគរយ (%)' }), h('option', { value: 'fixed', text: 'ចំនួនថេរ ($)' }));
+    selMode.value = raiseState.mode;
+    const val = h('input', { type: 'number', step: '0.5', value: raiseState.value, style: 'width:90px' });
+    const minY = h('input', { type: 'number', min: '0', step: '0.5', value: raiseState.minYears, style: 'width:80px' });
+    const rnd = h('select', null, [['0', 'មិនបង្គត់'], ['1', 'បង្គត់ $1'], ['5', 'បង្គត់ $5'], ['10', 'បង្គត់ $10']].map(x => h('option', { value: x[0], text: x[1] })));
+    rnd.value = raiseState.round;
+    const bind = (el, key) => el.addEventListener('input', () => { raiseState[key] = el.value; renderOut(); });
+    bind(selDept, 'dept'); bind(selMode, 'mode'); bind(val, 'value'); bind(minY, 'minYears'); bind(rnd, 'round');
+    selDept.addEventListener('change', () => { raiseState.dept = selDept.value; renderOut(); });
+    body.appendChild(card('💹 ក្លែងធ្វើការឡើងប្រាក់ខែ (គណនាតែប៉ុណ្ណោះ — មិនរក្សាទុក)',
+      rowEl(lab('ផ្នែក ', selDept), lab('របៀប ', selMode), lab('តម្លៃ ', val), lab('ឆ្នាំការងារអប្បបរមា ', minY), lab('បង្គត់ ', rnd)), out));
+    renderOut();
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ប្រើសម្រាប់ផែនការថវិកា។ ការគណនានេះមិនកែប្រាក់ខែក្នុងប្រព័ន្ធទេ — ត្រូវកែក្នុងទម្រង់បុគ្គលិកដោយខ្លួនឯង។' }));
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ កែច្រើន (សរសេរទៅ Supabase) ----
+  async function bulkUpdate(targets, patch, what) {
+    if (typeof supabaseClient === 'undefined') throw new Error('មិនឃើញការតភ្ជាប់ Supabase');
+    const ids = targets.map(e => e.id), done = new Set();
+    try {
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100);
+        const { error } = await supabaseClient.from('employees').update(patch).in('id', chunk);
+        if (error) throw new Error(`${error.message} (បានកែរួច ${done.size}/${ids.length})`);
+        chunk.forEach(id => done.add(id));
+      }
+    } finally {
+      targets.filter(e => done.has(e.id)).forEach(e => Object.assign(e, patch));
+      if (done.size && typeof renderTable === 'function') { try { renderTable(); } catch (_) { /* ignore */ } }
+    }
+    if (typeof logAudit === 'function') { try { logAudit('bulk_edit', { entity: 'employee', ref: what, new: patch, count: ids.length }); } catch (_) { /* ignore */ } }
+  }
+
+  function paneBulk(body) {
+    body.appendChild(h('p', { class: 'hrt-badge warn', text: '⚠ មុខងារនៅទីនេះសរសេរទៅ Supabase ពិតប្រាកដ។ ត្រូវមានការបញ្ជាក់មុនធ្វើ ហើយសូមបម្រុងទុកទិន្នន័យជាមុន (ផ្ទាំង «បម្រុងទុក»)។' }));
+
+    const rename = (field, title, noun) => {
+      const vals = distinct(emps().map(e => e[field])).sort();
+      const sel = h('select', null, vals.map(v => h('option', { value: v, text: `${v} (${emps().filter(e => String(e[field] || '').trim() === v).length})` })));
+      const inp = h('input', { type: 'text', placeholder: `${noun}ថ្មី`, style: 'min-width:200px' });
+      const go = btn('✅ ប្តូរឈ្មោះ', async () => {
+        const old = sel.value, nw = inp.value.trim();
+        if (!old) { await say(`មិនមាន${noun}ដើម្បីប្តូរ`); return; }
+        if (!nw || nw === old) { await say(`សូមបញ្ចូល${noun}ថ្មី (ខុសពីដើម)`); return; }
+        const targets = emps().filter(e => String(e[field] || '').trim() === old);
+        const exists = vals.indexOf(nw) >= 0 ? `\n\n(${noun} «${nw}» មានរួចហើយ — នឹងបញ្ចូលរួមគ្នា)` : '';
+        if (!(await ask(`ប្តូរ${noun} «${old}» → «${nw}» សម្រាប់ ${targets.length} នាក់ (រួមទាំងអ្នកឈប់បម្រើការ)?${exists}`))) return;
+        go.disabled = true;
+        try { await bulkUpdate(targets, { [field]: nw }, `${field}:${old}→${nw}`); await say(`✓ បានប្តូរ ${targets.length} នាក់`); renderBody(); }
+        catch (ex) { await say('ប្តូរមិនបាន៖ ' + (ex.message || ex)); renderBody(); }
+        finally { go.disabled = false; }
+      }, '');
+      body.appendChild(card(title, rowEl(lab(`${noun}ដើម `, sel), lab('→ ', inp), go)));
+    };
+    rename('dept', '🏷 ប្តូរឈ្មោះផ្នែក (ទាំងអស់ក្នុងផ្នែកនោះ)', 'ផ្នែក');
+    rename('position', '🏷 ប្តូរឈ្មោះមុខងារ (ទាំងអស់ដែលមានមុខងារនោះ)', 'មុខងារ');
+
+    // ជ្រើសច្រើននាក់
+    const chosen = new Set();
+    const search = h('input', { type: 'text', placeholder: '🔍 ស្វែងរក…', style: 'min-width:160px' });
+    const deptSel = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), distinct(emps().map(e => e.dept)).sort().map(d => h('option', { value: d, text: d })));
+    const onlyActive = h('input', { type: 'checkbox' });
+    const list = h('div', { class: 'wcb-list-like' });
+    const count = h('span', { class: 'hrt-muted' });
+    const allCb = h('input', { type: 'checkbox' });
+    let view = [];
+    const draw = () => {
+      const s = search.value.trim().toLowerCase();
+      view = sortedEmps().filter(e => (!deptSel.value || String(e.dept || '').trim() === deptSel.value) && (!onlyActive.checked || e.status === 'active') && (!s || [e.name, e.username, e.id].some(x => String(x == null ? '' : x).toLowerCase().indexOf(s) >= 0)));
+      list.textContent = '';
+      view.slice(0, 400).forEach(e => {
+        const cb = h('input', { type: 'checkbox' }); cb.checked = chosen.has(e);
+        cb.addEventListener('change', () => { if (cb.checked) chosen.add(e); else chosen.delete(e); upd(); });
+        list.appendChild(h('label', { class: 'hrt-pick' }, cb, h('span', { text: e.name || e.id }), h('small', { text: `${e.dept || '-'} · ${e.status === 'active' ? 'សកម្ម' : 'ឈប់'}` })));
+      });
+      if (view.length > 400) list.appendChild(empty(`បង្ហាញ ៤០០ ដំបូងពី ${view.length} — សូមត្រងឲ្យតូចជាងនេះ`));
+      upd();
+    };
+    const upd = () => { count.textContent = `បានជ្រើស ${chosen.size} នាក់`; allCb.checked = view.length > 0 && view.slice(0, 400).every(e => chosen.has(e)); };
+    allCb.addEventListener('change', () => { view.slice(0, 400).forEach(e => { if (allCb.checked) chosen.add(e); else chosen.delete(e); }); draw(); });
+    [search].forEach(el => el.addEventListener('input', draw));
+    deptSel.addEventListener('change', draw); onlyActive.addEventListener('change', draw);
+
+    const run = async (patch, label) => {
+      const targets = Array.from(chosen);
+      if (!targets.length) { await say('សូមជ្រើសបុគ្គលិកយ៉ាងតិចម្នាក់'); return; }
+      if (!(await ask(`${label} សម្រាប់ ${targets.length} នាក់?`))) return;
+      try { await bulkUpdate(targets, patch, label); await say(`✓ បានកែ ${targets.length} នាក់`); chosen.clear(); renderBody(); }
+      catch (ex) { await say('កែមិនបាន៖ ' + (ex.message || ex)); renderBody(); }
+    };
+    const stSel = h('select', null, h('option', { value: 'active', text: 'កំពុងបម្រើការ' }), h('option', { value: 'inactive', text: 'ឈប់បម្រើការ' }));
+    const newDept = h('input', { type: 'text', placeholder: 'ផ្នែកថ្មី', style: 'min-width:160px' });
+    body.appendChild(card('👥 កែបុគ្គលិកដែលបានជ្រើស',
+      rowEl(search, deptSel, h('label', null, onlyActive, ' តែកំពុងបម្រើការ'), h('label', null, allCb, ' ជ្រើសទាំងអស់ក្នុងបញ្ជី'), count),
+      list,
+      rowEl(lab('កំណត់ស្ថានភាព ', stSel), btn('✅ អនុវត្ត', () => run({ status: stSel.value }, `កំណត់ស្ថានភាព → ${stSel.value === 'active' ? 'កំពុងបម្រើការ' : 'ឈប់បម្រើការ'}`), '')),
+      rowEl(lab('ប្តូរផ្នែក ', newDept), btn('✅ អនុវត្ត', () => { const nd = newDept.value.trim(); if (!nd) { say('សូមបញ្ចូលឈ្មោះផ្នែកថ្មី'); return; } run({ dept: nd }, `ប្តូរផ្នែក → ${nd}`); }, ''))));
+    draw();
+  }
+
+  // ------------------------------------------------------------ ផ្ទាំង៖ នាំចេញ ----
+  function paneExport(body) {
+    const act = h('input', { type: 'checkbox' }); act.checked = true;
+    const sal = h('input', { type: 'checkbox' });
+    const pool = () => emps().filter(e => !act.checked || e.status === 'active');
+    body.appendChild(card('📤 នាំចេញបញ្ជីបុគ្គលិក',
+      rowEl(h('label', null, act, ' តែបុគ្គលិកកំពុងបម្រើការ'), h('label', null, sal, ' រួមទាំងប្រាក់ខែ')),
+      rowEl(btn('⬇ CSV (បើកក្នុង Excel)', () => {
+        const head = ['អត្តលេខ', 'Username', 'ឈ្មោះ', 'មុខងារ', 'ផ្នែក', 'ទូរស័ព្ទ', 'Email', 'ថ្ងៃចូលធ្វើការ', 'ស្ថានភាព'].concat(sal.checked ? ['ប្រាក់ខែ'] : []);
+        const rows = pool().map(e => [e.id, e.username, e.name, e.position, e.dept, e.phone, e.email, e.startDate, e.status === 'active' ? 'សកម្ម' : 'ឈប់បម្រើការ'].concat(sal.checked ? [e.salary] : []));
+        download(`employees-${ymKey(today0())}.csv`, toCsv([head].concat(rows)), 'text/csv;charset=utf-8');
+      }, ''),
+        btn('📇 vCard (.vcf) — បញ្ចូលទៅទូរស័ព្ទ', () => {
+          const list = pool().filter(e => e.phone);
+          if (!list.length) { say('គ្មានបុគ្គលិកដែលមានលេខទូរស័ព្ទ'); return; }
+          download('employees.vcf', toVcf(list, lsGet('wc_company', '')), 'text/vcard;charset=utf-8');
+        })),
+      h('p', { class: 'hrt-muted', text: 'vCard នាំចូលទៅ Contacts លើទូរស័ព្ទ ឬ Google Contacts បាន។ លេខ 0xx ត្រូវបានបំប្លែងជា +855xx។ ឯកសារ CSV មានអក្សរខ្មែរ (UTF-8 BOM) ដូច្នេះបើកក្នុង Excel បានត្រឹមត្រូវ។' })));
+  }
+
   // ------------------------------------------------------------ ទំព័រ «ឧបករណ៍ HR» ----
   const SUBS = [
     ['remind', '🔔 ការរំលឹក', paneReminders],
+    ['calendar', '📅 ប្រតិទិន', paneCalendar],
+    ['attendance', '📊 វត្តមាន', paneAttendance],
+    ['leave', '🌴 ច្បាប់', paneLeave],
     ['quality', '🧹 ពិនិត្យទិន្នន័យ', paneQuality],
     ['stats', '📈 ស្ថិតិ', paneStats],
+    ['cert', '📄 លិខិតបញ្ជាក់', paneCert],
+    ['tpl', '✉️ គំរូសារ', paneTemplates],
+    ['raise', '💹 ឡើងប្រាក់ខែ', paneRaise],
+    ['bulk', '🔁 កែច្រើន', paneBulk],
+    ['export', '📤 នាំចេញ', paneExport],
     ['backup', '💾 បម្រុងទុក', paneBackup]
   ];
   let sub = 'remind', bodyEl = null, tabsEl = null;
@@ -401,7 +941,6 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
 
   // ------------------------------------------------------------ ស្វែងរកលឿន (Ctrl+K) ----
   let pal = null, palInput = null, palList = null, palItems = [], palSel = 0;
-  const appVisible = () => { const m = document.getElementById('mainContainer'); return !!m && getComputedStyle(m).display !== 'none'; };
 
   function paletteItems(q) {
     q = q.trim().toLowerCase();
@@ -432,8 +971,6 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
       row.addEventListener('click', () => runPalette(i));
       palList.appendChild(row);
     });
-    const cur = palList.children[palSel];
-    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
 
   function runPalette(i) {
@@ -444,7 +981,8 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
   }
 
   function openPalette() {
-    if (!appVisible()) return; // មិនទាន់ចូលគណនី
+    const main = document.getElementById('mainContainer');
+    if (!main || main.style.display === 'none') return; // មិនទាន់ចូលគណនី
     if (!pal) {
       pal = h('div', { class: 'hrt-pal' });
       palInput = h('input', { type: 'text', placeholder: '🔎 ស្វែងរកទំព័រ ឬបុគ្គលិក (ឈ្មោះ/អត្តលេខ/ទូរស័ព្ទ/ផ្នែក)…', autocomplete: 'off' });
@@ -454,7 +992,6 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
       pal.addEventListener('mousedown', e => { if (e.target === pal) closePalette(); });
       palInput.addEventListener('input', () => { palSel = 0; renderPalette(); });
       palInput.addEventListener('keydown', e => {
-        if (e.isComposing || e.keyCode === 229) return;
         if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); renderPalette(); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); renderPalette(); }
         else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }
@@ -470,6 +1007,7 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
 
   // ------------------------------------------------------------ ចាប់ផ្តើម ----
   function init() {
+    if (typeof AUDIT_LABELS !== 'undefined' && AUDIT_LABELS && !AUDIT_LABELS.bulk_edit) { try { AUDIT_LABELS.bulk_edit = '🔁 កែបុគ្គលិកច្រើននាក់'; } catch (_) { /* ignore */ } }
     const empNav = document.querySelector('.nav-item[data-tab="employees"]');
     const empTab = document.getElementById('employeesTab');
     if (!empNav || !empTab) return false;
@@ -498,7 +1036,6 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
     }
     document.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && String(e.key).toLowerCase() === 'k') {
-        if (!appVisible()) return;
         e.preventDefault();
         if (pal && pal.classList.contains('open')) closePalette(); else openPalette();
       }
@@ -515,5 +1052,5 @@ details.hrt-d summary{cursor:pointer;font-weight:600;padding:4px 0}
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   }
-  window.hrTools = { computeReminders, computeQuality, computeStats, runBackup, openPalette };
+  window.hrTools = { computeReminders, computeQuality, computeStats, computeAttendance, computeLeave, computeCalendar, computeRaise, fillTpl, certificateHtml, toCsv, toVcf, khDate, runBackup, openPalette, panes: SUBS.reduce((o, x) => { o[x[0]] = x[2]; return o; }, {}) };
 })();
