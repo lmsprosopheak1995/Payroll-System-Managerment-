@@ -440,7 +440,8 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ គណនី Finance (admin ប៉ុណ្ណោះ) ----
-  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1'; } catch (_) { return false; } };
+  // ត្រូវមានទាំង role flag និង admin session (ដូច finance-auth.js) — កុំឲ្យ flag ចាស់ (stale) ធ្វើឲ្យ admin បាត់ផ្ទាំង
+  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1' && sessionStorage.getItem('admin_portal_session') === '1'; } catch (_) { return false; } };
 
   function paneAccess(body) {
     const url = new URL('finance.html', location.href).href;
@@ -501,15 +502,22 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     ['overview', '📊 សង្ខេប', paneOverview],
     ['cash', '💵 បើកសាច់ប្រាក់', paneCash],
     ['trend', '📈 និន្នាការ', paneTrend],
-    ['budget', '🎯 ថវិកា', paneBudget]
+    ['budget', '🎯 ថវិកា', paneBudget],
+    ['access', '🔑 គណនី Finance', paneAccess] // admin ប៉ុណ្ណោះ — លាក់ពេល render តាម isFinanceRole()
   ];
-  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess]); // admin ប៉ុណ្ណោះ
+  const visibleSubs = () => SUBS.filter(x => x[0] !== 'access' || !isFinanceRole());
 
   function renderBody() {
     if (!bodyEl) return;
     bodyEl.textContent = '';
-    Array.from(tabsEl.children).forEach(b => b.classList.toggle('on', b.dataset.sub === sub));
-    const def = SUBS.find(x => x[0] === sub) || SUBS[0];
+    const vis = visibleSubs();
+    if (!vis.some(x => x[0] === sub)) sub = vis[0][0];
+    Array.from(tabsEl.children).forEach(b => {
+      const show = vis.some(x => x[0] === b.dataset.sub);
+      b.hidden = !show; b.style.display = show ? '' : 'none';
+      b.classList.toggle('on', b.dataset.sub === sub);
+    });
+    const def = vis.find(x => x[0] === sub) || vis[0];
     try {
       const r = def[2](bodyEl);
       if (r && typeof r.catch === 'function') r.catch(ex => { console.error('finance', ex); bodyEl.appendChild(empty('មានបញ្ហា៖ ' + (ex.message || ex))); });
