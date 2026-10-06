@@ -12,6 +12,7 @@
  *   💳 ប័ណ្ណប្រាក់ខែ  — ព្រីន Payslip ម្នាក់ៗ ឬច្រើននាក់ (២ សន្លឹកក្នុងមួយទំព័រ)
  *   📋 អនុម័តប្រាក់ខែ — លំហូរ រៀបចំ → ត្រួតពិនិត្យ → អនុម័ត → ចាក់សោ + ប្រវត្តិ + រកការប្រែប្រួលក្រោយអនុម័ត
  *   📒 Journal       — Journal Entry សម្រាប់គណនេយ្យ (Dr/Cr តុល្យភាព) + CSV + ព្រីន
+ *   🛠 ឧបករណ៍ Payroll — ភ្ជាប់ប៊ូតុងដែលមានស្រាប់ក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (គណនា ព្រីន PDF Excel CSV បិទខែ ។ល។) សម្រាប់គណនី Finance
  *
  * ទិន្នន័យទាំងអស់គណនាដោយមុខងាររបស់កម្មវិធីដដែល (summarizeEmpMonth, calcAdvanceRow, payrollEmployeesForMonth)
  * ដូច្នេះចំនួនសរុបត្រូវនឹងផ្ទាំង «ប្រាក់ខែប្រចាំខែ»។ ទំព័រនេះ «អាន» តែប៉ុណ្ណោះ មិនកែទិន្នន័យអ្វីក្នុង Supabase ទេ។
@@ -841,6 +842,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     body.appendChild(h('div', { class: 'fin-grid' },
       statEl(wfLabel(st), `ស្ថានភាព ${monthLabel(finMonth)}`), statEl(`${g.n} នាក់`, 'បុគ្គលិកក្នុងបញ្ជី'), statEl('$' + usd2(g.net), 'ត្រូវបើកសរុប (សុទ្ធ)'),
       statEl(`${errs} / ${issues.length - errs}`, 'បញ្ហាធ្ងន់ធ្ងរ / ព្រមាន (មើលផ្ទាំង 🔍)')));
+    if (byId('monthlyLockText') && syncMonthly()) { const t = byId('monthlyLockText').textContent.trim(); if (t) body.appendChild(rowEl(badge('🔒 ការបិទខែក្នុងប្រព័ន្ធ៖ ' + t))); }
     const dr = wfDrift(rec, g);
     if (dr && (Math.abs(dr.net) >= 0.01 || dr.n !== 0)) body.appendChild(rowEl(badge(`⚠ ទិន្នន័យប្រែប្រួលពីពេល${wfLabel(st === 'locked' ? 'approved' : st).slice(2)} — ប្រាក់សុទ្ធ ${dr.net >= 0 ? '+' : '−'}$${usd2(Math.abs(dr.net))}${dr.n ? `, បុគ្គលិក ${dr.n > 0 ? '+' : ''}${dr.n}` : ''}`, 'late')));
     if (errs > 0 && st !== 'locked') body.appendChild(rowEl(badge(`⚠ មានបញ្ហាធ្ងន់ធ្ងរ ${errs} — ពិនិត្យក្នុងផ្ទាំង «🔍 ពិនិត្យ» មុនអនុម័ត`, 'warn')));
@@ -860,7 +862,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     };
     const acts = (WF_ACTIONS[st] || []).map(a => { const b = btn(a[1], () => act(a[0]), wfIdx(a[0]) > idx ? '' : 'secondary'); if (a[2] && fin) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; } return b; });
     body.appendChild(card('សកម្មភាព', rowEl(noteIn), rowEl(...acts),
-      h('p', { class: 'fin-muted', text: (fin ? 'គណនី Finance អាច «ដាក់ឲ្យត្រួតពិនិត្យ» និងត្រឡប់ទៅរៀបចំ។ ការអនុម័ត ចាក់សោ និងដោះសោ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។ ' : '') + 'ស្ថានភាពរក្សាក្នុង browser នេះ។ «ចាក់សោ» មិនទប់ស្កាត់ការកែទិន្នន័យទេ ប៉ុន្តែនឹងបង្ហាញការព្រមានពេលចំនួនប្រែប្រួល។' })));
+      h('p', { class: 'fin-muted', text: (fin ? 'គណនី Finance អាច «ដាក់ឲ្យត្រួតពិនិត្យ» និងត្រឡប់ទៅរៀបចំ។ ការអនុម័ត ចាក់សោ និងដោះសោ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។ ' : '') + 'ស្ថានភាពរក្សាក្នុង browser នេះ។ «ចាក់សោ» មិនទប់ស្កាត់ការកែទិន្នន័យទេ ប៉ុន្តែនឹងបង្ហាញការព្រមានពេលចំនួនប្រែប្រួល។ ការបិទខែពិតប្រាកដ ប្រើក្នុងផ្ទាំង «🛠 ឧបករណ៍ Payroll»។' })));
 
     if (rec.history.length) body.appendChild(card('ប្រវត្តិ', mkTable(['ពេលវេលា', 'ស្ថានភាព', 'ដោយ', 'សុទ្ធ ($)', 'កំណត់សម្គាល់'],
       rec.history.slice().reverse().map(x => [x.at ? new Date(x.at).toLocaleString() : '-', wfStatusBadge(x.st), x.by || '-', usd2(x.net), x.note || '']), [3])));
@@ -948,6 +950,61 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     render();
   }
 
+  // ------------------------------------------------------------ ឧបករណ៍ Payroll ----
+  // ភ្ជាប់ទៅមុខងារដែលមានស្រាប់ក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (គណនា ព្រីន PDF Excel CSV បិទខែ ។ល។)
+  // ព្រោះគណនី Finance មើលផ្ទាំងនោះមិនបាន។ ប៊ូតុងនីមួយៗចុចប៊ូតុងដើមក្នុងផ្ទាំងនោះ ដោយតម្រឹមខែឲ្យដូចទំព័រនេះសិន។
+  const byId = id => document.getElementById(id);
+  const toolAdminOnly = b => /^monthly(Backup|Audit)Btn$/.test(b.id || '') || /backup|restore|ប្រវត្តិកែប្រែ/i.test(b.textContent || '');
+  function syncMonthly(force) {
+    const mm = byId('monthlyMonth');
+    if (!mm) return false;
+    if (force || mm.value !== finMonth) {
+      mm.value = finMonth;
+      if (typeof renderMonthlyTab === 'function') { try { renderMonthlyTab(); } catch (ex) { console.error('finance sync monthly', ex); } }
+    }
+    return true;
+  }
+
+  function paneTools(body) {
+    body.appendChild(rowEl(...monthNav()));
+    const run = byId('monthlyRunBtn');
+    if (!run || !syncMonthly()) { body.appendChild(empty('រកមិនឃើញផ្ទាំង «ប្រាក់ខែប្រចាំខែ» ក្នុងកម្មវិធី — មិនអាចភ្ជាប់មុខងារបានទេ')); return; }
+    const fin = isFinanceRole();
+    const proxy = (orig, cls) => {
+      const lock = fin && toolAdminOnly(orig);
+      const b = btn((orig.textContent || '').trim(), () => { syncMonthly(); orig.click(); }, cls);
+      if (lock) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; }
+      return b;
+    };
+    const skip = new Set(['monthlyLockBtn', 'monthlyUnlockBtn']);
+    const ctl = [];
+    const mode = byId('payCurrencyMode');
+    if (mode) {
+      const sel = h('select', null, Array.from(mode.options).map(o => h('option', { value: o.value, text: o.textContent })));
+      sel.value = mode.value;
+      sel.addEventListener('change', () => { mode.value = sel.value; if (typeof setPayMode === 'function') setPayMode(sel.value); });
+      ctl.push(sel);
+    }
+    Array.from(run.parentElement.querySelectorAll('button')).forEach(b => { if (!skip.has(b.id)) ctl.push(proxy(b, b === run ? '' : 'secondary')); });
+    body.appendChild(card('🛠 ឧបករណ៍ Payroll — ' + monthLabel(finMonth), rowEl(...ctl),
+      h('p', { class: 'fin-muted', text: 'ប៊ូតុងទាំងនេះដំណើរការដូចក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (ទិន្នន័យ និងទ្រង់ទ្រាយដូចគ្នា) ដោយតម្រឹមខែតាមទំព័រនេះ។' + (fin ? ' Backup/Restore និងប្រវត្តិកែប្រែ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។' : '') })));
+
+    const lockTxt = byId('monthlyLockText'), lockBtn = byId('monthlyLockBtn'), unBtn = byId('monthlyUnlockBtn'), days = byId('lockDisputeDays');
+    if (lockTxt) {
+      const parts = [];
+      if (days && lockBtn && lockBtn.style.display !== 'none') {
+        const di = h('input', { type: 'number', min: '0', max: '60', step: '1', value: days.value, style: 'width:70px' });
+        di.addEventListener('input', () => { days.value = di.value; days.dispatchEvent(new Event('input', { bubbles: true })); });
+        parts.push(lab('រយៈពេលតវ៉ា (ថ្ងៃ) ', di));
+      }
+      const mkLock = (orig, cls) => { const b = btn((orig.textContent || '').trim(), () => { syncMonthly(); orig.click(); setTimeout(renderBody, 900); }, cls); if (fin) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; } return b; };
+      if (lockBtn && lockBtn.style.display !== 'none') parts.push(mkLock(lockBtn, ''));
+      if (unBtn && unBtn.style.display !== 'none') parts.push(mkLock(unBtn, 'danger'));
+      body.appendChild(card('🔒 ការបិទខែ (ប្រព័ន្ធ)', h('div', { style: 'font-size:.85rem;margin:0 0 6px' }, lockTxt.textContent.trim() || '-'), rowEl(...parts),
+        h('p', { class: 'fin-muted', text: 'នេះជាការបិទខែពិតប្រាកដរបស់ប្រព័ន្ធ (payroll-close) ។' + (fin ? ' បិទ/បើកខែឡើងវិញ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។' : '') })));
+    }
+  }
+
   // ------------------------------------------------------------ ទំព័រ ----
   const SUBS = [
     ['overview', '📊 សង្ខេប', paneOverview],
@@ -956,6 +1013,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     ['cash', '💵 បើកសាច់ប្រាក់', paneCash],
     ['paid', '✅ ស្ថានភាពបើកប្រាក់', panePaid],
     ['approve', '📋 អនុម័តប្រាក់ខែ', paneApprove],
+    ['tools', '🛠 ឧបករណ៍ Payroll', paneTools],
     ['trend', '📈 និន្នាការ', paneTrend],
     ['annual', '📆 ប្រចាំឆ្នាំ', paneAnnual],
     ['budget', '🎯 ថវិកា', paneBudget],
