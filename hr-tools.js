@@ -10,7 +10,7 @@
  *      🌴 ច្បាប់      — ឈប់ថ្ងៃនេះ ១៤ ថ្ងៃខាងមុខ រង់ចាំអនុម័ត ស្ថិតិប្រចាំឆ្នាំ
  *      📄 លិខិតបញ្ជាក់ — បង្កើតលិខិតបញ្ជាក់ការងារ (ព្រីន/PDF)
  *      ✉️ គំរូសារ    — សារជូនពរ/ស្វាគមន៍/រំលឹក ចម្លងទៅ Telegram
- *      💹 ឡើងប្រាក់ខែ — ក្លែងធ្វើការឡើងប្រាក់ខែ (គណនាតែប៉ុណ្ណោះ)
+ *      💹 ឡើងប្រាក់ខែ — មើលជាមុន ហើយអនុវត្តបាន (មាន CSV បម្រុងទុក Audit log និងប៊ូតុងត្រឡប់វិញ)
  *      🔁 កែច្រើន     — ប្តូរឈ្មោះផ្នែក/មុខងារ និងស្ថានភាព/ផ្នែកច្រើននាក់ (សរសេរទៅ Supabase)
  *      📤 នាំចេញ     — CSV និង vCard (.vcf)
  *      💾 បម្រុងទុក  — ទាញយកទិន្នន័យ Supabase ជាឯកសារ JSON (អានតែប៉ុណ្ណោះ មិនកែអ្វីទេ)
@@ -773,23 +773,123 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     refresh();
   }
 
-  // ------------------------------------------------------------ ផ្ទាំង៖ ឡើងប្រាក់ខែ (ក្លែងធ្វើ) ----
+  // ------------------------------------------------------------ ផ្ទាំង៖ ឡើងប្រាក់ខែ (មើលជាមុន + អនុវត្ត) ----
   const raiseState = { dept: '', mode: 'pct', value: '5', minYears: '0', round: '1' };
+  const LS_RAISE = 'hrt_last_raise';
+  let raiseApplied = null; // លទ្ធផលនៃការអនុវត្តដែលទើបធ្វើ (បង្ហាញជំនួសតារាងមើលជាមុន)
+  const stampNow = () => { const d = new Date(); return `${d.getFullYear()}${z2(d.getMonth() + 1)}${z2(d.getDate())}-${z2(d.getHours())}${z2(d.getMinutes())}`; };
+  const auditSafe = (action, e, oldV, newV) => {
+    if (typeof logAudit !== 'function') return;
+    try { logAudit(action, { entity: 'employee', ref: e.id, employeeId: e.id, old: { field: 'salary', value: oldV }, new: { field: 'salary', value: newV } }); } catch (_) { /* ignore */ }
+  };
+  const refreshApp = () => { if (typeof renderAll === 'function') { try { renderAll(); } catch (_) { /* ignore */ } } };
+
+  // រក្សាទុកប្រាក់ខែថ្មីម្នាក់ម្តងៗ តាម upsertEmployee របស់កម្មវិធី (ដូចការកែក្នុងទម្រង់បុគ្គលិក)
+  async function applyRaise(rows, onProgress) {
+    if (typeof upsertEmployee !== 'function') throw new Error('មិនឃើញមុខងារ upsertEmployee ក្នុង script.js');
+    const ok = [], fail = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i], e = r.e, prev = e.salary;
+      onProgress(`កំពុងរក្សាទុក ${i + 1}/${rows.length} — ${e.name}`);
+      e.salary = r.nw;
+      let saved = false;
+      try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
+      if (!saved) { e.salary = prev; fail.push(r); continue; }
+      ok.push({ id: e.id, name: e.name, old: r.old, nw: r.nw });
+      auditSafe('salary_raise', e, r.old, r.nw);
+    }
+    refreshApp();
+    return { ok, fail };
+  }
+
+  // ត្រឡប់វិញ៖ ស្ដារតែអ្នកដែលប្រាក់ខែនៅតែស្មើតម្លៃថ្មី (មិនជាន់ការកែក្រោយមក)
+  async function undoRaise(rec) {
+    if (typeof upsertEmployee !== 'function') throw new Error('មិនឃើញមុខងារ upsertEmployee ក្នុង script.js');
+    const byId = new Map(emps().map(e => [String(e.id), e]));
+    const ok = [], skipped = [], fail = [];
+    for (const x of rec.rows) {
+      const e = byId.get(String(x.id));
+      if (!e || Math.abs(Number(e.salary) - x.nw) > 0.0001) { skipped.push(x); continue; }
+      const prev = e.salary;
+      e.salary = x.old;
+      let saved = false;
+      try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
+      if (!saved) { e.salary = prev; fail.push(x); continue; }
+      ok.push(x);
+      auditSafe('salary_raise_undo', e, x.nw, x.old);
+    }
+    refreshApp();
+    return { ok, skipped, fail };
+  }
+
   function paneRaise(body) {
     const out = h('div');
+    const prog = h('p', { class: 'hrt-muted', text: '' });
+    let busy = false;
     const calc = () => computeRaise(emps(), raiseState);
+
+    const undoBlock = () => {
+      const last = getJson(LS_RAISE, null);
+      if (!last || !Array.isArray(last.rows) || !last.rows.length) return null;
+      const when = last.when ? new Date(last.when).toLocaleString() : '';
+      return rowEl(btn(`↩ ត្រឡប់ការឡើងប្រាក់ខែចុងក្រោយ (${last.rows.length} នាក់ · ${when})`, async () => {
+        if (busy) return;
+        if (!(await ask(`ត្រឡប់ប្រាក់ខែ ${last.rows.length} នាក់ ទៅតម្លៃមុនការឡើង?\n(អ្នកដែលប្រាក់ខែត្រូវបានកែក្រោយមក នឹងមិនត្រូវបានប៉ះពាល់ទេ)`))) return;
+        busy = true;
+        try {
+          const res = await undoRaise(last);
+          if (!res.fail.length) lsSet(LS_RAISE, '');
+          raiseApplied = null;
+          await say(`✓ បានស្ដារ ${res.ok.length} នាក់` + (res.skipped.length ? `\nរំលង ${res.skipped.length} នាក់ (ប្រាក់ខែត្រូវបានកែក្រោយមក ឬលុបបុគ្គលិករួច)` : '') + (res.fail.length ? `\n⚠ រក្សាទុកមិនបាន ${res.fail.length} នាក់` : ''));
+        } catch (ex) { await say('ត្រឡប់មិនបាន៖ ' + (ex.message || ex)); }
+        finally { busy = false; renderOut(); }
+      }, 'danger'));
+    };
+
     const renderOut = () => {
       out.textContent = '';
+      if (raiseApplied) {
+        const A = raiseApplied;
+        out.appendChild(card(`✅ បានអនុវត្តរួច — ${A.ok.length} នាក់`,
+          A.ok.length ? mkTable(['ឈ្មោះ', 'ចាស់ ($)', 'ថ្មី ($)', 'ឡើង ($)'], A.ok.map(x => [x.name, money(x.old), money(x.nw), (x.nw - x.old >= 0 ? '+' : '') + money(x.nw - x.old)])) : empty('គ្មាន'),
+          A.fail.length ? h('p', { class: 'hrt-badge late', text: `⚠ រក្សាទុកមិនបាន ${A.fail.length} នាក់៖ ${A.fail.map(x => x.e.name).join(', ')}` }) : null,
+          rowEl(btn('🔄 គណនីថ្មី', () => { raiseApplied = null; renderOut(); }, ''))));
+        const u = undoBlock(); if (u) out.appendChild(u);
+        return;
+      }
       const r = calc();
-      if (!r.n) { out.appendChild(empty('គ្មានបុគ្គលិកត្រូវតាមលក្ខខណ្ឌ (ឬមិនទាន់មានប្រាក់ខែ)')); return; }
+      if (!r.n) { out.appendChild(empty('គ្មានបុគ្គលិកត្រូវតាមលក្ខខណ្ឌ (ឬមិនទាន់មានប្រាក់ខែ)')); const u0 = undoBlock(); if (u0) out.appendChild(u0); return; }
       out.appendChild(h('div', { class: 'hrt-grid' },
         statEl(String(r.n), 'បុគ្គលិកដែលរងផលប៉ះពាល់'), statEl('$' + money(r.oldSum), 'ប្រាក់ខែសរុបបច្ចុប្បន្ន'),
-        statEl('$' + money(r.newSum), 'ប្រាក់ខែសរុបថ្មី'), statEl('+$' + money(r.diff), 'ចំណាយបន្ថែមក្នុងមួយខែ'), statEl('+$' + money(r.diff * 12), 'ចំណាយបន្ថែមក្នុងមួយឆ្នាំ')));
+        statEl('$' + money(r.newSum), 'ប្រាក់ខែសរុបថ្មី'), statEl((r.diff >= 0 ? '+' : '') + '$' + money(r.diff), 'ចំណាយបន្ថែមក្នុងមួយខែ'), statEl((r.diff >= 0 ? '+' : '') + '$' + money(r.diff * 12), 'ចំណាយបន្ថែមក្នុងមួយឆ្នាំ')));
       const rows = r.rows.slice().sort((a, b) => String(a.e.name).localeCompare(String(b.e.name)));
       out.appendChild(mkTable(['ឈ្មោះ', 'ផ្នែក', 'ឆ្នាំការងារ', 'ប្រាក់ខែចាស់ ($)', 'ប្រាក់ខែថ្មី ($)', 'ឡើង ($)'],
         rows.map(x => [x.e.name, x.e.dept || '-', x.years.toFixed(1), money(x.old), money(x.nw), (x.diff >= 0 ? '+' : '') + money(x.diff)])));
-      out.appendChild(rowEl(btn('⬇ CSV', () => download('salary-simulation.csv', toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ឡើង']].concat(rows.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, x.diff]))), 'text/csv;charset=utf-8'))));
+      out.appendChild(rowEl(
+        btn('⬇ CSV', () => download('salary-simulation.csv', toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ឡើង']].concat(rows.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, x.diff]))), 'text/csv;charset=utf-8')),
+        btn('✅ អនុវត្តការឡើងប្រាក់ខែ', async () => {
+          if (busy) return;
+          const todo = rows.filter(x => x.nw > 0 && Math.abs(x.diff) > 0.0001);
+          if (!todo.length) { await say('គ្មានអ្វីត្រូវអនុវត្ត (ប្រាក់ខែថ្មីដូចចាស់ ឬ ≤ 0)'); return; }
+          const sumDiff = todo.reduce((a, x) => a + x.diff, 0);
+          const neg = todo.filter(x => x.diff < 0).length, big = todo.filter(x => x.old > 0 && x.diff / x.old > 0.5).length;
+          const msg = `អនុវត្តការប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់?\n• ចំណាយបន្ថែម ${sumDiff >= 0 ? '+' : ''}$${money(sumDiff)} ក្នុងមួយខែ ($${money(sumDiff * 12)} ក្នុងមួយឆ្នាំ)\n• ប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចមិនប្តូរទេ\n• ប្រព័ន្ធនឹងទាញយក CSV នៃប្រាក់ខែចាស់ជាមុន ហើយអាចត្រឡប់វិញបាន`
+            + (neg ? `\n⚠ មាន ${neg} នាក់ត្រូវបានកាត់ប្រាក់ខែ` : '') + (big ? `\n⚠ មាន ${big} នាក់ឡើងលើស ៥០%` : '');
+          if (!(await ask(msg))) return;
+          busy = true;
+          try {
+            download(`salary-before-${stampNow()}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី']].concat(todo.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw]))), 'text/csv;charset=utf-8');
+            const res = await applyRaise(todo, m => { prog.textContent = m; });
+            prog.textContent = '';
+            if (res.ok.length) lsSet(LS_RAISE, JSON.stringify({ when: new Date().toISOString(), rows: res.ok }));
+            raiseApplied = res;
+            await say(`✓ បានអនុវត្ត ${res.ok.length} នាក់` + (res.fail.length ? `\n⚠ រក្សាទុកមិនបាន ${res.fail.length} នាក់` : ''));
+          } catch (ex) { prog.textContent = ''; await say('អនុវត្តមិនបាន៖ ' + (ex.message || ex)); }
+          finally { busy = false; renderOut(); }
+        }, '')));
+      const u = undoBlock(); if (u) out.appendChild(u);
     };
+
     const depts = distinct(emps().map(e => e.dept)).sort();
     const selDept = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d, text: d })));
     selDept.value = raiseState.dept;
@@ -799,13 +899,13 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     const minY = h('input', { type: 'number', min: '0', step: '0.5', value: raiseState.minYears, style: 'width:80px' });
     const rnd = h('select', null, [['0', 'មិនបង្គត់'], ['1', 'បង្គត់ $1'], ['5', 'បង្គត់ $5'], ['10', 'បង្គត់ $10']].map(x => h('option', { value: x[0], text: x[1] })));
     rnd.value = raiseState.round;
-    const bind = (el, key) => el.addEventListener('input', () => { raiseState[key] = el.value; renderOut(); });
+    const bind = (el, key) => el.addEventListener('input', () => { raiseState[key] = el.value; raiseApplied = null; renderOut(); });
     bind(selDept, 'dept'); bind(selMode, 'mode'); bind(val, 'value'); bind(minY, 'minYears'); bind(rnd, 'round');
-    selDept.addEventListener('change', () => { raiseState.dept = selDept.value; renderOut(); });
-    body.appendChild(card('💹 ក្លែងធ្វើការឡើងប្រាក់ខែ (គណនាតែប៉ុណ្ណោះ — មិនរក្សាទុក)',
-      rowEl(lab('ផ្នែក ', selDept), lab('របៀប ', selMode), lab('តម្លៃ ', val), lab('ឆ្នាំការងារអប្បបរមា ', minY), lab('បង្គត់ ', rnd)), out));
+    selDept.addEventListener('change', () => { raiseState.dept = selDept.value; raiseApplied = null; renderOut(); });
+    body.appendChild(card('💹 ឡើងប្រាក់ខែ — មើលជាមុន ហើយអនុវត្តបាន',
+      rowEl(lab('ផ្នែក ', selDept), lab('របៀប ', selMode), lab('តម្លៃ ', val), lab('ឆ្នាំការងារអប្បបរមា ', minY), lab('បង្គត់ ', rnd)), out, prog));
     renderOut();
-    body.appendChild(h('p', { class: 'hrt-muted', text: 'ប្រើសម្រាប់ផែនការថវិកា។ ការគណនានេះមិនកែប្រាក់ខែក្នុងប្រព័ន្ធទេ — ត្រូវកែក្នុងទម្រង់បុគ្គលិកដោយខ្លួនឯង។' }));
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ការអនុវត្តរក្សាទុកប្រាក់ខែមូលដ្ឋានថ្មីក្នុង Supabase ម្នាក់ម្តងៗ (ដូចការកែក្នុងទម្រង់បុគ្គលិក) ហើយកត់ត្រាក្នុង Audit log។ វាប៉ះពាល់ប្រាក់ខែនៃខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចរក្សាតម្លៃដើម។ មុនអនុវត្ត ប្រព័ន្ធទាញយក CSV នៃប្រាក់ខែចាស់ ហើយអាចចុច «ត្រឡប់» វិញបាន។' }));
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ កែច្រើន (សរសេរទៅ Supabase) ----
@@ -1007,7 +1107,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
 
   // ------------------------------------------------------------ ចាប់ផ្តើម ----
   function init() {
-    if (typeof AUDIT_LABELS !== 'undefined' && AUDIT_LABELS && !AUDIT_LABELS.bulk_edit) { try { AUDIT_LABELS.bulk_edit = '🔁 កែបុគ្គលិកច្រើននាក់'; } catch (_) { /* ignore */ } }
+    if (typeof AUDIT_LABELS !== 'undefined' && AUDIT_LABELS && !AUDIT_LABELS.bulk_edit) { try { AUDIT_LABELS.bulk_edit = '🔁 កែបុគ្គលិកច្រើននាក់'; AUDIT_LABELS.salary_raise = '💹 ឡើងប្រាក់ខែ'; AUDIT_LABELS.salary_raise_undo = '↩ ត្រឡប់ការឡើងប្រាក់ខែ'; } catch (_) { /* ignore */ } }
     const empNav = document.querySelector('.nav-item[data-tab="employees"]');
     const empTab = document.getElementById('employeesTab');
     if (!empNav || !empTab) return false;
