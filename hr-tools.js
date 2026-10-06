@@ -940,9 +940,11 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
           const neg = todo.filter(x => x.diff < 0).length, big = todo.filter(x => x.old > 0 && x.diff / x.old > 0.5).length;
           const futureEff = parseYMD(raiseState.effDate) > today0();
           const eff = raiseState.effDate;
-          const msg = `អនុវត្តការប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់ ចាប់ពីថ្ងៃទី ${effLabel()}?\n• ចំណាយបន្ថែម ${sumDiff >= 0 ? '+' : ''}$${money(sumDiff)} ក្នុងមួយខែ ($${money(sumDiff * 12)} ក្នុងមួយឆ្នាំ)\n• ប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចមិនប្តូរទេ\n• ប្រព័ន្ធនឹងទាញយក CSV នៃប្រាក់ខែចាស់ជាមុន ហើយអាចត្រឡប់វិញបាន`
-            + (neg ? `\n⚠ មាន ${neg} នាក់ត្រូវបានកាត់ប្រាក់ខែ` : '') + (big ? `\n⚠ មាន ${big} នាក់ឡើងលើស ៥០%` : '')
-            + (futureEff ? `\n🕒 ថ្ងៃកំណត់នៅអនាគត — ប្រព័ន្ធនឹងរក្សាទុកជាកាលវិភាគ ហើយប្តូរប្រាក់ខែដោយស្វ័យប្រវត្តិនៅថ្ងៃ ${effLabel()} (ពេលមាននរណាបើកកម្មវិធី)។ ប្រាក់ខែបច្ចុប្បន្នមិនប្តូរទេរហូតដល់ថ្ងៃនោះ` : '');
+          const warnTxt = (neg ? `\n⚠ មាន ${neg} នាក់ត្រូវបានកាត់ប្រាក់ខែ` : '') + (big ? `\n⚠ មាន ${big} នាក់ឡើងលើស ៥០%` : '');
+          const costTxt = `• ចំណាយបន្ថែម ${sumDiff >= 0 ? '+' : ''}$${money(sumDiff)} ក្នុងមួយខែ ($${money(sumDiff * 12)} ក្នុងមួយឆ្នាំ)`;
+          const msg = futureEff
+            ? `កំណត់ពេលប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់ ចាប់ពីថ្ងៃទី ${effLabel()}?\n${costTxt}\n• ប្រាក់ខែបច្ចុប្បន្នមិនប្តូរទេ ហើយប្រព័ន្ធនឹងអនុវត្តដោយស្វ័យប្រវត្តិនៅថ្ងៃនោះ (ពេលមាននរណាបើកកម្មវិធី)\n• អាចលុបកាលវិភាគបានគ្រប់ពេលមុនដល់ថ្ងៃកំណត់` + warnTxt
+            : `អនុវត្តការប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់ ចាប់ពីថ្ងៃទី ${effLabel()}?\n${costTxt}\n• ប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចមិនប្តូរទេ\n• ប្រព័ន្ធនឹងទាញយក CSV នៃប្រាក់ខែចាស់ជាមុន ហើយអាចត្រឡប់វិញបាន` + warnTxt;
           if (!(await ask(msg))) return;
           busy = true;
           if (futureEff) {
