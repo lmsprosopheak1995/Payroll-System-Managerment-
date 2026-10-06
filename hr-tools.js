@@ -783,7 +783,10 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     if (typeof logAudit !== 'function') return;
     try { logAudit(action, { entity: 'employee', ref: e.id, employeeId: e.id, old: { field: 'salary', value: oldV }, new: { field: 'salary', value: newV }, effective_date: eff || null }); } catch (_) { /* ignore */ }
   };
-  const refreshApp = () => { if (typeof renderAll === 'function') { try { renderAll(); } catch (_) { /* ignore */ } } };
+  const refreshApp = async () => {
+    if (typeof loadSalaryRaises === 'function') { try { await loadSalaryRaises(); } catch (_) { /* ignore */ } }
+    if (typeof renderAll === 'function') { try { renderAll(); } catch (_) { /* ignore */ } }
+  };
 
   // រក្សាទុកប្រាក់ខែថ្មីម្នាក់ម្តងៗ តាម upsertEmployee របស់កម្មវិធី (ដូចការកែក្នុងទម្រង់បុគ្គលិក)
   async function applyRaise(rows, onProgress, eff) {
@@ -799,7 +802,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       ok.push({ id: e.id, name: e.name, old: r.old, nw: r.nw, eff });
       auditSafe('salary_raise', e, r.old, r.nw, eff);
     }
-    refreshApp();
+    await refreshApp();
     return { ok, fail };
   }
 
@@ -817,9 +820,10 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
       if (!saved) { e.salary = prev; fail.push(x); continue; }
       ok.push(x);
+      try { await supabaseClient.from(RAISE_TBL).update({ status: 'undone' }).eq('employee_id', String(x.id)).eq('status', 'applied').eq('new_salary', x.nw).eq('old_salary', x.old); } catch (_) { /* ignore */ }
       auditSafe('salary_raise_undo', e, x.nw, x.old, x.eff);
     }
-    refreshApp();
+    await refreshApp();
     return { ok, skipped, fail };
   }
 
@@ -873,7 +877,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
         auditSafe('salary_raise', e, Number(r.old_salary), Number(r.new_salary), String(r.effective_date).slice(0, 10));
         res.applied.push({ name: nm, old: Number(r.old_salary), nw: Number(r.new_salary), eff: String(r.effective_date).slice(0, 10) });
       }
-      if (res.applied.length) refreshApp();
+      if (res.applied.length) await refreshApp();
     } catch (ex) { console.warn('hr-tools due raises', ex); }
     finally { dueBusy = false; }
     return res;
@@ -960,7 +964,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
             prog.textContent = '';
             if (res.ok.length) lsSet(LS_RAISE, JSON.stringify({ when: new Date().toISOString(), eff, rows: res.ok }));
             raiseApplied = res;
-            if (res.ok.length) { try { await dbInsertRaises(res.ok.map(x => ({ employee_id: String(x.id), employee_name: x.name, old_salary: x.old, new_salary: x.nw, effective_date: eff, status: 'applied', applied_at: nowIso() }))); } catch (ex) { console.warn('salary history', ex); } }
+            if (res.ok.length) { try { await dbInsertRaises(res.ok.map(x => ({ employee_id: String(x.id), employee_name: x.name, old_salary: x.old, new_salary: x.nw, effective_date: eff, status: 'applied', applied_at: nowIso() }))); } catch (ex) { console.warn('salary history', ex); } await refreshApp(); }
             await say(`✓ បានអនុវត្ត ${res.ok.length} នាក់` + (res.fail.length ? `\n⚠ រក្សាទុកមិនបាន ${res.fail.length} នាក់` : ''));
           } catch (ex) { prog.textContent = ''; await say('អនុវត្តមិនបាន៖ ' + (ex.message || ex)); }
           finally { busy = false; renderOut(); }

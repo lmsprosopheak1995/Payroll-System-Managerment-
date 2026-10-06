@@ -43,7 +43,7 @@ async function checkAdminAuthAndInit() {
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
     Object.keys(loadFailures).forEach(k => delete loadFailures[k]);
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null)]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null), loadSalaryRaises()]);
     if (typeof loadAdvRulesRemote === 'function') await loadAdvRulesRemote();
     renderAll();
     if (typeof requestAdvanceSync === 'function') requestAdvanceSync(currentMonthlyMonth());
@@ -529,8 +529,28 @@ async function removeHoliday(date) {
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
 
+// ==== ប្រវត្តិឡើងប្រាក់ខែ (salary_raises) — ប្រាក់ខែមូលដ្ឋានតាមថ្ងៃចាប់ពី ====
+let salaryRaises = []; // តែជួរ status='applied' តម្រៀបតាម effective_date
+async function loadSalaryRaises() {
+  try {
+    const { data, error } = await supabaseClient.from('salary_raises').select('*').eq('status', 'applied').order('effective_date', { ascending: true });
+    if (error) { salaryRaises = []; console.warn('salary_raises មិនទាន់អាចអាន (ប្រើ employees.salary ដដែល)', error.message); return; }
+    salaryRaises = (data || []).map(r => ({ empId: String(r.employee_id), eff: String(r.effective_date).slice(0, 10), old: parseFloat(r.old_salary) || 0, nw: parseFloat(r.new_salary) || 0 }));
+  } catch (ex) { salaryRaises = []; console.warn('loadSalaryRaises', ex); }
+}
+// ប្រាក់ខែមូលដ្ឋានរបស់បុគ្គលិកនៅថ្ងៃ date (YYYY-MM-DD)៖
+// បើមានការឡើងដែលចាប់ពីក្រោយថ្ងៃនោះ → ប្រាក់ខែមុនការឡើងដំបូងបំផុតនៃពួកវា (old) ; បើគ្មាន → employees.salary បច្ចុប្បន្ន
+function salaryOn(emp, date) {
+  const cur = parseFloat(emp && emp.salary) || 0;
+  if (!emp || !date || !salaryRaises.length) return cur;
+  const d = String(date).slice(0, 10), id = String(emp.id);
+  for (const r of salaryRaises) { if (r.empId === id && r.eff > d) return r.old; } // តម្រៀបតាមថ្ងៃ → ទីមួយ = ឡើងដំបូងបំផុតក្រោយ d
+  return cur;
+}
+const monthEndOf = month => { const [y, m] = String(month).split('-').map(Number); return `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+
 function computeRow(emp, record, date) {
-  const salary = parseFloat(emp.salary) || 0;
+  const salary = salaryOn(emp, date);
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const hourlyRate = settings.standardHours > 0 ? dailyRate / settings.standardHours : 0;
 
@@ -1758,7 +1778,7 @@ function calcLeaveBalanceRow(emp, year, rules) {
   // នៅសល់ → ផ្ទេរទៅឆ្នាំក្រោយ (ក្នុងកំណត់) ឯលើសពីនោះ = បើកលុយជំនួស
   const carryOut = rules.carryOver ? Math.min(rules.carryMaxDays, Math.max(0, remaining)) : 0;
   const cashDays = round2(Math.max(0, remaining) - carryOut);
-  const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
+  const dailyRate = settings.workDaysPerMonth > 0 ? salaryOn(emp, `${year}-12-31`) / settings.workDaysPerMonth : 0;
   const cashAmount = round2(cashDays * dailyRate);
   // ច្បាប់មានប្រាក់ខែ (ពិសេស) — កូតាផ្ទាល់ខ្លួន មិនកាត់សមាមាត្រ
   const paidQuota = months > 0 ? rules.paidQuotaDays : 0;
@@ -2541,7 +2561,7 @@ function dedItemId(empId, month) { return `auto_ded_${empId}_${month}`; }
 
 // គណនាថ្ងៃយឺត/ថ្ងៃច្បាប់ និងចំនួនប្រាក់ត្រូវកាត់សម្រាប់បុគ្គលិកម្នាក់ក្នុងមួយខែ
 function calcDeductionRow(emp, month) {
-  const salary = parseFloat(emp.salary) || 0;
+  const salary = salaryOn(emp, monthEndOf(month)); // ប្រើអត្រាបច្ចុប្បន្ននៅចុងខែ
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const exRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
   const startMin = lateStartMinutes(getEmpShift(emp.id));
@@ -2773,7 +2793,7 @@ function calcBonusRow(emp, month, rules) {
   const months = monthsOfService(emp.startDate, asOfDate);
   const years = months / 12;
   const eligible = rules.mode === 'manual' ? true : months >= rules.minMonths;
-  const salary = parseFloat(emp.salary) || 0;
+  const salary = salaryOn(emp, asOfDate);
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   let amount = 0;
   if (eligible) {
@@ -3132,7 +3152,7 @@ function exportMonthlyCSV() {
   const rows = monthlyRows(month);
   if (!rows.length) { customAlert('មិនមានទិន្នន័យ'); return; }
   const headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែមូលដ្ឋាន($)', 'ថ្ងៃធ្វើការ', 'ច្បាប់', 'OT(ម៉ោង)', 'តាមវត្តមាន($)', 'អត្ថប្រយោជន៍($)', 'ប្រាក់កាត់($)', 'ប្រាក់ខែសុទ្ធ($)', 'ប្រាក់ខែសុទ្ធ(៛)', 'ថ្ងៃធ្វើការ (ទី១-ថ្ងៃកំណត់)', 'ថ្ងៃត្រូវធ្វើការ', 'ប្រាក់ខែទី១($)'];
-  const lines = rows.map(({ e, t, adv }, i) => [i + 1, e.username || '', e.name, e.dept || '', (parseFloat(e.salary) || 0).toFixed(2),
+  const lines = rows.map(({ e, t, adv }, i) => [i + 1, e.username || '', e.name, e.dept || '', salaryOn(e, monthEndOf(month)).toFixed(2),
     t.workDays, t.leaveDays, t.otHours.toFixed(2), t.total.toFixed(2), t.benefitsUSD.toFixed(2), t.deductionsUSD.toFixed(2), t.net.toFixed(2), Math.round(t.netRiel), adv.workedDays, adv.requiredDays, adv.amount.toFixed(2)]);
   const csv = '\uFEFF' + headers.join(',') + '\n' + lines.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
