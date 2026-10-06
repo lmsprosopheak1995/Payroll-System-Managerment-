@@ -5,6 +5,8 @@
  *   💵 បើកសាច់ប្រាក់ — បញ្ជីបើកប្រាក់ខែ (ដុល្លារ/រៀល/ដុល្លារ+រៀល) គណនាចំនួនក្រដាសប្រាក់ត្រូវរៀបចំ + បញ្ជីហត្ថលេខា
  *   📈 និន្នាការ     — ថ្លៃប្រាក់ខែ ៦ ឬ ១២ ខែចុងក្រោយ
  *   🎯 ថវិកា        — កំណត់ថវិកាប្រចាំខែ (សរុប + តាមផ្នែក) ប្រៀបធៀបជាមួយចំណាយពិត
+ *   💰 Payroll (ផ្ទាំងដើមរបស់កម្មវិធី យកមកដាក់ក្នុង Finance)៖
+ *        ⭐ ប្រាក់ខែប្រចាំខែ · 🧾 អត្ថប្រយោជន៍ & ប្រាក់កាត់ · ⏱ យឺត/ច្បាប់ → កាត់លុយ · 🎁 បំណាច់ឆ្នាំ · 🏛 ប.ស.ស (NSSF)
  *
  * ទិន្នន័យទាំងអស់គណនាដោយមុខងាររបស់កម្មវិធីដដែល (summarizeEmpMonth, calcAdvanceRow, payrollEmployeesForMonth)
  * ដូច្នេះចំនួនសរុបត្រូវនឹងផ្ទាំង «ប្រាក់ខែប្រចាំខែ»។ ទំព័រនេះ «អាន» តែប៉ុណ្ណោះ មិនកែទិន្នន័យអ្វីក្នុង Supabase ទេ។
@@ -191,6 +193,9 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   const CSS = `
 .fin-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
 .fin-tabs button.on{background:var(--accent,#0d9488);color:#fff;border-color:transparent}
+.fin-sep{align-self:center;font-size:.72rem;font-weight:700;color:var(--text-muted,#5b6b80);margin:0 2px 0 8px;white-space:nowrap}
+#financeTab .tab-content.fin-mounted{display:none !important}
+#financeTab .tab-content.fin-mounted.fin-show{display:block !important}
 .fin-card{border:1px solid var(--border,#e1e8ef);border-radius:14px;background:var(--card-bg,#fff);padding:12px 14px;margin:0 0 14px}
 .fin-card h3{margin:0 0 8px;font-size:.98rem}
 .fin-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0}
@@ -569,17 +574,53 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     load();
   }
 
-  // ------------------------------------------------------------ ទំព័រ ----
-  const SUBS = [
-    ['overview', '📊 សង្ខេប', paneOverview],
-    ['cash', '💵 បើកសាច់ប្រាក់', paneCash],
-    ['trend', '📈 និន្នាការ', paneTrend],
-    ['budget', '🎯 ថវិកា', paneBudget]
+  // ------------------------------------------------------------ ផ្ទាំង Payroll ដែលមានស្រាប់ (យកមកដាក់ក្នុង Finance) ----
+  // មិនចម្លងកូដ៖ យកផ្ទាំងដើមរបស់កម្មវិធី (ប្រាក់ខែប្រចាំខែ, អត្ថប្រយោជន៍ & ប្រាក់កាត់, កាត់លុយ, បំណាច់ឆ្នាំ, NSSF)
+  // មកដាក់ក្នុងទំព័រ Finance ដូច្នេះមុខងារទាំងអស់ (បិទខែ, Payslip, ពន្ធ, ប្រាក់ខែទី១ …) ដំណើរការដូចដើម
+  // ហើយនឹងត្រូវដាក់ត្រឡប់ទៅកន្លែងដើមវិញ ពេលចាកចេញពីទំព័រ Finance (admin នៅប្រើ Payrolls ធម្មតាបាន)
+  const PAYROLL_TABS = [
+    { key: 'p-monthly', label: '⭐ ប្រាក់ខែប្រចាំខែ', id: 'monthlyTab', render: () => { if (typeof renderMonthlyTab === 'function') renderMonthlyTab(); } },
+    { key: 'p-items', label: '🧾 អត្ថប្រយោជន៍ & ប្រាក់កាត់', id: 'payrollTab', render: () => { if (typeof renderPayrollTab === 'function') renderPayrollTab(); } },
+    { key: 'p-deduct', label: '⏱ យឺត/ច្បាប់ → កាត់លុយ', id: 'deductTab', render: () => { if (typeof renderDeductTab === 'function') renderDeductTab(); } },
+    { key: 'p-bonus', label: '🎁 បំណាច់ឆ្នាំ', id: 'bonusTab', render: () => { if (typeof renderBonusTab === 'function') renderBonusTab(); } },
+    { key: 'p-nssf', label: '🏛 ប.ស.ស (NSSF)', id: 'nssfTab', render: () => { if (typeof onFeatureTab === 'function') onFeatureTab('nssf'); } }
   ];
-  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess]); // admin ប៉ុណ្ណោះ
+  const mounted = new Map(); // id → { el, parent, next }
+
+  function unmountAll() {
+    mounted.forEach(m => {
+      m.el.classList.remove('fin-mounted', 'fin-show');
+      if (m.parent) {
+        try { m.parent.insertBefore(m.el, m.next && m.next.parentNode === m.parent ? m.next : null); } catch (_) { m.parent.appendChild(m.el); }
+      }
+    });
+    mounted.clear();
+  }
+
+  function mountPayroll(def, body) {
+    let el = document.getElementById(def.id);
+    if (!el) { try { def.render(); } catch (ex) { console.error('finance payroll', ex); } el = document.getElementById(def.id); } // ផ្ទាំងខ្លះ (NSSF) ត្រូវបានបង្កើតពេលហៅ render ដំបូង
+    if (!el) { body.appendChild(empty(`មិនឃើញផ្ទាំង «${def.label}» ក្នុងកម្មវិធី (ឬមិនទាន់ផ្ទុក)`)); return; }
+    mounted.set(def.id, { el, parent: el.parentNode, next: el.nextSibling });
+    el.classList.add('fin-mounted', 'fin-show');
+    body.appendChild(el);
+    try { def.render(); } catch (ex) { console.error('finance payroll', ex); body.appendChild(empty('មានបញ្ហា៖ ' + (ex.message || ex))); }
+  }
+
+  // ------------------------------------------------------------ ទំព័រ ----
+  // [key, ស្លាក, pane, ក្រុម]
+  const GROUPS = { reports: '📊 របាយការណ៍', payroll: '💰 Payroll', admin: '⚙ គ្រប់គ្រង' };
+  const SUBS = [
+    ['overview', '📊 សង្ខេប', paneOverview, 'reports'],
+    ['cash', '💵 បើកសាច់ប្រាក់', paneCash, 'reports'],
+    ['trend', '📈 និន្នាការ', paneTrend, 'reports'],
+    ['budget', '🎯 ថវិកា', paneBudget, 'reports']
+  ].concat(PAYROLL_TABS.map(d => [d.key, d.label, body => mountPayroll(d, body), 'payroll']));
+  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess, 'admin']); // admin ប៉ុណ្ណោះ
 
   function renderBody() {
     if (!bodyEl) return;
+    unmountAll(); // ដាក់ផ្ទាំង Payroll ត្រឡប់កន្លែងដើមវិញមុន (រួចទើបសម្អាត)
     bodyEl.textContent = '';
     Array.from(tabsEl.children).forEach(b => b.classList.toggle('on', b.dataset.sub === sub));
     const def = SUBS.find(x => x[0] === sub) || SUBS[0];
@@ -603,11 +644,20 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     if (group) group.after(nav); else aiNav.before(nav);
     nav.addEventListener('click', () => { if (typeof showTab === 'function') showTab('finance'); renderBody(); });
 
+    let lastGroup = null;
     tabsEl = h('div', { class: 'fin-tabs' }, SUBS.map(x => {
       const b = h('button', { class: 'secondary', type: 'button', 'data-sub': x[0], text: x[1] });
       b.addEventListener('click', () => { sub = x[0]; renderBody(); });
+      if (x[3] && x[3] !== lastGroup) { lastGroup = x[3]; return [h('span', { class: 'fin-sep', text: GROUPS[x[3]] || '' }), b]; }
       return b;
-    }));
+    }).flat());
+    // ចាកចេញពីទំព័រ Finance (admin) → ដាក់ផ្ទាំង Payroll ត្រឡប់កន្លែងដើម ដើម្បីឲ្យម៉ឺនុយ Payrolls ធម្មតាដំណើរការ
+    const origShowTab = window.showTab;
+    if (typeof origShowTab === 'function' && !origShowTab.__finUnmount) {
+      const w = function (tab) { if (tab !== 'finance' && !isFinanceRole()) unmountAll(); return origShowTab.apply(this, arguments); };
+      w.__finUnmount = true;
+      window.showTab = w;
+    }
     bodyEl = h('div', { id: 'financeBody' });
     empTab.parentNode.appendChild(h('div', { id: 'financeTab', class: 'tab-content' },
       h('h2', { class: 'page-title', text: '💼 Finance' }), tabsEl, bodyEl));
@@ -625,6 +675,6 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   }
   window.financeTools = {
     summarize, cashPlan, denominate, budgetStatus, notesText, monthsBack, shiftMonth, normalizeRow, loadMonth, payoutSheetHtml, reportHtml, monthLabel,
-    panes: SUBS.reduce((o, x) => { o[x[0]] = x[2]; return o; }, {})
+    panes: SUBS.reduce((o, x) => { o[x[0]] = x[2]; return o; }, {}), _mounted: mounted, _unmountAll: unmountAll
   };
 })();
