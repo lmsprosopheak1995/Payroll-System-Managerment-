@@ -439,6 +439,63 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     renderOut();
   }
 
+  // ------------------------------------------------------------ ផ្ទាំង៖ គណនី Finance (admin ប៉ុណ្ណោះ) ----
+  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1'; } catch (_) { return false; } };
+
+  function paneAccess(body) {
+    const url = new URL('finance.html', location.href).href;
+    const status = h('p', { class: 'fin-muted', text: 'កំពុងពិនិត្យ…' });
+    const refresh = async () => {
+      try {
+        const { data, error } = await supabaseClient.rpc('finance_password_is_set');
+        status.textContent = error ? '⚠ មិនអាចពិនិត្យ — ប្រហែលមិនទាន់រត់ finance-auth.sql៖ ' + error.message
+          : (data ? '✓ គណនី Finance មានពាក្យសម្ងាត់ហើយ' : 'មិនទាន់កំណត់ពាក្យសម្ងាត់ Finance');
+      } catch (ex) { status.textContent = '⚠ ' + (ex.message || ex); }
+    };
+    const pwInput = ph => h('input', { type: 'password', placeholder: ph, autocomplete: 'new-password', style: 'min-width:220px' });
+    const adminPw = pwInput('ពាក្យសម្ងាត់ admin (ដើម្បីអនុញ្ញាត)');
+    const newPw = pwInput('ពាក្យសម្ងាត់ Finance ថ្មី (≥ ៦ តួ)');
+    const newPw2 = pwInput('បញ្ជាក់ពាក្យសម្ងាត់ Finance');
+    const urlInput = h('input', { type: 'text', readonly: 'readonly', value: url, style: 'width:min(460px,100%)' });
+    const rpcMsg = ex => (/password_too_short/.test(ex.message || '') ? 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ' : (ex.message || String(ex)));
+
+    const setBtn = btn('💾 កំណត់ / ប្តូរពាក្យសម្ងាត់ Finance', async () => {
+      if (!adminPw.value) { await say('សូមបញ្ចូលពាក្យសម្ងាត់ admin'); return; }
+      if (!newPw.value || newPw.value.length < 6) { await say('ពាក្យសម្ងាត់ Finance ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
+      if (newPw.value !== newPw2.value) { await say('ពាក្យសម្ងាត់ Finance ទាំងពីរមិនដូចគ្នាទេ'); return; }
+      setBtn.disabled = true;
+      try {
+        const { data, error } = await supabaseClient.rpc('set_finance_password', { p_admin_password: adminPw.value, p_new_password: newPw.value });
+        if (error) throw error;
+        if (!data) { await say('ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ'); return; }
+        adminPw.value = newPw.value = newPw2.value = '';
+        await say('✓ បានកំណត់ពាក្យសម្ងាត់ Finance — សូមប្រាប់អ្នក Finance ជាមួយតំណរខាងលើ');
+        refresh();
+      } catch (ex) { await say('កំណត់មិនបាន៖ ' + rpcMsg(ex)); }
+      finally { setBtn.disabled = false; }
+    }, '');
+    const offBtn = btn('🚫 បិទគណនី Finance', async () => {
+      if (!adminPw.value) { await say('សូមបញ្ចូលពាក្យសម្ងាត់ admin'); return; }
+      if (!window.confirm('បិទគណនី Finance? អ្នក Finance នឹងចូលមិនបានរហូតដល់កំណត់ពាក្យសម្ងាត់ថ្មី។')) return;
+      try {
+        const { data, error } = await supabaseClient.rpc('clear_finance_password', { p_admin_password: adminPw.value });
+        if (error) throw error;
+        if (!data) { await say('ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ'); return; }
+        adminPw.value = '';
+        await say('✓ បានបិទគណនី Finance');
+        refresh();
+      } catch (ex) { await say('បិទមិនបាន៖ ' + rpcMsg(ex)); }
+    });
+
+    body.appendChild(card('🔑 គណនី Finance',
+      status,
+      rowEl(lab('តំណរទំព័រចូល ', urlInput), btn('📋 ចម្លង', async () => { try { await navigator.clipboard.writeText(url); await say('✓ បានចម្លងតំណរ'); } catch (_) { urlInput.select(); await say('ចម្លងមិនបាន — សូមចម្លងដោយដៃ'); } })),
+      rowEl(adminPw), rowEl(newPw, newPw2), rowEl(setBtn, offBtn),
+      h('p', { class: 'fin-muted', text: 'ពាក្យសម្ងាត់ Finance ត្រូវបាន hash ក្នុង Supabase (ដូចពាក្យសម្ងាត់ admin) ហើយការចូលខុស ៥ ដងនឹងចាក់សោ ៦០ វិនាទី។ ក្រោយចូល អ្នក Finance ឃើញតែទំព័រ Finance។' }),
+      h('p', { class: 'fin-badge warn', text: '⚠ ការរឹតបន្តឹងនេះជាកម្រិតចំណុចប្រទាក់ (UI) ដូច admin ដែរ ព្រោះកម្មវិធីប្រើ anon key ជាមួយ RLS បើកទូលាយ។' })));
+    refresh();
+  }
+
   // ------------------------------------------------------------ ទំព័រ ----
   const SUBS = [
     ['overview', '📊 សង្ខេប', paneOverview],
@@ -446,6 +503,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     ['trend', '📈 និន្នាការ', paneTrend],
     ['budget', '🎯 ថវិកា', paneBudget]
   ];
+  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess]); // admin ប៉ុណ្ណោះ
 
   function renderBody() {
     if (!bodyEl) return;
