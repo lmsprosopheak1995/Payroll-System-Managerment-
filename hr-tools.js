@@ -774,18 +774,19 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ ឡើងប្រាក់ខែ (មើលជាមុន + អនុវត្ត) ----
-  const raiseState = { dept: '', mode: 'pct', value: '5', minYears: '0', round: '1' };
+  const ymdStr = d => `${d.getFullYear()}-${z2(d.getMonth() + 1)}-${z2(d.getDate())}`;
+  const raiseState = { dept: '', mode: 'pct', value: '5', minYears: '0', round: '1', effDate: ymdStr(today0()) };
   const LS_RAISE = 'hrt_last_raise';
   let raiseApplied = null; // លទ្ធផលនៃការអនុវត្តដែលទើបធ្វើ (បង្ហាញជំនួសតារាងមើលជាមុន)
   const stampNow = () => { const d = new Date(); return `${d.getFullYear()}${z2(d.getMonth() + 1)}${z2(d.getDate())}-${z2(d.getHours())}${z2(d.getMinutes())}`; };
-  const auditSafe = (action, e, oldV, newV) => {
+  const auditSafe = (action, e, oldV, newV, eff) => {
     if (typeof logAudit !== 'function') return;
-    try { logAudit(action, { entity: 'employee', ref: e.id, employeeId: e.id, old: { field: 'salary', value: oldV }, new: { field: 'salary', value: newV } }); } catch (_) { /* ignore */ }
+    try { logAudit(action, { entity: 'employee', ref: e.id, employeeId: e.id, old: { field: 'salary', value: oldV }, new: { field: 'salary', value: newV }, effective_date: eff || null }); } catch (_) { /* ignore */ }
   };
   const refreshApp = () => { if (typeof renderAll === 'function') { try { renderAll(); } catch (_) { /* ignore */ } } };
 
   // រក្សាទុកប្រាក់ខែថ្មីម្នាក់ម្តងៗ តាម upsertEmployee របស់កម្មវិធី (ដូចការកែក្នុងទម្រង់បុគ្គលិក)
-  async function applyRaise(rows, onProgress) {
+  async function applyRaise(rows, onProgress, eff) {
     if (typeof upsertEmployee !== 'function') throw new Error('មិនឃើញមុខងារ upsertEmployee ក្នុង script.js');
     const ok = [], fail = [];
     for (let i = 0; i < rows.length; i++) {
@@ -795,8 +796,8 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       let saved = false;
       try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
       if (!saved) { e.salary = prev; fail.push(r); continue; }
-      ok.push({ id: e.id, name: e.name, old: r.old, nw: r.nw });
-      auditSafe('salary_raise', e, r.old, r.nw);
+      ok.push({ id: e.id, name: e.name, old: r.old, nw: r.nw, eff });
+      auditSafe('salary_raise', e, r.old, r.nw, eff);
     }
     refreshApp();
     return { ok, fail };
@@ -816,23 +817,82 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
       if (!saved) { e.salary = prev; fail.push(x); continue; }
       ok.push(x);
-      auditSafe('salary_raise_undo', e, x.nw, x.old);
+      auditSafe('salary_raise_undo', e, x.nw, x.old, x.eff);
     }
     refreshApp();
     return { ok, skipped, fail };
   }
 
+
+  // ---- ប្រវត្តិ/កំណត់ពេលឡើងប្រាក់ខែ (តារាង salary_raises ក្នុង Supabase — មើលឯកសារ salary_raises.sql) ----
+  const RAISE_TBL = 'salary_raises';
+  const sbReady = () => typeof supabaseClient !== 'undefined' && supabaseClient;
+  const nowIso = () => new Date().toISOString();
+  async function dbInsertRaises(rows) {
+    if (!sbReady()) throw new Error('មិនឃើញការតភ្ជាប់ Supabase');
+    const { error } = await supabaseClient.from(RAISE_TBL).insert(rows);
+    if (error) throw new Error(error.message + ' — សូមដំណើរការ salary_raises.sql ក្នុង Supabase ជាមុន');
+  }
+  async function dbListRaises(status) {
+    if (!sbReady()) throw new Error('មិនឃើញការតភ្ជាប់ Supabase');
+    const { data, error } = await supabaseClient.from(RAISE_TBL).select('*').eq('status', status).order('effective_date', { ascending: true });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+  // ប្តូរ status ដោយមានលក្ខខណ្ឌ (from) ដើម្បីការពារការអនុវត្តជាន់គ្នា ពេលមានអ្នកប្រើច្រើននាក់
+  async function dbSetStatus(id, from, to, extra) {
+    const patch = Object.assign({ status: to }, extra || {});
+    const { data, error } = await supabaseClient.from(RAISE_TBL).update(patch).eq('id', id).eq('status', from).select('id');
+    if (error) throw new Error(error.message);
+    return !!(data && data.length);
+  }
+
+  // អនុវត្តការឡើងប្រាក់ខែដែលដល់ថ្ងៃកំណត់ (effective_date ≤ ថ្ងៃនេះ)
+  let dueBusy = false;
+  async function processDueRaises() {
+    const res = { applied: [], conflict: [], fail: [] };
+    if (dueBusy || !sbReady() || typeof upsertEmployee !== 'function' || !emps().length) return res;
+    dueBusy = true;
+    try {
+      const todayS = ymdStr(today0());
+      const due = (await dbListRaises('pending')).filter(r => String(r.effective_date).slice(0, 10) <= todayS);
+      const byId = new Map(emps().map(e => [String(e.id), e]));
+      for (const r of due) {
+        const e = byId.get(String(r.employee_id));
+        const nm = (e && e.name) || r.employee_name || r.employee_id;
+        if (!e) { await dbSetStatus(r.id, 'pending', 'conflict', { note: 'រកមិនឃើញបុគ្គលិក' }); res.conflict.push({ name: nm, why: 'រកមិនឃើញបុគ្គលិក' }); continue; }
+        if (Math.abs(Number(e.salary) - Number(r.old_salary)) > 0.0001) {
+          await dbSetStatus(r.id, 'pending', 'conflict', { note: 'ប្រាក់ខែត្រូវបានកែក្រោយពេលកំណត់ពេល' });
+          res.conflict.push({ name: nm, why: 'ប្រាក់ខែត្រូវបានកែក្រោយពេលកំណត់ពេល' }); continue;
+        }
+        if (!(await dbSetStatus(r.id, 'pending', 'applied', { applied_at: nowIso() }))) continue; // អ្នកផ្សេងបានយករួច
+        const prev = e.salary; e.salary = Number(r.new_salary);
+        let saved = false;
+        try { saved = await upsertEmployee(e); } catch (_) { saved = false; }
+        if (!saved) { e.salary = prev; try { await dbSetStatus(r.id, 'applied', 'pending', { applied_at: null }); } catch (_) { /* ignore */ } res.fail.push({ name: nm }); continue; }
+        auditSafe('salary_raise', e, Number(r.old_salary), Number(r.new_salary), String(r.effective_date).slice(0, 10));
+        res.applied.push({ name: nm, old: Number(r.old_salary), nw: Number(r.new_salary), eff: String(r.effective_date).slice(0, 10) });
+      }
+      if (res.applied.length) refreshApp();
+    } catch (ex) { console.warn('hr-tools due raises', ex); }
+    finally { dueBusy = false; }
+    return res;
+  }
+  const dueMsg = r => (r.applied.length ? `✓ បានអនុវត្តការឡើងប្រាក់ខែដែលដល់ថ្ងៃកំណត់ ${r.applied.length} នាក់\n` + r.applied.map(x => `• ${x.name}: $${money(x.old)} → $${money(x.nw)}`).join('\n') : '')
+    + (r.conflict.length ? `\n⚠ រំលង ${r.conflict.length} នាក់ (មើលក្នុងផ្ទាំងឡើងប្រាក់ខែ)` : '') + (r.fail.length ? `\n⚠ រក្សាទុកមិនបាន ${r.fail.length} នាក់ នឹងព្យាយាមម្តងទៀត` : '');
+
   function paneRaise(body) {
     const out = h('div');
     const prog = h('p', { class: 'hrt-muted', text: '' });
     let busy = false;
-    const calc = () => computeRaise(emps(), raiseState);
+    const calc = () => computeRaise(emps(), Object.assign({}, raiseState, { now: parseYMD(raiseState.effDate) || undefined }));
+    const effLabel = () => { const d = parseYMD(raiseState.effDate); return d ? fmt(d) : ''; };
 
     const undoBlock = () => {
       const last = getJson(LS_RAISE, null);
       if (!last || !Array.isArray(last.rows) || !last.rows.length) return null;
       const when = last.when ? new Date(last.when).toLocaleString() : '';
-      return rowEl(btn(`↩ ត្រឡប់ការឡើងប្រាក់ខែចុងក្រោយ (${last.rows.length} នាក់ · ${when})`, async () => {
+      return rowEl(btn(`↩ ត្រឡប់ការឡើងប្រាក់ខែចុងក្រោយ (${last.rows.length} នាក់ · ${when}${last.eff ? ' · ចាប់ពី ' + fmt(parseYMD(last.eff)) : ''})`, async () => {
         if (busy) return;
         if (!(await ask(`ត្រឡប់ប្រាក់ខែ ${last.rows.length} នាក់ ទៅតម្លៃមុនការឡើង?\n(អ្នកដែលប្រាក់ខែត្រូវបានកែក្រោយមក នឹងមិនត្រូវបានប៉ះពាល់ទេ)`))) return;
         busy = true;
@@ -850,11 +910,11 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       out.textContent = '';
       if (raiseApplied) {
         const A = raiseApplied;
-        out.appendChild(card(`✅ បានអនុវត្តរួច — ${A.ok.length} នាក់`,
+        out.appendChild(card((A.scheduled ? `🕒 បានកំណត់ពេល — ${A.ok.length} នាក់ · នឹងអនុវត្តថ្ងៃ ${fmt(parseYMD(A.eff))}` : `✅ បានអនុវត្តរួច — ${A.ok.length} នាក់`) + (!A.scheduled && A.eff ? ` · ចាប់ពី ${fmt(parseYMD(A.eff))}` : ''),
           A.ok.length ? mkTable(['ឈ្មោះ', 'ចាស់ ($)', 'ថ្មី ($)', 'ឡើង ($)'], A.ok.map(x => [x.name, money(x.old), money(x.nw), (x.nw - x.old >= 0 ? '+' : '') + money(x.nw - x.old)])) : empty('គ្មាន'),
           A.fail.length ? h('p', { class: 'hrt-badge late', text: `⚠ រក្សាទុកមិនបាន ${A.fail.length} នាក់៖ ${A.fail.map(x => x.e.name).join(', ')}` }) : null,
           rowEl(btn('🔄 គណនីថ្មី', () => { raiseApplied = null; renderOut(); }, ''))));
-        const u = undoBlock(); if (u) out.appendChild(u);
+        if (!A.scheduled) { const u = undoBlock(); if (u) out.appendChild(u); }
         return;
       }
       const r = calc();
@@ -866,29 +926,63 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
       out.appendChild(mkTable(['ឈ្មោះ', 'ផ្នែក', 'ឆ្នាំការងារ', 'ប្រាក់ខែចាស់ ($)', 'ប្រាក់ខែថ្មី ($)', 'ឡើង ($)'],
         rows.map(x => [x.e.name, x.e.dept || '-', x.years.toFixed(1), money(x.old), money(x.nw), (x.diff >= 0 ? '+' : '') + money(x.diff)])));
       out.appendChild(rowEl(
-        btn('⬇ CSV', () => download('salary-simulation.csv', toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ឡើង']].concat(rows.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, x.diff]))), 'text/csv;charset=utf-8')),
+        btn('⬇ CSV', () => download('salary-simulation.csv', toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ឡើង', 'ចាប់ពីថ្ងៃ']].concat(rows.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, x.diff, effLabel()]))), 'text/csv;charset=utf-8')),
         btn('✅ អនុវត្តការឡើងប្រាក់ខែ', async () => {
           if (busy) return;
           const todo = rows.filter(x => x.nw > 0 && Math.abs(x.diff) > 0.0001);
           if (!todo.length) { await say('គ្មានអ្វីត្រូវអនុវត្ត (ប្រាក់ខែថ្មីដូចចាស់ ឬ ≤ 0)'); return; }
+          if (!parseYMD(raiseState.effDate)) { await say('សូមជ្រើសរើស «ចាប់ពីថ្ងៃ-ខែ-ឆ្នាំ» ជាមុន'); return; }
           const sumDiff = todo.reduce((a, x) => a + x.diff, 0);
           const neg = todo.filter(x => x.diff < 0).length, big = todo.filter(x => x.old > 0 && x.diff / x.old > 0.5).length;
-          const msg = `អនុវត្តការប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់?\n• ចំណាយបន្ថែម ${sumDiff >= 0 ? '+' : ''}$${money(sumDiff)} ក្នុងមួយខែ ($${money(sumDiff * 12)} ក្នុងមួយឆ្នាំ)\n• ប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចមិនប្តូរទេ\n• ប្រព័ន្ធនឹងទាញយក CSV នៃប្រាក់ខែចាស់ជាមុន ហើយអាចត្រឡប់វិញបាន`
-            + (neg ? `\n⚠ មាន ${neg} នាក់ត្រូវបានកាត់ប្រាក់ខែ` : '') + (big ? `\n⚠ មាន ${big} នាក់ឡើងលើស ៥០%` : '');
+          const futureEff = parseYMD(raiseState.effDate) > today0();
+          const eff = raiseState.effDate;
+          const msg = `អនុវត្តការប្តូរប្រាក់ខែមូលដ្ឋាន ${todo.length} នាក់ ចាប់ពីថ្ងៃទី ${effLabel()}?\n• ចំណាយបន្ថែម ${sumDiff >= 0 ? '+' : ''}$${money(sumDiff)} ក្នុងមួយខែ ($${money(sumDiff * 12)} ក្នុងមួយឆ្នាំ)\n• ប៉ះពាល់ខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចមិនប្តូរទេ\n• ប្រព័ន្ធនឹងទាញយក CSV នៃប្រាក់ខែចាស់ជាមុន ហើយអាចត្រឡប់វិញបាន`
+            + (neg ? `\n⚠ មាន ${neg} នាក់ត្រូវបានកាត់ប្រាក់ខែ` : '') + (big ? `\n⚠ មាន ${big} នាក់ឡើងលើស ៥០%` : '')
+            + (futureEff ? `\n🕒 ថ្ងៃកំណត់នៅអនាគត — ប្រព័ន្ធនឹងរក្សាទុកជាកាលវិភាគ ហើយប្តូរប្រាក់ខែដោយស្វ័យប្រវត្តិនៅថ្ងៃ ${effLabel()} (ពេលមាននរណាបើកកម្មវិធី)។ ប្រាក់ខែបច្ចុប្បន្នមិនប្តូរទេរហូតដល់ថ្ងៃនោះ` : '');
           if (!(await ask(msg))) return;
           busy = true;
+          if (futureEff) {
+            try {
+              const pend = await dbListRaises('pending');
+              const ids = new Set(todo.map(x => String(x.e.id)));
+              for (const o of pend) if (ids.has(String(o.employee_id))) await dbSetStatus(o.id, 'pending', 'cancelled', { note: 'ជំនួសដោយការកំណត់ពេលថ្មី' });
+              await dbInsertRaises(todo.map(x => ({ employee_id: String(x.e.id), employee_name: x.e.name, old_salary: x.old, new_salary: x.nw, effective_date: eff, status: 'pending' })));
+              raiseApplied = { scheduled: true, eff, ok: todo.map(x => ({ id: x.e.id, name: x.e.name, old: x.old, nw: x.nw })), fail: [] };
+              await say(`✓ បានកំណត់ពេលឡើងប្រាក់ខែ ${todo.length} នាក់ នៅថ្ងៃ ${effLabel()}`);
+            } catch (ex) { await say('កំណត់ពេលមិនបាន៖ ' + (ex.message || ex)); }
+            finally { busy = false; renderOut(); renderPending(); }
+            return;
+          }
           try {
-            download(`salary-before-${stampNow()}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី']].concat(todo.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw]))), 'text/csv;charset=utf-8');
-            const res = await applyRaise(todo, m => { prog.textContent = m; });
+            download(`salary-before-${stampNow()}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែចាស់', 'ប្រាក់ខែថ្មី', 'ចាប់ពីថ្ងៃ']].concat(todo.map(x => [x.e.username || x.e.id, x.e.name, x.e.dept || '', x.old, x.nw, effLabel()]))), 'text/csv;charset=utf-8');
+            const res = await applyRaise(todo, m => { prog.textContent = m; }, eff);
+            res.eff = eff;
             prog.textContent = '';
-            if (res.ok.length) lsSet(LS_RAISE, JSON.stringify({ when: new Date().toISOString(), rows: res.ok }));
+            if (res.ok.length) lsSet(LS_RAISE, JSON.stringify({ when: new Date().toISOString(), eff, rows: res.ok }));
             raiseApplied = res;
+            if (res.ok.length) { try { await dbInsertRaises(res.ok.map(x => ({ employee_id: String(x.id), employee_name: x.name, old_salary: x.old, new_salary: x.nw, effective_date: eff, status: 'applied', applied_at: nowIso() }))); } catch (ex) { console.warn('salary history', ex); } }
             await say(`✓ បានអនុវត្ត ${res.ok.length} នាក់` + (res.fail.length ? `\n⚠ រក្សាទុកមិនបាន ${res.fail.length} នាក់` : ''));
           } catch (ex) { prog.textContent = ''; await say('អនុវត្តមិនបាន៖ ' + (ex.message || ex)); }
           finally { busy = false; renderOut(); }
         }, '')));
       const u = undoBlock(); if (u) out.appendChild(u);
     };
+
+    // បញ្ជីដែលកំណត់ពេលរង់ចាំ + ដែលមានបញ្ហា
+    const pendEl = h('div');
+    async function renderPending() {
+      pendEl.textContent = '';
+      let pend = [], conf = [];
+      try { pend = await dbListRaises('pending'); conf = await dbListRaises('conflict'); } catch (_) { return; } // តារាងមិនទាន់បង្កើត → លាក់
+      if (!pend.length && !conf.length) return;
+      const kids = [];
+      if (pend.length) kids.push(mkTable(['ឈ្មោះ', 'ចាប់ពីថ្ងៃ', 'ចាស់ ($)', 'ថ្មី ($)', ''],
+        pend.map(r => [r.employee_name || r.employee_id, fmt(parseYMD(String(r.effective_date))), money(r.old_salary), money(r.new_salary),
+          btn('✖ លុប', async () => { if (!(await ask(`លុបការកំណត់ពេលរបស់ ${r.employee_name || r.employee_id}?`))) return; try { await dbSetStatus(r.id, 'pending', 'cancelled', { note: 'លុបដោយអ្នកប្រើ' }); } catch (ex) { await say(ex.message || ex); } renderPending(); }, 'danger')])));
+      if (conf.length) kids.push(h('p', { class: 'hrt-badge late', text: `⚠ មិនអាចអនុវត្ត ${conf.length} នាក់៖ ${conf.map(r => `${r.employee_name || r.employee_id} (${r.note || ''})`).join(', ')}` }),
+        rowEl(btn('🧹 សម្អាតបញ្ជីបញ្ហា', async () => { for (const r of conf) { try { await dbSetStatus(r.id, 'conflict', 'cancelled'); } catch (_) { /* ignore */ } } renderPending(); }, '')));
+      pendEl.appendChild(card(`🕒 ការឡើងប្រាក់ខែដែលបានកំណត់ពេល (${pend.length})`, ...kids));
+    }
 
     const depts = distinct(emps().map(e => e.dept)).sort();
     const selDept = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d, text: d })));
@@ -900,12 +994,14 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     const rnd = h('select', null, [['0', 'មិនបង្គត់'], ['1', 'បង្គត់ $1'], ['5', 'បង្គត់ $5'], ['10', 'បង្គត់ $10']].map(x => h('option', { value: x[0], text: x[1] })));
     rnd.value = raiseState.round;
     const bind = (el, key) => el.addEventListener('input', () => { raiseState[key] = el.value; raiseApplied = null; renderOut(); });
-    bind(selDept, 'dept'); bind(selMode, 'mode'); bind(val, 'value'); bind(minY, 'minYears'); bind(rnd, 'round');
+    const effIn = h('input', { type: 'date', value: raiseState.effDate });
+    bind(selDept, 'dept'); bind(selMode, 'mode'); bind(val, 'value'); bind(minY, 'minYears'); bind(rnd, 'round'); bind(effIn, 'effDate');
     selDept.addEventListener('change', () => { raiseState.dept = selDept.value; raiseApplied = null; renderOut(); });
     body.appendChild(card('💹 ឡើងប្រាក់ខែ — មើលជាមុន ហើយអនុវត្តបាន',
-      rowEl(lab('ផ្នែក ', selDept), lab('របៀប ', selMode), lab('តម្លៃ ', val), lab('ឆ្នាំការងារអប្បបរមា ', minY), lab('បង្គត់ ', rnd)), out, prog));
+      rowEl(lab('ផ្នែក ', selDept), lab('របៀប ', selMode), lab('តម្លៃ ', val), lab('ឆ្នាំការងារអប្បបរមា ', minY), lab('បង្គត់ ', rnd), lab('ចាប់ពីថ្ងៃ-ខែ-ឆ្នាំ ', effIn)), out, prog), pendEl);
     renderOut();
-    body.appendChild(h('p', { class: 'hrt-muted', text: 'ការអនុវត្តរក្សាទុកប្រាក់ខែមូលដ្ឋានថ្មីក្នុង Supabase ម្នាក់ម្តងៗ (ដូចការកែក្នុងទម្រង់បុគ្គលិក) ហើយកត់ត្រាក្នុង Audit log។ វាប៉ះពាល់ប្រាក់ខែនៃខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចរក្សាតម្លៃដើម។ មុនអនុវត្ត ប្រព័ន្ធទាញយក CSV នៃប្រាក់ខែចាស់ ហើយអាចចុច «ត្រឡប់» វិញបាន។' }));
+    processDueRaises().then(r => { if (r.applied.length || r.conflict.length || r.fail.length) say(dueMsg(r)); renderOut(); renderPending(); });
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ការអនុវត្តរក្សាទុកប្រាក់ខែមូលដ្ឋានថ្មីក្នុង Supabase ម្នាក់ម្តងៗ (ដូចការកែក្នុងទម្រង់បុគ្គលិក) ហើយកត់ត្រាក្នុង Audit log។ វាប៉ះពាល់ប្រាក់ខែនៃខែដែលមិនទាន់បិទ — ខែដែលបានបិទរួចរក្សាតម្លៃដើម។ មុនអនុវត្ត ប្រព័ន្ធទាញយក CSV នៃប្រាក់ខែចាស់ ហើយអាចចុច «ត្រឡប់» វិញបាន។ បើជ្រើសថ្ងៃអនាគត ការឡើងប្រាក់ខែនឹងត្រូវកំណត់ពេល (តារាង salary_raises) ហើយអនុវត្តដោយស្វ័យប្រវត្តិនៅថ្ងៃនោះ — ណែនាំឱ្យជ្រើសថ្ងៃទី ១ នៃខែ ដើម្បីកុំឱ្យប្រាក់ខែពាក់កណ្តាលខែច្រឡំ។' }));
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ កែច្រើន (សរសេរទៅ Supabase) ----
@@ -1143,7 +1239,19 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     return true;
   }
 
+  // ពេលបើកកម្មវិធី៖ រង់ចាំទិន្នន័យបុគ្គលិកផ្ទុករួច រួចអនុវត្តការឡើងប្រាក់ខែដែលដល់ថ្ងៃកំណត់
+  function watchDueRaises() {
+    let tries = 0;
+    const t = setInterval(async () => {
+      if (++tries > 60) { clearInterval(t); return; }
+      if (!emps().length || !sbReady() || typeof upsertEmployee !== 'function') return;
+      clearInterval(t);
+      const r = await processDueRaises();
+      if (r.applied.length || r.conflict.length || r.fail.length) say(dueMsg(r));
+    }, 2000);
+  }
   function boot() {
+    watchDueRaises();
     if (init()) return;
     let tries = 0;
     const t = setInterval(() => { if (init() || ++tries >= 40) clearInterval(t); }, 500);
