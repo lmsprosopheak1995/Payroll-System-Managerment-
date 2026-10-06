@@ -9,6 +9,9 @@
  *   ✅ ស្ថានភាពបើកប្រាក់ — ធីកបុគ្គលិកដែលបានបើកប្រាក់ហើយ (រក្សាក្នុង browser) + វឌ្ឍនភាព
  *   📆 ប្រចាំឆ្នាំ    — សរុបប្រាក់ខែ ១២ ខែ + CSV + ព្រីន
  *   🔍 ពិនិត្យ       — ស្វែងរកភាពមិនប្រក្រតី (ប្រាក់អវិជ្ជមាន គ្មានប្រាក់ខែ OT ខ្ពស់ ប្រែប្រួលខ្លាំង ។ល។)
+ *   💳 ប័ណ្ណប្រាក់ខែ  — ព្រីន Payslip ម្នាក់ៗ ឬច្រើននាក់ (២ សន្លឹកក្នុងមួយទំព័រ)
+ *   📋 អនុម័តប្រាក់ខែ — លំហូរ រៀបចំ → ត្រួតពិនិត្យ → អនុម័ត → ចាក់សោ + ប្រវត្តិ + រកការប្រែប្រួលក្រោយអនុម័ត
+ *   📒 Journal       — Journal Entry សម្រាប់គណនេយ្យ (Dr/Cr តុល្យភាព) + CSV + ព្រីន
  *
  * ទិន្នន័យទាំងអស់គណនាដោយមុខងាររបស់កម្មវិធីដដែល (summarizeEmpMonth, calcAdvanceRow, payrollEmployeesForMonth)
  * ដូច្នេះចំនួនសរុបត្រូវនឹងផ្ទាំង «ប្រាក់ខែប្រចាំខែ»។ ទំព័រនេះ «អាន» តែប៉ុណ្ណោះ មិនកែទិន្នន័យអ្វីក្នុង Supabase ទេ។
@@ -729,16 +732,235 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     body.appendChild(h('p', { class: 'fin-muted', text: 'ការពិនិត្យជាគ្រាន់តែការណែនាំ ដើម្បីជួយពិនិត្យមុនបើកប្រាក់ — មិនកែទិន្នន័យអ្វីទេ។ «ប្រែប្រួលខ្លាំង» ប្រៀបធៀបប្រាក់សុទ្ធជាមួយខែមុន (≥ ៣០% និង > $20)។' }));
   }
 
+  // ============================================================ Payroll៖ ប័ណ្ណប្រាក់ខែ / អនុម័ត / Journal ====
+  const lastDay = ym => { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); };
+
+  // ------------------------------------------------------------ ប័ណ្ណប្រាក់ខែ ----
+  const SLIP_CSS = `.slip{border:1px solid #444;padding:5mm 6mm;margin:0 0 7mm;page-break-inside:avoid}.slip h2{margin:0 0 1mm;font-size:12.5pt;text-align:center}
+.slip .meta{text-align:center;color:#444;margin:0 0 3mm;font-size:9.5pt}.g2{display:grid;grid-template-columns:1fr 1fr;gap:.8mm 8mm;margin:0 0 3mm;font-size:9.8pt}.g2 span{color:#555}
+.slip .sg{display:flex;justify-content:space-between;margin-top:9mm;text-align:center;font-size:9.5pt}.slip .sg div{min-width:50mm;border-top:1px solid #777;padding-top:1mm}`;
+
+  // ប័ណ្ណមួយសន្លឹកក្នុងមួយជួរ · ប្រសិនបើផលបូកមិនស្មើប្រាក់សុទ្ធ នឹងបន្ថែមជួរ «កែតម្រូវ» ដើម្បីឲ្យត្រូវគ្នា
+  function slipLines(r) {
+    const dueAdv = r.advDue ? r.adv : 0;
+    const diff = r2(r.net - r2(r.total + r.benefits - r.deductions - dueAdv));
+    const L = [['ប្រាក់តាមវត្តមាន', r.total, '+'], ['អត្ថប្រយោជន៍', r.benefits, '+'], ['ប្រាក់កាត់', r.deductions, '−']];
+    if (dueAdv > 0) L.push(['ប្រាក់ខែទី១ ដែលបានបើកមុន', dueAdv, '−']);
+    if (Math.abs(diff) >= 0.01) L.push(['កែតម្រូវផ្សេងៗ', Math.abs(diff), diff > 0 ? '+' : '−']);
+    return L;
+  }
+
+  function payslipsHtml(o) {
+    const slips = o.rows.map(r => {
+      const e = r.e;
+      const lines = slipLines(r).map(l => `<tr><td>${escHtml(l[0])}</td><td class="r">${l[2] === '+' ? usd2(l[1]) : ''}</td><td class="r">${l[2] === '−' ? usd2(l[1]) : ''}</td></tr>`).join('');
+      return `<div class="slip"><h2>ប័ណ្ណប្រាក់ខែ — ${escHtml(o.monthLabel)}</h2><p class="meta">${escHtml(o.company || '')}</p>
+<div class="g2"><div><span>អត្តលេខ៖</span> ${escHtml(e.username || e.id || '')}</div><div><span>ផ្នែក៖</span> ${escHtml(e.dept || '-')}</div>
+<div><span>ឈ្មោះ៖</span> ${escHtml(e.name || '')}</div><div><span>តួនាទី៖</span> ${escHtml(e.position || e.title || e.role || '-')}</div>
+<div><span>ប្រាក់ខែមូលដ្ឋាន៖</span> $${usd2(baseSalary(e))}</div><div><span>ថ្ងៃធ្វើការ / ច្បាប់៖</span> ${r.workDays} / ${r.leaveDays}</div>
+<div><span>OT៖</span> ${r.otHours.toFixed(1)} ម៉ោង · $${usd2(r.otPay)}</div><div></div></div>
+<table><thead><tr><th>ប្រភេទ</th><th class="r" style="width:30mm">បូក ($)</th><th class="r" style="width:30mm">ដក ($)</th></tr></thead><tbody>${lines}
+<tr><th>ប្រាក់សុទ្ធត្រូវទទួល</th><th class="r" colspan="2">$${usd2(r.net)}</th></tr></tbody></table>
+<div class="sg"><div>ហត្ថលេខាបុគ្គលិក</div><div>ហិរញ្ញវត្ថុ</div></div></div>`;
+    }).join('');
+    return `<!doctype html><html lang="km"><head><meta charset="utf-8"><title>ប័ណ្ណប្រាក់ខែ ${escHtml(o.monthLabel)}</title>${fontLink(o.fontHref)}<style>${PRINT_CSS}${SLIP_CSS}</style></head><body>${slips}</body></html>`;
+  }
+
+  const slipState = { q: '', dept: '' };
+  function panePayslip(body) {
+    const ld = loadMonth(finMonth);
+    body.appendChild(rowEl(...monthNav()));
+    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
+    const depts = Array.from(new Set(ld.rows.map(r => String(r.e.dept || '').trim()))).sort();
+    const q = h('input', { type: 'search', placeholder: '🔎 ស្វែងរកឈ្មោះ / អត្តលេខ', value: slipState.q, style: 'min-width:210px' });
+    const dsel = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d || '__none__', text: d || '(គ្មានផ្នែក)' })));
+    dsel.value = slipState.dept; if (dsel.value !== slipState.dept) { dsel.value = ''; slipState.dept = ''; }
+    const picked = new Set(), out = h('div'), cnt = h('span', { class: 'fin-muted' });
+    const view = () => {
+      const s = q.value.trim().toLowerCase(), dv = dsel.value;
+      return ld.rows.filter(r => {
+        const d = String(r.e.dept || '').trim();
+        if (dv === '__none__' ? d !== '' : (dv && d !== dv)) return false;
+        return !s || String(r.e.name || '').toLowerCase().includes(s) || String(r.e.username || r.e.id || '').toLowerCase().includes(s);
+      });
+    };
+    const printRows = rows => { if (!rows.length) { say('គ្មានបុគ្គលិកត្រូវព្រីន'); return; } openPrint(payslipsHtml({ rows, monthLabel: monthLabel(finMonth), company: company(), fontHref: fontHref() })); };
+    const render = () => {
+      slipState.q = q.value; slipState.dept = dsel.value;
+      const rows = view();
+      cnt.textContent = `ជ្រើសរើស ${picked.size} នាក់ · បង្ហាញ ${rows.length}/${ld.rows.length}`;
+      out.textContent = '';
+      if (!rows.length) { out.appendChild(empty('រកមិនឃើញបុគ្គលិកត្រូវនឹងលក្ខខណ្ឌ')); return; }
+      out.appendChild(mkTable(['', 'ឈ្មោះ', 'ផ្នែក', 'សុទ្ធ ($)', ''], rows.map(r => {
+        const k = empKey(r.e), cb = h('input', { type: 'checkbox' }); cb.checked = picked.has(k);
+        cb.addEventListener('change', () => { if (cb.checked) picked.add(k); else picked.delete(k); cnt.textContent = `ជ្រើសរើស ${picked.size} នាក់ · បង្ហាញ ${rows.length}/${ld.rows.length}`; });
+        return [cb, r.e.name || '', r.e.dept || '-', usd2(r.net), btn('🖨', () => printRows([r]))];
+      }), [3]));
+    };
+    q.addEventListener('input', render); dsel.addEventListener('change', render);
+    body.appendChild(rowEl(q, lab('ផ្នែក ', dsel),
+      btn('☑ ជ្រើសទាំងអស់ដែលបង្ហាញ', () => { view().forEach(r => picked.add(empKey(r.e))); render(); }),
+      btn('☐ លុបការជ្រើស', () => { picked.clear(); render(); }),
+      btn('🖨 ព្រីនដែលបានជ្រើស', () => printRows(ld.rows.filter(r => picked.has(empKey(r.e))))),
+      btn('🖨 ព្រីនទាំងអស់ដែលបង្ហាញ', () => printRows(view()))));
+    body.appendChild(rowEl(cnt));
+    body.appendChild(out);
+    body.appendChild(h('p', { class: 'fin-muted', text: 'ប័ណ្ណ ២ សន្លឹកក្នុងមួយទំព័រ A4 (ប្រហែល)។ ប្រសិនបើផលបូកជួរមិនស្មើប្រាក់សុទ្ធ នឹងមានជួរ «កែតម្រូវផ្សេងៗ» ដើម្បីឲ្យចំនួនត្រូវគ្នា។' }));
+    render();
+  }
+
+  // ------------------------------------------------------------ លំហូរអនុម័ត ----
+  // រក្សាទុកក្នុង localStorage របស់ browser នេះ។ «ចាក់សោ» ជាសញ្ញាប្រាប់ និងរកឃើញការប្រែប្រួលក្រោយអនុម័ត — មិនទប់ស្កាត់ការកែក្នុងផ្ទាំងផ្សេងទេ។
+  const WF_KEY = 'fin_wf_v1';
+  const WF_STEPS = [['draft', '១ រៀបចំ'], ['reviewed', '២ ត្រួតពិនិត្យ'], ['approved', '៣ អនុម័ត'], ['locked', '៤ ចាក់សោ']];
+  const WF_ACTIONS = {
+    draft: [['reviewed', '📨 ដាក់ឲ្យត្រួតពិនិត្យ', false]],
+    reviewed: [['approved', '✓ អនុម័ត', true], ['draft', '↩ ត្រឡប់ទៅរៀបចំ', false]],
+    approved: [['locked', '🔒 ចាក់សោខែ', true], ['reviewed', '↩ ត្រឡប់ទៅត្រួតពិនិត្យ', true]],
+    locked: [['approved', '🔓 ដោះសោ', true]]
+  }; // [ទៅស្ថានភាព, ស្លាក, admin ប៉ុណ្ណោះ]
+  const wfAll = () => getJson(WF_KEY, {});
+  const wfGet = m => { const r = wfAll()[m]; return (r && typeof r === 'object') ? { status: r.status || 'draft', history: Array.isArray(r.history) ? r.history : [], snap: r.snap || null } : { status: 'draft', history: [], snap: null }; };
+  const wfSave = (m, rec) => { const a = wfAll(); a[m] = rec; lsSet(WF_KEY, JSON.stringify(a)); };
+  const wfIdx = st => Math.max(0, WF_STEPS.findIndex(x => x[0] === st));
+  const wfLabel = st => WF_STEPS[wfIdx(st)][1];
+  const snapOf = g => ({ n: g.n, net: r2(g.net), total: r2(g.total), benefits: r2(g.benefits), deductions: r2(g.deductions) });
+  const wfStatusBadge = st => h('span', { class: 'fin-badge' + (st === 'draft' ? ' warn' : ''), text: wfLabel(st) });
+  const wfDrift = (rec, g) => (rec.snap && rec.status !== 'draft') ? { net: r2(g.net - rec.snap.net), n: g.n - rec.snap.n } : null;
+
+  function paneApprove(body) {
+    const ld = loadMonth(finMonth);
+    body.appendChild(rowEl(...monthNav()));
+    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
+    const g = summarize(ld.rows).g, rec = wfGet(finMonth), st = rec.status, idx = wfIdx(st);
+    let prevRows = []; try { prevRows = loadMonth(shiftMonth(finMonth, -1)).rows; } catch (_) { prevRows = []; }
+    const issues = auditRows(ld.rows, prevRows), errs = issues.filter(x => x.lvl === 'late').length;
+    const fin = isFinanceRole();
+
+    body.appendChild(h('div', { class: 'fin-row' }, WF_STEPS.map((s, i) => h('span', { class: 'fin-badge', text: (i < idx ? '✓ ' : '') + s[1], style: i <= idx ? (i === idx ? 'font-weight:700;outline:2px solid #0d9488' : '') : 'background:#e5e7eb;color:#6b7280' }))));
+    body.appendChild(h('div', { class: 'fin-grid' },
+      statEl(wfLabel(st), `ស្ថានភាព ${monthLabel(finMonth)}`), statEl(`${g.n} នាក់`, 'បុគ្គលិកក្នុងបញ្ជី'), statEl('$' + usd2(g.net), 'ត្រូវបើកសរុប (សុទ្ធ)'),
+      statEl(`${errs} / ${issues.length - errs}`, 'បញ្ហាធ្ងន់ធ្ងរ / ព្រមាន (មើលផ្ទាំង 🔍)')));
+    const dr = wfDrift(rec, g);
+    if (dr && (Math.abs(dr.net) >= 0.01 || dr.n !== 0)) body.appendChild(rowEl(badge(`⚠ ទិន្នន័យប្រែប្រួលពីពេល${wfLabel(st === 'locked' ? 'approved' : st).slice(2)} — ប្រាក់សុទ្ធ ${dr.net >= 0 ? '+' : '−'}$${usd2(Math.abs(dr.net))}${dr.n ? `, បុគ្គលិក ${dr.n > 0 ? '+' : ''}${dr.n}` : ''}`, 'late')));
+    if (errs > 0 && st !== 'locked') body.appendChild(rowEl(badge(`⚠ មានបញ្ហាធ្ងន់ធ្ងរ ${errs} — ពិនិត្យក្នុងផ្ទាំង «🔍 ពិនិត្យ» មុនអនុម័ត`, 'warn')));
+
+    const noteIn = h('input', { type: 'text', placeholder: 'កំណត់សម្គាល់ (ចាំបាច់ពេលត្រឡប់ក្រោយ/ដោះសោ)', style: 'min-width:280px' });
+    const act = async to => {
+      const back = wfIdx(to) < idx, note = noteIn.value.trim();
+      if (back && !note) { await say('សូមបញ្ចូលមូលហេតុក្នុង «កំណត់សម្គាល់» មុនត្រឡប់ក្រោយ ឬដោះសោ'); return; }
+      if ((to === 'reviewed' || to === 'approved') && !back && errs > 0 && !window.confirm(`នៅមានបញ្ហាធ្ងន់ធ្ងរ ${errs}។ បន្តដែរឬទេ?`)) return;
+      if (to === 'locked' && !window.confirm(`ចាក់សោ ${monthLabel(finMonth)}?`)) return;
+      const r = wfGet(finMonth);
+      r.status = to;
+      r.history = r.history.concat([{ st: to, at: new Date().toISOString(), by: fin ? 'Finance' : 'Admin', note, net: r2(g.net), n: g.n }]);
+      if (to === 'draft') r.snap = null; else if (to === 'reviewed' || to === 'approved') r.snap = snapOf(g);
+      wfSave(finMonth, r);
+      renderBody();
+    };
+    const acts = (WF_ACTIONS[st] || []).map(a => { const b = btn(a[1], () => act(a[0]), wfIdx(a[0]) > idx ? '' : 'secondary'); if (a[2] && fin) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; } return b; });
+    body.appendChild(card('សកម្មភាព', rowEl(noteIn), rowEl(...acts),
+      h('p', { class: 'fin-muted', text: (fin ? 'គណនី Finance អាច «ដាក់ឲ្យត្រួតពិនិត្យ» និងត្រឡប់ទៅរៀបចំ។ ការអនុម័ត ចាក់សោ និងដោះសោ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។ ' : '') + 'ស្ថានភាពរក្សាក្នុង browser នេះ។ «ចាក់សោ» មិនទប់ស្កាត់ការកែទិន្នន័យទេ ប៉ុន្តែនឹងបង្ហាញការព្រមានពេលចំនួនប្រែប្រួល។' })));
+
+    if (rec.history.length) body.appendChild(card('ប្រវត្តិ', mkTable(['ពេលវេលា', 'ស្ថានភាព', 'ដោយ', 'សុទ្ធ ($)', 'កំណត់សម្គាល់'],
+      rec.history.slice().reverse().map(x => [x.at ? new Date(x.at).toLocaleString() : '-', wfStatusBadge(x.st), x.by || '-', usd2(x.net), x.note || '']), [3])));
+
+    const all = wfAll(), months = Object.keys(all).sort().reverse().slice(0, 12);
+    if (months.length) body.appendChild(card('ខែដែលមានកំណត់ត្រា', mkTable(['ខែ', 'ស្ថានភាព', 'សុទ្ធ ($)', ''], months.map(m => {
+      const r = wfGet(m), last = r.history[r.history.length - 1];
+      return [monthLabel(m), wfStatusBadge(r.status), last ? usd2(last.net) : '-', btn('បើក', () => { finMonth = m; renderBody(); })];
+    }), [2])));
+  }
+
+  // ------------------------------------------------------------ Payroll Journal ----
+  const JR_KEY = 'fin_journal_accts';
+  const JR_DEF = { expense: '6100 ចំណាយប្រាក់ខែ', ded: '2200 ប្រាក់កាត់ត្រូវបង់', adv: '1150 ប្រាក់ខែទី១ (បុរេប្រទាន)', pay: '2100 ប្រាក់ខែត្រូវបង់', cash: '1000 សាច់ប្រាក់ / ធនាគារ' };
+  const JR_LAB = { expense: 'ចំណាយប្រាក់ខែ (Dr)', ded: 'ប្រាក់កាត់ត្រូវបង់ (Cr)', adv: 'ប្រាក់ខែទី១/បុរេប្រទាន', pay: 'ប្រាក់ខែត្រូវបង់ (Cr/Dr)', cash: 'សាច់ប្រាក់/ធនាគារ (Cr)' };
+  const jrAccts = () => Object.assign({}, JR_DEF, getJson(JR_KEY, {}));
+
+  // o: {month, accts, byDept, paidAmt} → { lines:[{date,entry,account,desc,debit,credit,dept}], totD, totC, netDiff }
+  function journalLines(rows, o) {
+    const A = o.accts, L = [], ml = monthLabel(o.month);
+    let n = 0;
+    const eno = () => `PR-${o.month.replace('-', '')}-${z2(++n)}`;
+    const add = (date, entry, account, desc, debit, credit, dept) => { debit = r2(debit); credit = r2(credit); if (debit > 0 || credit > 0) L.push({ date, entry, account, desc, debit, credit, dept: dept || '' }); };
+    const dEnd = `${o.month}-${z2(lastDay(o.month))}`, d25 = `${o.month}-25`;
+    const advDue = r2(rows.reduce((a, r) => a + (r.advDue ? r.adv : 0), 0));
+    const ded = r2(rows.reduce((a, r) => a + r.deductions, 0));
+
+    if (advDue > 0) { const e = eno(); add(d25, e, A.adv, `ប្រាក់ខែទី១ ${ml}`, advDue, 0); add(d25, e, A.cash, `ទូទាត់ប្រាក់ខែទី១ ${ml}`, 0, advDue); }
+
+    const e2 = eno(); let dr = 0;
+    if (o.byDept) {
+      const m = new Map();
+      rows.forEach(r => { const k = String(r.e.dept || '').trim() || '(គ្មានផ្នែក)'; m.set(k, (m.get(k) || 0) + r.total + r.benefits); });
+      Array.from(m.keys()).sort().forEach(k => { const v = r2(m.get(k)); dr += v; add(dEnd, e2, A.expense, `ចំណាយប្រាក់ខែ ${ml}`, v, 0, k); });
+    } else { dr = r2(rows.reduce((a, r) => a + r.total + r.benefits, 0)); add(dEnd, e2, A.expense, `ចំណាយប្រាក់ខែ ${ml}`, dr, 0); }
+    dr = r2(dr);
+    const pay = r2(dr - ded - advDue);
+    add(dEnd, e2, A.ded, `ប្រាក់កាត់ ${ml}`, 0, ded);
+    add(dEnd, e2, A.adv, `កាត់ប្រាក់ខែទី១ដែលបានបើកមុន ${ml}`, 0, advDue);
+    add(dEnd, e2, A.pay, `ប្រាក់ខែសុទ្ធត្រូវបង់ ${ml}`, 0, pay);
+
+    const paid = r2(o.paidAmt || 0);
+    if (paid > 0) { const e3 = eno(); add(dEnd, e3, A.pay, `បើកប្រាក់ខែ ${ml}`, paid, 0); add(dEnd, e3, A.cash, `បើកប្រាក់ខែ ${ml}`, 0, paid); }
+
+    const totD = r2(L.reduce((a, x) => a + x.debit, 0)), totC = r2(L.reduce((a, x) => a + x.credit, 0));
+    return { lines: L, totD, totC, netDiff: r2(pay - rows.reduce((a, r) => a + r.net, 0)), pay };
+  }
+
+  const jrState = { byDept: false };
+  function paneJournal(body) {
+    const ld = loadMonth(finMonth);
+    body.appendChild(rowEl(...monthNav()));
+    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
+    const wf = wfGet(finMonth);
+    const accts = jrAccts(), out = h('div');
+    const inputs = {};
+    Object.keys(JR_DEF).forEach(k => {
+      inputs[k] = h('input', { type: 'text', value: accts[k], style: 'min-width:210px' });
+      inputs[k].addEventListener('change', () => { const o = {}; Object.keys(inputs).forEach(x => { o[x] = inputs[x].value.trim() || JR_DEF[x]; }); lsSet(JR_KEY, JSON.stringify(o)); render(); });
+    });
+    const byDept = h('input', { type: 'checkbox' }); byDept.checked = jrState.byDept;
+    byDept.addEventListener('change', () => { jrState.byDept = byDept.checked; render(); });
+
+    const build = () => {
+      const pm = paidMonth(finMonth), paidAmt = Object.keys(pm).reduce((a, k) => a + num(pm[k] && pm[k].amt), 0);
+      const cur = {}; Object.keys(inputs).forEach(k => { cur[k] = inputs[k].value.trim() || JR_DEF[k]; });
+      return journalLines(ld.rows, { month: finMonth, accts: cur, byDept: byDept.checked, paidAmt });
+    };
+    const HEADS = ['កាលបរិច្ឆេទ', 'លេខ Entry', 'គណនី', 'ពិពណ៌នា', 'Debit ($)', 'Credit ($)', 'ផ្នែក'];
+    const render = () => {
+      out.textContent = '';
+      const j = build();
+      out.appendChild(rowEl(badge(j.totD === j.totC ? `✓ Debit = Credit ($${usd2(j.totD)})` : `⚠ មិនស្មើ៖ Dr ${usd2(j.totD)} / Cr ${usd2(j.totC)}`, j.totD === j.totC ? '' : 'late'),
+        Math.abs(j.netDiff) >= 0.01 ? badge(`⚠ ប្រាក់ខែត្រូវបង់ខុសពីផលបូកប្រាក់សុទ្ធ $${usd2(j.netDiff)} (ពិនិត្យប្រាក់កាត់/ប្រាក់ខែទី១)`, 'warn') : badge('✓ ស្មើផលបូកប្រាក់សុទ្ធបុគ្គលិក'),
+        h('span', { class: 'fin-muted', text: 'ស្ថានភាព៖ ' }), wfStatusBadge(wf.status)));
+      if (wf.status !== 'approved' && wf.status !== 'locked') out.appendChild(rowEl(badge('⚠ ខែនេះមិនទាន់អនុម័តទេ — Journal នេះជាសេចក្តីព្រាង', 'warn')));
+      out.appendChild(mkTable(HEADS, j.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit ? usd2(x.debit) : '', x.credit ? usd2(x.credit) : '', x.dept]).concat([['', '', '', 'សរុប', usd2(j.totD), usd2(j.totC), ''].map(c => h('b', { text: c }))]), [4, 5]));
+      out.appendChild(rowEl(
+        btn('⬇ CSV', () => { const jj = build(); download(`payroll-journal-${finMonth}.csv`, toCsv([['Date', 'Entry', 'Account', 'Description', 'Debit', 'Credit', 'Department']].concat(jj.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit || '', x.credit || '', x.dept]))), 'text/csv;charset=utf-8'); }),
+        btn('🖨 ព្រីន', () => { const jj = build(); openPrint(listHtml({ title: `Payroll Journal — ${monthLabel(finMonth)}`, sub: company(), heads: HEADS, rows: jj.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit ? usd2(x.debit) : '', x.credit ? usd2(x.credit) : '', x.dept]), foot: ['', '', '', 'សរុប', usd2(jj.totD), usd2(jj.totC), ''], right: [4, 5], landscape: true, fontHref: fontHref() })); })));
+    };
+    body.appendChild(card('📒 គណនី (កែបាន — រក្សាទុកក្នុង browser)', ...Object.keys(JR_DEF).map(k => rowEl(lab(JR_LAB[k] + ' ', inputs[k]))), rowEl(lab('បំបែកចំណាយតាមផ្នែក ', byDept))));
+    body.appendChild(out);
+    body.appendChild(h('p', { class: 'fin-muted', text: 'Entry ១ = ប្រាក់ខែទី១ (ទី២៥) · Entry ២ = បង្គរប្រាក់ខែ ចុងខែ · Entry ៣ = ការបើកប្រាក់សុទ្ធ (ពីផ្ទាំង «✅ ស្ថានភាពបើកប្រាក់»)។ ប្រាក់ខែទី១ ត្រូវបានដកតែបុគ្គលិកដែលដល់ថ្ងៃទូទាត់។ ប្រើរូបិយប័ណ្ណ USD។ ត្រូវផ្ទៀងផ្ទាត់ជាមួយគណនេយ្យករមុននាំចូល។' }));
+    render();
+  }
+
   // ------------------------------------------------------------ ទំព័រ ----
   const SUBS = [
     ['overview', '📊 សង្ខេប', paneOverview],
     ['register', '🧾 បញ្ជីប្រាក់ខែ', paneRegister],
+    ['payslip', '💳 ប័ណ្ណប្រាក់ខែ', panePayslip],
     ['cash', '💵 បើកសាច់ប្រាក់', paneCash],
     ['paid', '✅ ស្ថានភាពបើកប្រាក់', panePaid],
+    ['approve', '📋 អនុម័តប្រាក់ខែ', paneApprove],
     ['trend', '📈 និន្នាការ', paneTrend],
     ['annual', '📆 ប្រចាំឆ្នាំ', paneAnnual],
     ['budget', '🎯 ថវិកា', paneBudget],
     ['checks', '🔍 ពិនិត្យ', paneChecks],
+    ['journal', '📒 Journal', paneJournal],
     ['access', '🔑 គណនី Finance', paneAccess] // admin ប៉ុណ្ណោះ — លាក់ពេល render តាម isFinanceRole()
   ];
   const visibleSubs = () => SUBS.filter(x => x[0] !== 'access' || !isFinanceRole());
@@ -795,7 +1017,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   }
   window.financeTools = {
-    summarize, auditRows, cashPlan, denominate, budgetStatus, notesText, monthsBack, shiftMonth, normalizeRow, loadMonth, payoutSheetHtml, reportHtml, monthLabel,
+    summarize, auditRows, journalLines, payslipsHtml, slipLines, cashPlan, denominate, budgetStatus, notesText, monthsBack, shiftMonth, normalizeRow, loadMonth, payoutSheetHtml, reportHtml, monthLabel,
     panes: SUBS.reduce((o, x) => { o[x[0]] = x[2]; return o; }, {})
   };
 })();
