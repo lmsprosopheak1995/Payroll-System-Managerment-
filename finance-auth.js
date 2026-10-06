@@ -1,11 +1,11 @@
 /* finance-auth.js — ទំព័រចូលគណនី Finance
  *
  * ១) ទំព័រចូល៖ បើកតាម  finance.html  (ឬ  index.html?role=finance) → បង្ហាញប្រអប់ «ចូលគណនី Finance»
- *    ផ្ទៀងផ្ទាត់ពាក្យសម្ងាត់តាម RPC login_finance (មើល finance-auth.sql)
+ *    ចូលដោយ ឈ្មោះអ្នកប្រើ + ពាក្យសម្ងាត់ (admin បង្កើតគណនីឲ្យម្នាក់ៗ) ផ្ទៀងផ្ទាត់តាម RPC login_finance (មើល finance-auth.sql)
  * ២) ក្រោយចូល (ទម្រង់ Finance)៖ បង្ហាញតែទំព័រ «💼 Finance» — លាក់ម៉ឺនុយផ្សេង ប៊ូតុងបន្ថែម/កែបុគ្គលិក
  *    ប្តូរពាក្យសម្ងាត់ admin ឧបករណ៍ស្វែងរក (Ctrl+K) ជាដើម
  * ៣) សម្រាប់ admin៖ បន្ថែមប៊ូតុង «💼 ទំព័រចូល Finance» ក្នុងក្បាលទំព័រ (នៅក្បែរ «ទំព័រចូលបុគ្គលិក»)
- *    ហើយកំណត់ពាក្យសម្ងាត់ Finance នៅ Finance → «🔑 គណនី Finance»
+ *    ហើយបង្កើត/គ្រប់គ្រងគណនី Finance នៅ Finance → «🔑 គណនី Finance»
  *
  * ⚠ ការរឹតបន្តឹងនេះជាការគ្រប់គ្រង «ចំណុចប្រទាក់» (UI) ដូចការចូល admin ដែលមានស្រាប់ ព្រោះកម្មវិធីប្រើ anon key
  *   ជាមួយ RLS បើកទូលាយ។ វាមិនការពារទិន្នន័យពីអ្នកដែលហៅ Supabase ផ្ទាល់បានទេ។
@@ -17,6 +17,7 @@
 
   const ROLE_KEY = 'finance_portal_role';
   const ADMIN_KEY = 'admin_portal_session'; // ដូចក្នុង script.js
+  const USER_KEY = 'finance_portal_user';   // {id, username, full_name} របស់អ្នក Finance ដែលបានចូល
   const ss = {
     get: k => { try { return sessionStorage.getItem(k); } catch (_) { return null; } },
     set: (k, v) => { try { sessionStorage.setItem(k, v); } catch (_) { /* ignore */ } },
@@ -24,7 +25,7 @@
   };
 
   // ចាកចេញ (clearAdminSession) → លុប role ចាស់ ដើម្បីកុំឲ្យ admin ដែលចូលបន្ទាប់ត្រូវរឹតបន្តឹង
-  if (ss.get(ADMIN_KEY) !== '1') ss.del(ROLE_KEY);
+  if (ss.get(ADMIN_KEY) !== '1') { ss.del(ROLE_KEY); ss.del(USER_KEY); }
   const isRole = () => ss.get(ROLE_KEY) === '1' && ss.get(ADMIN_KEY) === '1';
   const wantsEntry = () => /(?:^|[?&])role=finance(?:&|$)/.test((typeof location !== 'undefined' && location.search) || '');
 
@@ -62,19 +63,21 @@ body.fin-mode #changeAdminPwBtn, body.fin-mode #addBtn, body.fin-mode a[href="em
     document.body.classList.add('fin-entry');
     const err = h('p', { id: 'finLoginError', style: 'color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none;' });
     const note = h('p', { style: 'color:var(--text-muted); font-size:0.75rem; text-align:center; margin:0 0 14px;' });
+    const user = h('input', { type: 'text', id: 'finLoginUser', autocomplete: 'username', autocapitalize: 'off', spellcheck: 'false', style: 'width:100%;padding:10px 12px;font-size:0.9rem;' });
     const pw = h('input', { type: 'password', id: 'finLoginPassword', autocomplete: 'current-password', style: 'width:100%;padding:10px 12px;font-size:0.9rem;' });
     const btn = h('button', { id: 'finLoginBtn', type: 'button', style: 'width:100%;padding:11px;font-size:0.9rem;', text: 'ចូលគណនី' });
     const showErr = m => { err.textContent = m; err.style.display = m ? 'block' : 'none'; };
 
     async function submit() {
-      const v = pw.value;
-      if (!v) { showErr('សូមបំពេញពាក្យសម្ងាត់'); return; }
+      const u = user.value.trim().toLowerCase(), v = pw.value;
+      if (!u || !v) { showErr('សូមបំពេញឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់'); return; }
       showErr(''); btn.disabled = true;
       try {
-        const { data, error } = await supabaseClient.rpc('login_finance', { p_password: v });
+        const { data, error } = await supabaseClient.rpc('login_finance', { p_username: u, p_password: v });
         if (error) { showErr(/too_many_attempts/.test(error.message || '') ? 'ព្យាយាមច្រើនពេក — សូមរង់ចាំ ១ នាទី' : 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
-        if (!data) { showErr('ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+        if (!data || !data.ok) { showErr('ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ (ឬគណនីត្រូវបានបិទ)'); return; }
         pw.value = '';
+        try { ss.set(USER_KEY, JSON.stringify(data.user || {})); } catch (_) { /* ignore */ }
         ss.set(ROLE_KEY, '1'); ss.set(ADMIN_KEY, '1'); // script.js ទទួលស្គាល់ session → ផ្ទុកកម្មវិធី; យើងរឹតបន្តឹងជា Finance
         location.reload();
       } catch (ex) { showErr('មានបញ្ហា៖ ' + (ex.message || ex)); }
@@ -82,23 +85,25 @@ body.fin-mode #changeAdminPwBtn, body.fin-mode #addBtn, body.fin-mode a[href="em
     }
     btn.addEventListener('click', submit);
     pw.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    user.addEventListener('keydown', e => { if (e.key === 'Enter') pw.focus(); });
 
     gate.appendChild(h('div', { class: 'portal-card', id: 'finLoginCard', style: 'background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:22px;' },
       h('h1', { style: 'font-size:1.05rem; text-align:center; margin:0 0 4px;', text: '💼 ចូលគណនី Finance' }),
       note, err,
-      h('div', { class: 'form-group' }, h('label', { style: 'font-size:0.72rem;color:var(--text-muted);font-weight:600;', text: 'ពាក្យសម្ងាត់ Finance' }), pw),
+      h('div', { class: 'form-group' }, h('label', { style: 'font-size:0.72rem;color:var(--text-muted);font-weight:600;', text: 'ឈ្មោះអ្នកប្រើ' }), user),
+      h('div', { class: 'form-group' }, h('label', { style: 'font-size:0.72rem;color:var(--text-muted);font-weight:600;', text: 'ពាក្យសម្ងាត់' }), pw),
       btn,
       h('p', { style: 'text-align:center; margin:14px 0 0; font-size:0.74rem;' }, h('a', { href: 'index.html', text: '← ចូលជាអ្នកគ្រប់គ្រង', style: 'color:var(--text-muted)' }))));
 
     // ពិនិត្យថាមានគណនី Finance ហើយឬនៅ
     (async () => {
       try {
-        const { data, error } = await supabaseClient.rpc('finance_password_is_set');
+        const { data, error } = await supabaseClient.rpc('finance_users_exist');
         if (error) note.textContent = '⚠ មិនអាចពិនិត្យគណនី Finance — សូមរត់ finance-auth.sql ក្នុង Supabase ជាមុន (' + error.message + ')';
-        else if (!data) note.textContent = 'Finance មិនទាន់មានគណនី — សូមឲ្យអ្នកគ្រប់គ្រងកំណត់ពាក្យសម្ងាត់ក្នុង Finance → «🔑 គណនី Finance»';
+        else if (!data) note.textContent = 'មិនទាន់មានគណនី Finance — សូមឲ្យអ្នកគ្រប់គ្រងបង្កើតក្នុង Finance → «🔑 គណនី Finance»';
       } catch (ex) { note.textContent = '⚠ ' + (ex.message || ex); }
     })();
-    setTimeout(() => { try { pw.focus(); } catch (_) { /* ignore */ } }, 50);
+    setTimeout(() => { try { user.focus(); } catch (_) { /* ignore */ } }, 50);
   }
 
   // ------------------------------------------------------------ ទម្រង់ Finance (ក្រោយចូល) ----
@@ -116,7 +121,7 @@ body.fin-mode #changeAdminPwBtn, body.fin-mode #addBtn, body.fin-mode a[href="em
       if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { e.stopImmediatePropagation(); }
     }, true);
     const title = document.querySelector('.app-main header h1');
-    if (title && !document.getElementById('finModeBadge')) title.appendChild(h('span', { id: 'finModeBadge', class: 'fin-badge-mode', text: 'Finance' }));
+    if (title && !document.getElementById('finModeBadge')) { let u = {}; try { u = JSON.parse(ss.get(USER_KEY) || '{}') || {}; } catch (_) { u = {}; } title.appendChild(h('span', { id: 'finModeBadge', class: 'fin-badge-mode', text: 'Finance' + (u.full_name || u.username ? ' · ' + (u.full_name || u.username) : '') })); }
 
     // បើកទំព័រ Finance បន្ទាប់ពីទិន្នន័យទាំងអស់ផ្ទុកចប់ (renderAll ត្រូវបានហៅក្រោយ Promise.all)
     let opened = false;
@@ -152,5 +157,5 @@ body.fin-mode #changeAdminPwBtn, body.fin-mode #addBtn, body.fin-mode a[href="em
   }
 
   if (typeof document !== 'undefined') init();
-  window.financeAuth = { isRole, ROLE_KEY };
+  window.financeAuth = { isRole, ROLE_KEY, USER_KEY };
 })();

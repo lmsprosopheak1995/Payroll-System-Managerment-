@@ -1,18 +1,10 @@
 /* finance.js — ទំព័រ «💼 Finance» (ហិរញ្ញវត្ថុ) សម្រាប់ប្រព័ន្ធគ្រប់គ្រងបុគ្គលិក
  *
- * ទំព័រថ្មីក្នុងម៉ឺនុយខាងឆ្វេង (ក្រោមក្រុម Payrolls) មានច្រើនផ្ទាំង៖
+ * ទំព័រថ្មីក្នុងម៉ឺនុយខាងឆ្វេង (ក្រោមក្រុម Payrolls) មាន ៤ ផ្ទាំង៖
  *   📊 សង្ខេប       — ថ្លៃប្រាក់ខែប្រចាំខែ សរុប/តាមផ្នែក/Top 10 ប្រៀបធៀបខែមុន + CSV + ព្រីនរបាយការណ៍
  *   💵 បើកសាច់ប្រាក់ — បញ្ជីបើកប្រាក់ខែ (ដុល្លារ/រៀល/ដុល្លារ+រៀល) គណនាចំនួនក្រដាសប្រាក់ត្រូវរៀបចំ + បញ្ជីហត្ថលេខា
  *   📈 និន្នាការ     — ថ្លៃប្រាក់ខែ ៦ ឬ ១២ ខែចុងក្រោយ
  *   🎯 ថវិកា        — កំណត់ថវិកាប្រចាំខែ (សរុប + តាមផ្នែក) ប្រៀបធៀបជាមួយចំណាយពិត
- *   🧾 បញ្ជីប្រាក់ខែ  — តារាងបុគ្គលិកម្នាក់ៗ ស្វែងរក/ត្រង/តម្រៀប + CSV + ព្រីន
- *   ✅ ស្ថានភាពបើកប្រាក់ — ធីកបុគ្គលិកដែលបានបើកប្រាក់ហើយ (រក្សាក្នុង browser) + វឌ្ឍនភាព
- *   📆 ប្រចាំឆ្នាំ    — សរុបប្រាក់ខែ ១២ ខែ + CSV + ព្រីន
- *   🔍 ពិនិត្យ       — ស្វែងរកភាពមិនប្រក្រតី (ប្រាក់អវិជ្ជមាន គ្មានប្រាក់ខែ OT ខ្ពស់ ប្រែប្រួលខ្លាំង ។ល។)
- *   💳 ប័ណ្ណប្រាក់ខែ  — ព្រីន Payslip ម្នាក់ៗ ឬច្រើននាក់ (២ សន្លឹកក្នុងមួយទំព័រ)
- *   📋 អនុម័តប្រាក់ខែ — លំហូរ រៀបចំ → ត្រួតពិនិត្យ → អនុម័ត → ចាក់សោ + ប្រវត្តិ + រកការប្រែប្រួលក្រោយអនុម័ត
- *   📒 Journal       — Journal Entry សម្រាប់គណនេយ្យ (Dr/Cr តុល្យភាព) + CSV + ព្រីន
- *   🛠 ឧបករណ៍ Payroll — ភ្ជាប់ប៊ូតុងដែលមានស្រាប់ក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (គណនា ព្រីន PDF Excel CSV បិទខែ ។ល។) សម្រាប់គណនី Finance
  *
  * ទិន្នន័យទាំងអស់គណនាដោយមុខងាររបស់កម្មវិធីដដែល (summarizeEmpMonth, calcAdvanceRow, payrollEmployeesForMonth)
  * ដូច្នេះចំនួនសរុបត្រូវនឹងផ្ទាំង «ប្រាក់ខែប្រចាំខែ»។ ទំព័រនេះ «អាន» តែប៉ុណ្ណោះ មិនកែទិន្នន័យអ្វីក្នុង Supabase ទេ។
@@ -448,592 +440,149 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ គណនី Finance (admin ប៉ុណ្ណោះ) ----
-  // ត្រូវមានទាំង role flag និង admin session (ដូច finance-auth.js) — កុំឲ្យ flag ចាស់ (stale) ធ្វើឲ្យ admin បាត់ផ្ទាំង
-  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1' && sessionStorage.getItem('admin_portal_session') === '1'; } catch (_) { return false; } };
+  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1'; } catch (_) { return false; } };
 
-  function paneAccess(body) {
+  // ពាក្យសម្ងាត់ admin ទុកក្នុងអង្គចងចាំ (មិនរក្សាទុកលើថាស) ១០ នាទី ដើម្បីកុំវាយរាល់ប្រតិបត្តិការ
+  let adminPwMem = null, adminPwTimer = null;
+  const lockAdmin = () => { adminPwMem = null; if (adminPwTimer) { clearTimeout(adminPwTimer); adminPwTimer = null; } };
+  const unlockAdmin = pw => {
+    adminPwMem = pw;
+    if (adminPwTimer) clearTimeout(adminPwTimer);
+    adminPwTimer = setTimeout(() => { adminPwMem = null; adminPwTimer = null; if (sub === 'access') renderBody(); }, 10 * 60 * 1000);
+  };
+  const rpcErr = ex => {
+    const m = (ex && ex.message) || String(ex);
+    if (/admin_denied/.test(m)) return 'ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ';
+    if (/password_too_short/.test(m)) return 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ';
+    if (/username_taken/.test(m)) return 'ឈ្មោះអ្នកប្រើនេះមានរួចហើយ';
+    if (/username_invalid/.test(m)) return 'ឈ្មោះអ្នកប្រើត្រូវមាន ៣–៣០ តួ (a-z 0-9 . _ -)';
+    return m;
+  };
+  const genPassword = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ដកតួងាយច្រឡំ (l, 1, O, 0, I)
+    const r = new Uint32Array(10); crypto.getRandomValues(r);
+    return Array.from(r, x => chars[x % chars.length]).join('');
+  };
+  const askText = async (msg) => (typeof customPrompt === 'function' ? customPrompt(msg) : window.prompt(msg));
+  const askYes = m => (typeof customConfirm === 'function' ? customConfirm(m) : Promise.resolve(window.confirm(m)));
+  const copyText = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (_) { return false; } };
+  const fmtWhen = v => { if (!v) return '-'; const d = new Date(v); return isNaN(d) ? '-' : d.toLocaleString(); };
+
+  async function paneAccess(body) {
     const url = new URL('finance.html', location.href).href;
-    const status = h('p', { class: 'fin-muted', text: 'កំពុងពិនិត្យ…' });
-    const refresh = async () => {
-      try {
-        const { data, error } = await supabaseClient.rpc('finance_password_is_set');
-        status.textContent = error ? '⚠ មិនអាចពិនិត្យ — ប្រហែលមិនទាន់រត់ finance-auth.sql៖ ' + error.message
-          : (data ? '✓ គណនី Finance មានពាក្យសម្ងាត់ហើយ' : 'មិនទាន់កំណត់ពាក្យសម្ងាត់ Finance');
-      } catch (ex) { status.textContent = '⚠ ' + (ex.message || ex); }
-    };
-    const pwInput = ph => h('input', { type: 'password', placeholder: ph, autocomplete: 'new-password', style: 'min-width:220px' });
-    const adminPw = pwInput('ពាក្យសម្ងាត់ admin (ដើម្បីអនុញ្ញាត)');
-    const newPw = pwInput('ពាក្យសម្ងាត់ Finance ថ្មី (≥ ៦ តួ)');
-    const newPw2 = pwInput('បញ្ជាក់ពាក្យសម្ងាត់ Finance');
     const urlInput = h('input', { type: 'text', readonly: 'readonly', value: url, style: 'width:min(460px,100%)' });
-    const rpcMsg = ex => (/password_too_short/.test(ex.message || '') ? 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ' : (ex.message || String(ex)));
+    body.appendChild(card('🔗 តំណរទំព័រចូល Finance',
+      rowEl(urlInput, btn('📋 ចម្លង', async () => { await say((await copyText(url)) ? '✓ បានចម្លងតំណរ' : 'ចម្លងមិនបាន — សូមចម្លងដោយដៃ'); })),
+      h('p', { class: 'fin-muted', text: 'ផ្ញើតំណរនេះឲ្យអ្នក Finance ជាមួយឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់របស់ពួកគេ។' })));
 
-    const setBtn = btn('💾 កំណត់ / ប្តូរពាក្យសម្ងាត់ Finance', async () => {
-      if (!adminPw.value) { await say('សូមបញ្ចូលពាក្យសម្ងាត់ admin'); return; }
-      if (!newPw.value || newPw.value.length < 6) { await say('ពាក្យសម្ងាត់ Finance ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
-      if (newPw.value !== newPw2.value) { await say('ពាក្យសម្ងាត់ Finance ទាំងពីរមិនដូចគ្នាទេ'); return; }
-      setBtn.disabled = true;
+    // ---- ជំហាន ១៖ ដោះសោដោយពាក្យសម្ងាត់ admin ----
+    if (!adminPwMem) {
+      const pw = h('input', { type: 'password', placeholder: 'ពាក្យសម្ងាត់ admin', autocomplete: 'current-password', style: 'min-width:240px' });
+      const go = btn('🔓 បើកការគ្រប់គ្រងគណនី', async () => {
+        if (!pw.value) { await say('សូមបញ្ចូលពាក្យសម្ងាត់ admin'); return; }
+        go.disabled = true;
+        try {
+          const { data, error } = await supabaseClient.rpc('login_admin', { p_password: pw.value });
+          if (error) throw error;
+          if (!data) { await say('ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ'); return; }
+          unlockAdmin(pw.value); renderBody();
+        } catch (ex) { await say('បើកមិនបាន៖ ' + rpcErr(ex)); }
+        finally { go.disabled = false; }
+      }, '');
+      pw.addEventListener('keydown', e => { if (e.key === 'Enter') go.click(); });
+      body.appendChild(card('🔐 គណនី Finance',
+        h('p', { class: 'fin-muted', text: 'បញ្ចូលពាក្យសម្ងាត់ admin ដើម្បីមើល និងគ្រប់គ្រងគណនី Finance។ ពាក្យសម្ងាត់ត្រូវចងចាំក្នុងអង្គចងចាំតែ ១០ នាទី (មិនរក្សាទុកលើថាស)។' }),
+        rowEl(pw, go)));
+      return;
+    }
+
+    // ---- ជំហាន ២៖ បញ្ជីគណនី ----
+    const listBox = h('div');
+    const run = async (fn, okMsg) => {
+      try { const r = await fn(); if (okMsg) await say(typeof okMsg === 'function' ? await okMsg(r) : okMsg); await load(); }
+      catch (ex) { if (/admin_denied/.test((ex && ex.message) || '')) { lockAdmin(); renderBody(); } await say('មិនបាន៖ ' + rpcErr(ex)); }
+    };
+    const call = async (name, args) => { const { data, error } = await supabaseClient.rpc(name, Object.assign({ p_admin_password: adminPwMem }, args)); if (error) throw error; return data; };
+    const draw = users => {
+      listBox.textContent = '';
+      if (!users.length) { listBox.appendChild(empty('មិនទាន់មានគណនី Finance — បង្កើតខាងក្រោម')); return; }
+      listBox.appendChild(mkTable(['ឈ្មោះអ្នកប្រើ', 'ឈ្មោះពេញ', 'ស្ថានភាព', 'ចូលចុងក្រោយ', ''], users.map(u => [
+        u.username, u.full_name || '-', badge(u.active ? 'សកម្ម' : 'បិទ', u.active ? '' : 'late'), fmtWhen(u.last_login),
+        h('div', { class: 'fin-row', style: 'margin:0;flex-wrap:nowrap' },
+          btn('✏️ ឈ្មោះ', async () => { const v = await askText(`ឈ្មោះពេញរបស់ «${u.username}»៖`); if (v === null || v === undefined) return; run(() => call('update_finance_user', { p_id: u.id, p_full_name: String(v).trim() }), '✓ បានកែឈ្មោះ'); }),
+          btn('🔑 ពាក្យសម្ងាត់', async () => {
+            const v = await askText(`ពាក្យសម្ងាត់ថ្មីរបស់ «${u.username}» (≥ ៦ តួ) — ទុកទទេ ដើម្បីបង្កើតដោយស្វ័យប្រវត្តិ៖`);
+            if (v === null || v === undefined) return;
+            const np = String(v).trim() || genPassword();
+            run(async () => { await call('update_finance_user', { p_id: u.id, p_new_password: np }); return np; },
+              async np2 => { const c = await copyText(`${u.username} / ${np2}`); return `✓ ពាក្យសម្ងាត់ថ្មីរបស់ ${u.username}៖ ${np2}${c ? '\n(បានចម្លងរួច)' : ''}\nសូមផ្ញើឲ្យគាត់ — នឹងមិនបង្ហាញទៀតទេ`; });
+          }),
+          btn(u.active ? '⏸ បិទ' : '▶ បើក', () => run(() => call('update_finance_user', { p_id: u.id, p_active: !u.active }), u.active ? '✓ បានបិទគណនី' : '✓ បានបើកគណនី')),
+          btn('🗑 លុប', async () => { if (await askYes(`លុបគណនី «${u.username}»? មិនអាចត្រឡប់វិញបានទេ។`)) run(() => call('delete_finance_user', { p_id: u.id }), '✓ បានលុបគណនី'); }, 'danger'))])));
+    };
+    async function load() {
+      listBox.textContent = 'កំពុងផ្ទុក…';
+      try { draw((await call('list_finance_users', {})) || []); }
+      catch (ex) {
+        if (/admin_denied/.test((ex && ex.message) || '')) { lockAdmin(); renderBody(); return; }
+        listBox.textContent = '⚠ ' + rpcErr(ex) + ' — ប្រហែលមិនទាន់រត់ finance-auth.sql ក្នុង Supabase';
+      }
+    }
+    body.appendChild(card('👥 គណនី Finance', rowEl(btn('🔄 ផ្ទុកឡើងវិញ', load), btn('🔒 ចាក់សោវិញ', () => { lockAdmin(); renderBody(); })), listBox));
+
+    // ---- ជំហាន ៣៖ បង្កើតគណនីថ្មី ----
+    const fromEmp = h('select', { style: 'min-width:220px;max-width:100%' }, h('option', { value: '', text: '— ជ្រើសពីបុគ្គលិក (ស្រេចចិត្ត) —' }),
+      emps().filter(e => e.status === 'active').slice().sort((a, b) => String(a.name).localeCompare(String(b.name))).map((e, i) => h('option', { value: String(e.id), text: e.name + (e.dept ? ' · ' + e.dept : '') })));
+    const uName = h('input', { type: 'text', placeholder: 'ឈ្មោះអ្នកប្រើ (a-z 0-9 . _ -)', autocapitalize: 'off', spellcheck: 'false', style: 'min-width:200px' });
+    const fName = h('input', { type: 'text', placeholder: 'ឈ្មោះពេញ', style: 'min-width:200px' });
+    const pwNew = h('input', { type: 'text', placeholder: 'ពាក្យសម្ងាត់ (≥ ៦ តួ)', autocomplete: 'off', style: 'min-width:180px' });
+    fromEmp.addEventListener('change', () => {
+      const e = emps().find(x => String(x.id) === fromEmp.value);
+      if (!e) return;
+      fName.value = e.name || '';
+      const sug = String(e.username || '').toLowerCase();
+      if (/^[a-z0-9._-]{3,30}$/.test(sug)) uName.value = sug;
+    });
+    const createBtn = btn('➕ បង្កើតគណនី', async () => {
+      const u = uName.value.trim().toLowerCase(), p = pwNew.value;
+      if (!/^[a-z0-9._-]{3,30}$/.test(u)) { await say('ឈ្មោះអ្នកប្រើត្រូវមាន ៣–៣០ តួ ដោយប្រើ a-z 0-9 . _ - ប៉ុណ្ណោះ'); return; }
+      if (!p || p.length < 6) { await say('ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ (ឬចុច 🎲 បង្កើត)'); return; }
+      createBtn.disabled = true;
       try {
-        const { data, error } = await supabaseClient.rpc('set_finance_password', { p_admin_password: adminPw.value, p_new_password: newPw.value });
-        if (error) throw error;
-        if (!data) { await say('ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ'); return; }
-        adminPw.value = newPw.value = newPw2.value = '';
-        await say('✓ បានកំណត់ពាក្យសម្ងាត់ Finance — សូមប្រាប់អ្នក Finance ជាមួយតំណរខាងលើ');
-        refresh();
-      } catch (ex) { await say('កំណត់មិនបាន៖ ' + rpcMsg(ex)); }
-      finally { setBtn.disabled = false; }
+        await call('create_finance_user', { p_username: u, p_full_name: fName.value.trim(), p_password: p });
+        const info = `ឈ្មោះអ្នកប្រើ៖ ${u}\nពាក្យសម្ងាត់៖ ${p}\nតំណរចូល៖ ${url}`;
+        const c = await copyText(info);
+        uName.value = fName.value = pwNew.value = ''; fromEmp.value = '';
+        await say('✓ បានបង្កើតគណនី Finance\n\n' + info + (c ? '\n\n(បានចម្លងទៅ clipboard)' : '') + '\n\nសូមផ្ញើឲ្យអ្នកប្រើ — ពាក្យសម្ងាត់នឹងមិនបង្ហាញទៀតទេ');
+        await load();
+      } catch (ex) {
+        if (/admin_denied/.test((ex && ex.message) || '')) { lockAdmin(); renderBody(); }
+        await say('បង្កើតមិនបាន៖ ' + rpcErr(ex));
+      } finally { createBtn.disabled = false; }
     }, '');
-    const offBtn = btn('🚫 បិទគណនី Finance', async () => {
-      if (!adminPw.value) { await say('សូមបញ្ចូលពាក្យសម្ងាត់ admin'); return; }
-      if (!window.confirm('បិទគណនី Finance? អ្នក Finance នឹងចូលមិនបានរហូតដល់កំណត់ពាក្យសម្ងាត់ថ្មី។')) return;
-      try {
-        const { data, error } = await supabaseClient.rpc('clear_finance_password', { p_admin_password: adminPw.value });
-        if (error) throw error;
-        if (!data) { await say('ពាក្យសម្ងាត់ admin មិនត្រឹមត្រូវ'); return; }
-        adminPw.value = '';
-        await say('✓ បានបិទគណនី Finance');
-        refresh();
-      } catch (ex) { await say('បិទមិនបាន៖ ' + rpcMsg(ex)); }
-    });
-
-    body.appendChild(card('🔑 គណនី Finance',
-      status,
-      rowEl(lab('តំណរទំព័រចូល ', urlInput), btn('📋 ចម្លង', async () => { try { await navigator.clipboard.writeText(url); await say('✓ បានចម្លងតំណរ'); } catch (_) { urlInput.select(); await say('ចម្លងមិនបាន — សូមចម្លងដោយដៃ'); } })),
-      rowEl(adminPw), rowEl(newPw, newPw2), rowEl(setBtn, offBtn),
-      h('p', { class: 'fin-muted', text: 'ពាក្យសម្ងាត់ Finance ត្រូវបាន hash ក្នុង Supabase (ដូចពាក្យសម្ងាត់ admin) ហើយការចូលខុស ៥ ដងនឹងចាក់សោ ៦០ វិនាទី។ ក្រោយចូល អ្នក Finance ឃើញតែទំព័រ Finance។' }),
+    body.appendChild(card('➕ បង្កើតគណនី Finance ថ្មី',
+      rowEl(lab('ជ្រើសពីបុគ្គលិក ', fromEmp)),
+      rowEl(uName, fName),
+      rowEl(pwNew, btn('🎲 បង្កើតពាក្យសម្ងាត់', () => { pwNew.value = genPassword(); }), createBtn),
+      h('p', { class: 'fin-muted', text: 'ម្នាក់ៗមានឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់ផ្ទាល់ខ្លួន។ ពាក្យសម្ងាត់ត្រូវបាន hash ក្នុង Supabase ហើយការចូលខុស ៥ ដងនឹងចាក់សោគណនីនោះ ៦០ វិនាទី។ ក្រោយចូល អ្នក Finance ឃើញតែទំព័រ Finance។' }),
       h('p', { class: 'fin-badge warn', text: '⚠ ការរឹតបន្តឹងនេះជាកម្រិតចំណុចប្រទាក់ (UI) ដូច admin ដែរ ព្រោះកម្មវិធីប្រើ anon key ជាមួយ RLS បើកទូលាយ។' })));
-    refresh();
-  }
-
-  // ============================================================ មុខងារស្តង់ដារបន្ថែម ====
-  const empKey = e => String(e.id != null ? e.id : (e.username || e.name || ''));
-  const baseSalary = e => { const s = parseFloat(e.salary); return s > 0 ? s : 0; };
-  const hasIdx = (list, i) => !!list && list.indexOf(i) >= 0;
-
-  // ឯកសារព្រីនទូទៅ (តារាង + ហត្ថលេខា) — o: {title, sub, heads, rows, foot, right, landscape, note}
-  function listHtml(o) {
-    const cls = i => (hasIdx(o.right, i) ? ' class="r"' : '');
-    const head = o.heads.map((x, i) => `<th${cls(i)}>${escHtml(x)}</th>`).join('');
-    const rows = o.rows.map(r => `<tr>${r.map((c, i) => `<td${cls(i)}>${escHtml(c)}</td>`).join('')}</tr>`).join('');
-    const foot = o.foot ? `<tr>${o.foot.map((c, i) => `<th${cls(i)}>${escHtml(c)}</th>`).join('')}</tr>` : '';
-    return `<!doctype html><html lang="km"><head><meta charset="utf-8"><title>${escHtml(o.title)}</title>${fontLink(o.fontHref)}<style>${PRINT_CSS}${o.landscape ? '@page{size:A4 landscape;margin:10mm}body{font-size:9pt}' : ''}</style></head><body>
-<h1>${escHtml(o.title)}</h1><p class="sub">${escHtml(o.sub || '')}</p>
-<table><thead><tr>${head}</tr></thead><tbody>${rows}${foot}</tbody></table>
-<div class="note">${escHtml(o.note || '')} បង្កើតនៅ ${escHtml(new Date().toLocaleString())}</div>
-<div class="foot"><div>អ្នករៀបចំ<div class="sp"></div>…………………</div><div>ហិរញ្ញវត្ថុ<div class="sp"></div>…………………</div><div>អ្នកអនុម័ត<div class="sp"></div>…………………</div></div></body></html>`;
-  }
-  const subLine = () => [company(), monthLabel(finMonth)].filter(Boolean).join(' · ');
-
-  // ------------------------------------------------------------ ផ្ទាំង៖ បញ្ជីប្រាក់ខែ ----
-  const regState = { q: '', dept: '', sort: 'name' };
-  const REG_HEADS = ['ល.រ', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែមូលដ្ឋាន ($)', 'ថ្ងៃធ្វើការ', 'ថ្ងៃច្បាប់', 'OT (ម៉ោង)', 'តាមវត្តមាន ($)', 'អត្ថប្រយោជន៍ ($)', 'ប្រាក់កាត់ ($)', 'សុទ្ធ ($)', 'ប្រាក់ខែទី១ ($)'];
-  const REG_RIGHT = [4, 5, 6, 7, 8, 9, 10, 11, 12];
-
-  function regCells(r, i, raw) {
-    const f = raw ? r2 : usd2;
-    return [String(i + 1), String(r.e.username || r.e.id || ''), String(r.e.name || ''), String(r.e.dept || ''), f(baseSalary(r.e)), String(r.workDays), String(r.leaveDays), r.otHours.toFixed(1), f(r.total), f(r.benefits), f(r.deductions), f(r.net), f(r.adv)];
-  }
-  function regFoot(rows, raw) {
-    const f = raw ? r2 : usd2, s = k => rows.reduce((a, r) => a + num(r[k]), 0);
-    return ['', '', `សរុប (${rows.length} នាក់)`, '', f(rows.reduce((a, r) => a + baseSalary(r.e), 0)), String(r2(s('workDays'))), String(r2(s('leaveDays'))), s('otHours').toFixed(1), f(s('total')), f(s('benefits')), f(s('deductions')), f(s('net')), f(s('adv'))];
-  }
-
-  function paneRegister(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    const depts = Array.from(new Set(ld.rows.map(r => String(r.e.dept || '').trim()))).sort();
-    const q = h('input', { type: 'search', placeholder: '🔎 ស្វែងរកឈ្មោះ / អត្តលេខ', value: regState.q, style: 'min-width:210px' });
-    const dsel = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d || '__none__', text: d || '(គ្មានផ្នែក)' })));
-    dsel.value = regState.dept;
-    if (dsel.value !== regState.dept) { dsel.value = ''; regState.dept = ''; }
-    const ssel = h('select', null, h('option', { value: 'name', text: 'តាមឈ្មោះ' }), h('option', { value: 'dept', text: 'តាមផ្នែក' }),
-      h('option', { value: 'net', text: 'សុទ្ធ ច្រើន → តិច' }), h('option', { value: 'total', text: 'តាមវត្តមាន ច្រើន → តិច' }), h('option', { value: 'ot', text: 'OT ច្រើន → តិច' }));
-    ssel.value = regState.sort;
-    const out = h('div');
-
-    const view = () => {
-      const s = q.value.trim().toLowerCase(), dv = dsel.value;
-      const rows = ld.rows.filter(r => {
-        const d = String(r.e.dept || '').trim();
-        if (dv === '__none__' ? d !== '' : (dv && d !== dv)) return false;
-        return !s || String(r.e.name || '').toLowerCase().includes(s) || String(r.e.username || r.e.id || '').toLowerCase().includes(s);
-      });
-      const by = { net: (a, b) => b.net - a.net, total: (a, b) => b.total - a.total, ot: (a, b) => b.otHours - a.otHours, dept: (a, b) => String(a.e.dept || '').localeCompare(String(b.e.dept || '')) || String(a.e.name || '').localeCompare(String(b.e.name || '')) };
-      if (by[ssel.value]) rows.sort(by[ssel.value]);
-      return rows;
-    };
-    const render = () => {
-      regState.q = q.value; regState.dept = dsel.value; regState.sort = ssel.value;
-      out.textContent = '';
-      const rows = view();
-      if (!rows.length) { out.appendChild(empty('រកមិនឃើញបុគ្គលិកត្រូវនឹងលក្ខខណ្ឌ')); return; }
-      out.appendChild(mkTable(REG_HEADS, rows.map((r, i) => regCells(r, i)).concat([regFoot(rows).map(c => h('b', { text: c }))]), REG_RIGHT));
-    };
-    q.addEventListener('input', render); dsel.addEventListener('change', render); ssel.addEventListener('change', render);
-
-    body.appendChild(rowEl(q, lab('ផ្នែក ', dsel), lab('តម្រៀប ', ssel),
-      btn('⬇ CSV', () => { const rows = view(); download(`payroll-register-${finMonth}.csv`, toCsv([REG_HEADS].concat(rows.map((r, i) => regCells(r, i, true)), [regFoot(rows, true)])), 'text/csv;charset=utf-8'); }),
-      btn('🖨 ព្រីន', () => { const rows = view(); openPrint(listHtml({ title: 'បញ្ជីប្រាក់ខែបុគ្គលិក', sub: subLine(), heads: REG_HEADS, rows: rows.map((r, i) => regCells(r, i)), foot: regFoot(rows), right: REG_RIGHT, landscape: true, fontHref: fontHref() })); })));
-    body.appendChild(out);
-    render();
-  }
-
-  // ------------------------------------------------------------ ផ្ទាំង៖ ស្ថានភាពបើកប្រាក់ ----
-  // រក្សាទុកក្នុង localStorage របស់ browser នេះ (មិនសរសេរទៅ Supabase)
-  const PAID_KEY = 'fin_paid_v1';
-  const paidMonth = m => { const a = getJson(PAID_KEY, {}); return (a[m] && typeof a[m] === 'object') ? a[m] : {}; };
-  function savePaid(m, mutate) {
-    const a = getJson(PAID_KEY, {});
-    const mm = (a[m] && typeof a[m] === 'object') ? a[m] : {};
-    mutate(mm);
-    if (Object.keys(mm).length) a[m] = mm; else delete a[m];
-    lsSet(PAID_KEY, JSON.stringify(a));
-  }
-  const payFilter = { v: 'all' };
-
-  function panePaid(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    const payable = ld.rows.filter(r => r.net > 0);
-    if (!payable.length) { body.appendChild(empty(ld.rows.length ? 'គ្មានបុគ្គលិកដែលមានប្រាក់សុទ្ធត្រូវបើកក្នុងខែនេះ' : noData(ld))); return; }
-    const stats = h('div'), out = h('div');
-    const sel = h('select', null, h('option', { value: 'all', text: 'ទាំងអស់' }), h('option', { value: 'unpaid', text: 'មិនទាន់បើក' }), h('option', { value: 'paid', text: 'បានបើកហើយ' }));
-    sel.value = payFilter.v;
-    sel.addEventListener('change', () => { payFilter.v = sel.value; render(); });
-
-    const render = () => {
-      const pm = paidMonth(finMonth);
-      const isPaid = r => !!pm[empKey(r.e)];
-      const paid = payable.filter(isPaid);
-      const totalAmt = payable.reduce((a, r) => a + r.net, 0), paidAmt = paid.reduce((a, r) => a + r.net, 0);
-      const pct = totalAmt > 0 ? paidAmt / totalAmt * 100 : 0;
-      stats.textContent = '';
-      stats.appendChild(h('div', { class: 'fin-grid' },
-        statEl(`${paid.length}/${payable.length} នាក់`, 'បានបើកហើយ'),
-        statEl('$' + usd2(paidAmt), 'ចំនួនបានបើក'),
-        statEl('$' + usd2(totalAmt - paidAmt), 'នៅសល់ត្រូវបើក'),
-        statEl(pct.toFixed(1) + '%', 'វឌ្ឍនភាព')));
-      stats.appendChild(h('div', { class: 'fin-bar', style: 'margin:0 0 12px' }, h('i', { style: `width:${Math.min(100, pct).toFixed(1)}%` })));
-
-      out.textContent = '';
-      const rows = payable.filter(r => payFilter.v === 'all' || (payFilter.v === 'paid') === isPaid(r));
-      if (!rows.length) { out.appendChild(empty('គ្មានបុគ្គលិកក្នុងតម្រងនេះ')); return; }
-      out.appendChild(mkTable(['បានបើក', 'ឈ្មោះ', 'ផ្នែក', 'សុទ្ធ ($)', 'ស្ថានភាព', 'កាលបរិច្ឆេទ'], rows.map(r => {
-        const rec = pm[empKey(r.e)];
-        const cb = h('input', { type: 'checkbox' }); cb.checked = !!rec;
-        cb.addEventListener('change', () => { savePaid(finMonth, mm => { if (cb.checked) mm[empKey(r.e)] = { at: new Date().toISOString(), amt: r2(r.net) }; else delete mm[empKey(r.e)]; }); render(); });
-        return [cb, r.e.name || '', r.e.dept || '-', usd2(r.net), rec ? badge('✓ បានបើក') : badge('មិនទាន់បើក', 'warn'), rec && rec.at ? new Date(rec.at).toLocaleString() : '-'];
-      }), [3]));
-    };
-
-    body.appendChild(rowEl(lab('បង្ហាញ ', sel),
-      btn('✓ សម្គាល់ទាំងអស់ថាបានបើក', () => {
-        if (!window.confirm(`សម្គាល់បុគ្គលិកទាំង ${payable.length} នាក់ ថាបានបើកប្រាក់ខែ ${monthLabel(finMonth)}?`)) return;
-        savePaid(finMonth, mm => { payable.forEach(r => { const k = empKey(r.e); if (!mm[k]) mm[k] = { at: new Date().toISOString(), amt: r2(r.net) }; }); });
-        render();
-      }),
-      btn('↺ សម្អាតខែនេះ', () => { if (!window.confirm(`សម្អាតស្ថានភាពបើកប្រាក់ ${monthLabel(finMonth)}?`)) return; savePaid(finMonth, mm => { Object.keys(mm).forEach(k => delete mm[k]); }); render(); }),
-      btn('⬇ CSV', () => {
-        const pm = paidMonth(finMonth);
-        download(`payment-status-${finMonth}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'សុទ្ធ', 'ស្ថានភាព', 'កាលបរិច្ឆេទ']].concat(payable.map(r => { const rec = pm[empKey(r.e)]; return [r.e.username || r.e.id || '', r.e.name || '', r.e.dept || '', r.net, rec ? 'បានបើក' : 'មិនទាន់បើក', rec && rec.at ? rec.at : '']; }))), 'text/csv;charset=utf-8');
-      })));
-    body.appendChild(stats); body.appendChild(out);
-    body.appendChild(h('p', { class: 'fin-muted', text: 'ស្ថានភាពនេះរក្សាទុកក្នុង browser នេះប៉ុណ្ណោះ (មិនចែករំលែករវាងឧបករណ៍ទេ)។ បុគ្គលិកដែលប្រាក់សុទ្ធ ≤ 0 មិនបង្ហាញក្នុងបញ្ជីនេះ។' }));
-    render();
-  }
-
-  // ------------------------------------------------------------ ផ្ទាំង៖ របាយការណ៍ប្រចាំឆ្នាំ ----
-  const annualState = { year: '' };
-  function paneAnnual(body) {
-    const yr = h('input', { type: 'number', min: '2000', max: '2100', step: '1', value: annualState.year || finMonth.slice(0, 4), style: 'width:100px' });
-    const out = h('div');
-    const go = btn('📆 គណនា', async () => {
-      const y = parseInt(yr.value, 10);
-      if (!(y >= 2000 && y <= 2100)) { await say('សូមបញ្ចូលឆ្នាំឲ្យត្រឹមត្រូវ (២០០០–២១០០)'); return; }
-      annualState.year = String(y);
-      go.disabled = true; out.textContent = '';
-      const nowM = curMonth(), months = [];
-      for (let m = 1; m <= 12; m++) { const ym = `${y}-${z2(m)}`; if (ym <= nowM) months.push(ym); }
-      const res = [];
-      try {
-        for (let i = 0; i < months.length; i++) {
-          out.textContent = `កំពុងគណនា ${i + 1}/${months.length} (${months[i]})…`;
-          await new Promise(r => setTimeout(r, 0));
-          let g = monthCache.get(months[i]);
-          if (!g) { g = summarize(loadMonth(months[i]).rows).g; monthCache.set(months[i], g); }
-          res.push({ m: months[i], g });
-        }
-        out.textContent = '';
-        const data = res.filter(x => x.g.net > 0);
-        if (!data.length) { out.appendChild(empty(`មិនមានទិន្នន័យប្រាក់ខែសម្រាប់ឆ្នាំ ${y}`)); return; }
-        const T = data.reduce((t, x) => { ['total', 'benefits', 'deductions', 'otPay', 'net', 'adv'].forEach(k => { t[k] += x.g[k]; }); return t; }, { total: 0, benefits: 0, deductions: 0, otPay: 0, net: 0, adv: 0 });
-        const hi = data.reduce((a, x) => (x.g.net > a.g.net ? x : a)), lo = data.reduce((a, x) => (x.g.net < a.g.net ? x : a));
-        const heads = ['ខែ', 'នាក់', 'តាមវត្តមាន ($)', 'អត្ថប្រយោជន៍ ($)', 'ប្រាក់កាត់ ($)', 'OT ($)', 'សុទ្ធ ($)'];
-        const mkRow = f => res.map(x => [monthLabel(x.m), x.g.net > 0 ? String(x.g.n) : '-', ...(x.g.net > 0 ? [x.g.total, x.g.benefits, x.g.deductions, x.g.otPay, x.g.net].map(f) : ['-', '-', '-', '-', '-'])]);
-        const foot = f => ['សរុប', '', f(T.total), f(T.benefits), f(T.deductions), f(T.otPay), f(T.net)];
-        out.appendChild(h('div', { class: 'fin-grid' },
-          statEl('$' + usd2(T.net), `ប្រាក់សុទ្ធសរុបឆ្នាំ ${toKh(y)}`),
-          statEl('$' + usd2(T.net / data.length), `មធ្យមក្នុងមួយខែ (${data.length} ខែ)`),
-          statEl('$' + usd2(hi.g.net), `ខ្ពស់បំផុត · ${monthLabel(hi.m)}`),
-          statEl('$' + usd2(lo.g.net), `ទាបបំផុត · ${monthLabel(lo.m)}`)));
-        const max = Math.max(1, ...res.map(x => x.g.net));
-        out.appendChild(h('div', { class: 'fin-cols' }, res.map(x => h('div', { class: 'fin-col' }, h('span', { text: x.g.net ? '$' + riel(x.g.net) : '-' }), h('i', { style: `height:${Math.round(x.g.net / max * 100)}px` }), h('span', { text: x.m.slice(5) })))));
-        out.appendChild(rowEl(
-          btn('⬇ CSV', () => download(`payroll-annual-${y}.csv`, toCsv([heads].concat(mkRow(r2).map(r => r.map(c => (c === '-' ? '' : c))), [foot(r2)])), 'text/csv;charset=utf-8')),
-          btn('🖨 ព្រីន', () => openPrint(listHtml({ title: `របាយការណ៍ប្រាក់ខែប្រចាំឆ្នាំ ${toKh(y)}`, sub: company(), heads, rows: mkRow(usd2), foot: foot(usd2), right: [1, 2, 3, 4, 5, 6], fontHref: fontHref() })))));
-        out.appendChild(mkTable(heads, mkRow(usd2).concat([foot(usd2).map(c => h('b', { text: c }))]), [1, 2, 3, 4, 5, 6]));
-        if (data.length < res.length) out.appendChild(h('p', { class: 'fin-muted', text: 'ខែដែលគ្មានទិន្នន័យ បង្ហាញ «-» ហើយមិនរាប់ក្នុងមធ្យម។ ខែអនាគតមិនត្រូវបានគណនាទេ។' }));
-      } catch (ex) { out.textContent = 'មានបញ្ហា៖ ' + (ex.message || ex); }
-      finally { go.disabled = false; }
-    });
-    body.appendChild(card('📆 របាយការណ៍ប្រាក់ខែប្រចាំឆ្នាំ', rowEl(lab('ឆ្នាំ ', yr), go, btn('🔄 លុបទិន្នន័យចាំ', () => { monthCache.clear(); say('✓ បានលុបទិន្នន័យចាំ — ចុច «គណនា» ម្តងទៀត'); })),
-      h('p', { class: 'fin-muted', text: 'សរុបប្រាក់ខែពីខែមករា ដល់ខែបច្ចុប្បន្ន (ឬធ្នូ) ក្នុងឆ្នាំដែលបានជ្រើស។ ការគណនាអាចយឺតបន្តិចបើបុគ្គលិកច្រើន។' })));
-    body.appendChild(out);
-  }
-
-  // ------------------------------------------------------------ ផ្ទាំង៖ ពិនិត្យភាពមិនប្រក្រតី ----
-  function auditRows(rows, prevRows) {
-    const issues = [], add = (lvl, r, msg) => issues.push({ lvl, r, msg });
-    const ot = rows.filter(r => r.otHours > 0).map(r => r.otHours);
-    const otAvg = ot.length ? ot.reduce((a, b) => a + b, 0) / ot.length : 0;
-    const names = new Map();
-    rows.forEach(r => { const k = String(r.e.name || '').trim().toLowerCase(); if (k) names.set(k, (names.get(k) || 0) + 1); });
-    const prev = new Map((prevRows || []).map(p => [empKey(p.e), p]));
-    rows.forEach(r => {
-      if (r.net < 0) add('late', r, `ប្រាក់សុទ្ធអវិជ្ជមាន ($${usd2(r.net)})`);
-      if (r.noSalary) add('warn', r, 'គ្មានប្រាក់ខែមូលដ្ឋាន');
-      if (r.unmarked > 0) add('warn', r, `មិនទាន់កត់វត្តមាន ${r.unmarked} ថ្ងៃ`);
-      if (!r.noSalary && r.workDays === 0 && r.leaveDays === 0) add('warn', r, 'គ្មានថ្ងៃធ្វើការ ឬថ្ងៃច្បាប់ក្នុងខែនេះ');
-      if (otAvg > 0 && r.otHours > Math.max(40, otAvg * 3)) add('warn', r, `OT ខ្ពស់ខុសធម្មតា (${r.otHours.toFixed(1)} ម៉ោង · មធ្យម ${otAvg.toFixed(1)})`);
-      const nk = String(r.e.name || '').trim().toLowerCase();
-      if (nk && names.get(nk) > 1) add('warn', r, 'ឈ្មោះស្ទួនក្នុងបញ្ជី');
-      const p = prev.get(empKey(r.e));
-      if (p && p.net > 0 && r.net > 0) {
-        const d = r.net - p.net, pc = d / p.net * 100;
-        if (Math.abs(d) > 20 && Math.abs(pc) >= 30) add('warn', r, `ប្រាក់សុទ្ធប្រែប្រួលខ្លាំងពីខែមុន (${pc >= 0 ? '+' : ''}${pc.toFixed(0)}% · $${usd2(p.net)} → $${usd2(r.net)})`);
-      }
-    });
-    return issues.sort((a, b) => (a.lvl === b.lvl ? 0 : a.lvl === 'late' ? -1 : 1) || String(a.r.e.name || '').localeCompare(String(b.r.e.name || '')));
-  }
-
-  function paneChecks(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    let prevRows = [];
-    try { prevRows = loadMonth(shiftMonth(finMonth, -1)).rows; } catch (_) { prevRows = []; }
-    const issues = auditRows(ld.rows, prevRows);
-    const errs = issues.filter(x => x.lvl === 'late').length, warns = issues.length - errs;
-    const flagged = new Set(issues.map(x => empKey(x.r.e))).size;
-    body.appendChild(h('div', { class: 'fin-grid' }, statEl(String(errs), 'បញ្ហាធ្ងន់ធ្ងរ'), statEl(String(warns), 'ការព្រមាន'), statEl(`${flagged}/${ld.rows.length}`, 'បុគ្គលិកដែលមានបញ្ហា')));
-    if (!issues.length) { body.appendChild(card('✓ ល្អ', empty(`មិនឃើញភាពមិនប្រក្រតីសម្រាប់ ${monthLabel(finMonth)} ទេ`))); return; }
-    body.appendChild(rowEl(btn('⬇ CSV', () => download(`payroll-checks-${finMonth}.csv`, toCsv([['កម្រិត', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'បញ្ហា']].concat(issues.map(x => [x.lvl === 'late' ? 'ធ្ងន់ធ្ងរ' : 'ព្រមាន', x.r.e.username || x.r.e.id || '', x.r.e.name || '', x.r.e.dept || '', x.msg]))), 'text/csv;charset=utf-8'))));
-    body.appendChild(mkTable(['កម្រិត', 'ឈ្មោះ', 'ផ្នែក', 'បញ្ហា'], issues.map(x => [badge(x.lvl === 'late' ? 'ធ្ងន់ធ្ងរ' : 'ព្រមាន', x.lvl), x.r.e.name || '', x.r.e.dept || '-', x.msg])));
-    body.appendChild(h('p', { class: 'fin-muted', text: 'ការពិនិត្យជាគ្រាន់តែការណែនាំ ដើម្បីជួយពិនិត្យមុនបើកប្រាក់ — មិនកែទិន្នន័យអ្វីទេ។ «ប្រែប្រួលខ្លាំង» ប្រៀបធៀបប្រាក់សុទ្ធជាមួយខែមុន (≥ ៣០% និង > $20)។' }));
-  }
-
-  // ============================================================ Payroll៖ ប័ណ្ណប្រាក់ខែ / អនុម័ត / Journal ====
-  const lastDay = ym => { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); };
-
-  // ------------------------------------------------------------ ប័ណ្ណប្រាក់ខែ ----
-  const SLIP_CSS = `.slip{border:1px solid #444;padding:5mm 6mm;margin:0 0 7mm;page-break-inside:avoid}.slip h2{margin:0 0 1mm;font-size:12.5pt;text-align:center}
-.slip .meta{text-align:center;color:#444;margin:0 0 3mm;font-size:9.5pt}.g2{display:grid;grid-template-columns:1fr 1fr;gap:.8mm 8mm;margin:0 0 3mm;font-size:9.8pt}.g2 span{color:#555}
-.slip .sg{display:flex;justify-content:space-between;margin-top:9mm;text-align:center;font-size:9.5pt}.slip .sg div{min-width:50mm;border-top:1px solid #777;padding-top:1mm}`;
-
-  // ប័ណ្ណមួយសន្លឹកក្នុងមួយជួរ · ប្រសិនបើផលបូកមិនស្មើប្រាក់សុទ្ធ នឹងបន្ថែមជួរ «កែតម្រូវ» ដើម្បីឲ្យត្រូវគ្នា
-  function slipLines(r) {
-    const dueAdv = r.advDue ? r.adv : 0;
-    const diff = r2(r.net - r2(r.total + r.benefits - r.deductions - dueAdv));
-    const L = [['ប្រាក់តាមវត្តមាន', r.total, '+'], ['អត្ថប្រយោជន៍', r.benefits, '+'], ['ប្រាក់កាត់', r.deductions, '−']];
-    if (dueAdv > 0) L.push(['ប្រាក់ខែទី១ ដែលបានបើកមុន', dueAdv, '−']);
-    if (Math.abs(diff) >= 0.01) L.push(['កែតម្រូវផ្សេងៗ', Math.abs(diff), diff > 0 ? '+' : '−']);
-    return L;
-  }
-
-  function payslipsHtml(o) {
-    const slips = o.rows.map(r => {
-      const e = r.e;
-      const lines = slipLines(r).map(l => `<tr><td>${escHtml(l[0])}</td><td class="r">${l[2] === '+' ? usd2(l[1]) : ''}</td><td class="r">${l[2] === '−' ? usd2(l[1]) : ''}</td></tr>`).join('');
-      return `<div class="slip"><h2>ប័ណ្ណប្រាក់ខែ — ${escHtml(o.monthLabel)}</h2><p class="meta">${escHtml(o.company || '')}</p>
-<div class="g2"><div><span>អត្តលេខ៖</span> ${escHtml(e.username || e.id || '')}</div><div><span>ផ្នែក៖</span> ${escHtml(e.dept || '-')}</div>
-<div><span>ឈ្មោះ៖</span> ${escHtml(e.name || '')}</div><div><span>តួនាទី៖</span> ${escHtml(e.position || e.title || e.role || '-')}</div>
-<div><span>ប្រាក់ខែមូលដ្ឋាន៖</span> $${usd2(baseSalary(e))}</div><div><span>ថ្ងៃធ្វើការ / ច្បាប់៖</span> ${r.workDays} / ${r.leaveDays}</div>
-<div><span>OT៖</span> ${r.otHours.toFixed(1)} ម៉ោង · $${usd2(r.otPay)}</div><div></div></div>
-<table><thead><tr><th>ប្រភេទ</th><th class="r" style="width:30mm">បូក ($)</th><th class="r" style="width:30mm">ដក ($)</th></tr></thead><tbody>${lines}
-<tr><th>ប្រាក់សុទ្ធត្រូវទទួល</th><th class="r" colspan="2">$${usd2(r.net)}</th></tr></tbody></table>
-<div class="sg"><div>ហត្ថលេខាបុគ្គលិក</div><div>ហិរញ្ញវត្ថុ</div></div></div>`;
-    }).join('');
-    return `<!doctype html><html lang="km"><head><meta charset="utf-8"><title>ប័ណ្ណប្រាក់ខែ ${escHtml(o.monthLabel)}</title>${fontLink(o.fontHref)}<style>${PRINT_CSS}${SLIP_CSS}</style></head><body>${slips}</body></html>`;
-  }
-
-  const slipState = { q: '', dept: '' };
-  function panePayslip(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    const depts = Array.from(new Set(ld.rows.map(r => String(r.e.dept || '').trim()))).sort();
-    const q = h('input', { type: 'search', placeholder: '🔎 ស្វែងរកឈ្មោះ / អត្តលេខ', value: slipState.q, style: 'min-width:210px' });
-    const dsel = h('select', null, h('option', { value: '', text: 'គ្រប់ផ្នែក' }), depts.map(d => h('option', { value: d || '__none__', text: d || '(គ្មានផ្នែក)' })));
-    dsel.value = slipState.dept; if (dsel.value !== slipState.dept) { dsel.value = ''; slipState.dept = ''; }
-    const picked = new Set(), out = h('div'), cnt = h('span', { class: 'fin-muted' });
-    const view = () => {
-      const s = q.value.trim().toLowerCase(), dv = dsel.value;
-      return ld.rows.filter(r => {
-        const d = String(r.e.dept || '').trim();
-        if (dv === '__none__' ? d !== '' : (dv && d !== dv)) return false;
-        return !s || String(r.e.name || '').toLowerCase().includes(s) || String(r.e.username || r.e.id || '').toLowerCase().includes(s);
-      });
-    };
-    const printRows = rows => { if (!rows.length) { say('គ្មានបុគ្គលិកត្រូវព្រីន'); return; } openPrint(payslipsHtml({ rows, monthLabel: monthLabel(finMonth), company: company(), fontHref: fontHref() })); };
-    const render = () => {
-      slipState.q = q.value; slipState.dept = dsel.value;
-      const rows = view();
-      cnt.textContent = `ជ្រើសរើស ${picked.size} នាក់ · បង្ហាញ ${rows.length}/${ld.rows.length}`;
-      out.textContent = '';
-      if (!rows.length) { out.appendChild(empty('រកមិនឃើញបុគ្គលិកត្រូវនឹងលក្ខខណ្ឌ')); return; }
-      out.appendChild(mkTable(['', 'ឈ្មោះ', 'ផ្នែក', 'សុទ្ធ ($)', ''], rows.map(r => {
-        const k = empKey(r.e), cb = h('input', { type: 'checkbox' }); cb.checked = picked.has(k);
-        cb.addEventListener('change', () => { if (cb.checked) picked.add(k); else picked.delete(k); cnt.textContent = `ជ្រើសរើស ${picked.size} នាក់ · បង្ហាញ ${rows.length}/${ld.rows.length}`; });
-        return [cb, r.e.name || '', r.e.dept || '-', usd2(r.net), btn('🖨', () => printRows([r]))];
-      }), [3]));
-    };
-    q.addEventListener('input', render); dsel.addEventListener('change', render);
-    body.appendChild(rowEl(q, lab('ផ្នែក ', dsel),
-      btn('☑ ជ្រើសទាំងអស់ដែលបង្ហាញ', () => { view().forEach(r => picked.add(empKey(r.e))); render(); }),
-      btn('☐ លុបការជ្រើស', () => { picked.clear(); render(); }),
-      btn('🖨 ព្រីនដែលបានជ្រើស', () => printRows(ld.rows.filter(r => picked.has(empKey(r.e))))),
-      btn('🖨 ព្រីនទាំងអស់ដែលបង្ហាញ', () => printRows(view()))));
-    body.appendChild(rowEl(cnt));
-    body.appendChild(out);
-    body.appendChild(h('p', { class: 'fin-muted', text: 'ប័ណ្ណ ២ សន្លឹកក្នុងមួយទំព័រ A4 (ប្រហែល)។ ប្រសិនបើផលបូកជួរមិនស្មើប្រាក់សុទ្ធ នឹងមានជួរ «កែតម្រូវផ្សេងៗ» ដើម្បីឲ្យចំនួនត្រូវគ្នា។' }));
-    render();
-  }
-
-  // ------------------------------------------------------------ លំហូរអនុម័ត ----
-  // រក្សាទុកក្នុង localStorage របស់ browser នេះ។ «ចាក់សោ» ជាសញ្ញាប្រាប់ និងរកឃើញការប្រែប្រួលក្រោយអនុម័ត — មិនទប់ស្កាត់ការកែក្នុងផ្ទាំងផ្សេងទេ។
-  const WF_KEY = 'fin_wf_v1';
-  const WF_STEPS = [['draft', '១ រៀបចំ'], ['reviewed', '២ ត្រួតពិនិត្យ'], ['approved', '៣ អនុម័ត'], ['locked', '៤ ចាក់សោ']];
-  const WF_ACTIONS = {
-    draft: [['reviewed', '📨 ដាក់ឲ្យត្រួតពិនិត្យ', false]],
-    reviewed: [['approved', '✓ អនុម័ត', true], ['draft', '↩ ត្រឡប់ទៅរៀបចំ', false]],
-    approved: [['locked', '🔒 ចាក់សោខែ', true], ['reviewed', '↩ ត្រឡប់ទៅត្រួតពិនិត្យ', true]],
-    locked: [['approved', '🔓 ដោះសោ', true]]
-  }; // [ទៅស្ថានភាព, ស្លាក, admin ប៉ុណ្ណោះ]
-  const wfAll = () => getJson(WF_KEY, {});
-  const wfGet = m => { const r = wfAll()[m]; return (r && typeof r === 'object') ? { status: r.status || 'draft', history: Array.isArray(r.history) ? r.history : [], snap: r.snap || null } : { status: 'draft', history: [], snap: null }; };
-  const wfSave = (m, rec) => { const a = wfAll(); a[m] = rec; lsSet(WF_KEY, JSON.stringify(a)); };
-  const wfIdx = st => Math.max(0, WF_STEPS.findIndex(x => x[0] === st));
-  const wfLabel = st => WF_STEPS[wfIdx(st)][1];
-  const snapOf = g => ({ n: g.n, net: r2(g.net), total: r2(g.total), benefits: r2(g.benefits), deductions: r2(g.deductions) });
-  const wfStatusBadge = st => h('span', { class: 'fin-badge' + (st === 'draft' ? ' warn' : ''), text: wfLabel(st) });
-  const wfDrift = (rec, g) => (rec.snap && rec.status !== 'draft') ? { net: r2(g.net - rec.snap.net), n: g.n - rec.snap.n } : null;
-
-  function paneApprove(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    const g = summarize(ld.rows).g, rec = wfGet(finMonth), st = rec.status, idx = wfIdx(st);
-    let prevRows = []; try { prevRows = loadMonth(shiftMonth(finMonth, -1)).rows; } catch (_) { prevRows = []; }
-    const issues = auditRows(ld.rows, prevRows), errs = issues.filter(x => x.lvl === 'late').length;
-    const fin = isFinanceRole();
-
-    body.appendChild(h('div', { class: 'fin-row' }, WF_STEPS.map((s, i) => h('span', { class: 'fin-badge', text: (i < idx ? '✓ ' : '') + s[1], style: i <= idx ? (i === idx ? 'font-weight:700;outline:2px solid #0d9488' : '') : 'background:#e5e7eb;color:#6b7280' }))));
-    body.appendChild(h('div', { class: 'fin-grid' },
-      statEl(wfLabel(st), `ស្ថានភាព ${monthLabel(finMonth)}`), statEl(`${g.n} នាក់`, 'បុគ្គលិកក្នុងបញ្ជី'), statEl('$' + usd2(g.net), 'ត្រូវបើកសរុប (សុទ្ធ)'),
-      statEl(`${errs} / ${issues.length - errs}`, 'បញ្ហាធ្ងន់ធ្ងរ / ព្រមាន (មើលផ្ទាំង 🔍)')));
-    if (byId('monthlyLockText') && syncMonthly()) { const t = byId('monthlyLockText').textContent.trim(); if (t) body.appendChild(rowEl(badge('🔒 ការបិទខែក្នុងប្រព័ន្ធ៖ ' + t))); }
-    const dr = wfDrift(rec, g);
-    if (dr && (Math.abs(dr.net) >= 0.01 || dr.n !== 0)) body.appendChild(rowEl(badge(`⚠ ទិន្នន័យប្រែប្រួលពីពេល${wfLabel(st === 'locked' ? 'approved' : st).slice(2)} — ប្រាក់សុទ្ធ ${dr.net >= 0 ? '+' : '−'}$${usd2(Math.abs(dr.net))}${dr.n ? `, បុគ្គលិក ${dr.n > 0 ? '+' : ''}${dr.n}` : ''}`, 'late')));
-    if (errs > 0 && st !== 'locked') body.appendChild(rowEl(badge(`⚠ មានបញ្ហាធ្ងន់ធ្ងរ ${errs} — ពិនិត្យក្នុងផ្ទាំង «🔍 ពិនិត្យ» មុនអនុម័ត`, 'warn')));
-
-    const noteIn = h('input', { type: 'text', placeholder: 'កំណត់សម្គាល់ (ចាំបាច់ពេលត្រឡប់ក្រោយ/ដោះសោ)', style: 'min-width:280px' });
-    const act = async to => {
-      const back = wfIdx(to) < idx, note = noteIn.value.trim();
-      if (back && !note) { await say('សូមបញ្ចូលមូលហេតុក្នុង «កំណត់សម្គាល់» មុនត្រឡប់ក្រោយ ឬដោះសោ'); return; }
-      if ((to === 'reviewed' || to === 'approved') && !back && errs > 0 && !window.confirm(`នៅមានបញ្ហាធ្ងន់ធ្ងរ ${errs}។ បន្តដែរឬទេ?`)) return;
-      if (to === 'locked' && !window.confirm(`ចាក់សោ ${monthLabel(finMonth)}?`)) return;
-      const r = wfGet(finMonth);
-      r.status = to;
-      r.history = r.history.concat([{ st: to, at: new Date().toISOString(), by: fin ? 'Finance' : 'Admin', note, net: r2(g.net), n: g.n }]);
-      if (to === 'draft') r.snap = null; else if (to === 'reviewed' || to === 'approved') r.snap = snapOf(g);
-      wfSave(finMonth, r);
-      renderBody();
-    };
-    const acts = (WF_ACTIONS[st] || []).map(a => { const b = btn(a[1], () => act(a[0]), wfIdx(a[0]) > idx ? '' : 'secondary'); if (a[2] && fin) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; } return b; });
-    body.appendChild(card('សកម្មភាព', rowEl(noteIn), rowEl(...acts),
-      h('p', { class: 'fin-muted', text: (fin ? 'គណនី Finance អាច «ដាក់ឲ្យត្រួតពិនិត្យ» និងត្រឡប់ទៅរៀបចំ។ ការអនុម័ត ចាក់សោ និងដោះសោ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។ ' : '') + 'ស្ថានភាពរក្សាក្នុង browser នេះ។ «ចាក់សោ» មិនទប់ស្កាត់ការកែទិន្នន័យទេ ប៉ុន្តែនឹងបង្ហាញការព្រមានពេលចំនួនប្រែប្រួល។ ការបិទខែពិតប្រាកដ ប្រើក្នុងផ្ទាំង «🛠 ឧបករណ៍ Payroll»។' })));
-
-    if (rec.history.length) body.appendChild(card('ប្រវត្តិ', mkTable(['ពេលវេលា', 'ស្ថានភាព', 'ដោយ', 'សុទ្ធ ($)', 'កំណត់សម្គាល់'],
-      rec.history.slice().reverse().map(x => [x.at ? new Date(x.at).toLocaleString() : '-', wfStatusBadge(x.st), x.by || '-', usd2(x.net), x.note || '']), [3])));
-
-    const all = wfAll(), months = Object.keys(all).sort().reverse().slice(0, 12);
-    if (months.length) body.appendChild(card('ខែដែលមានកំណត់ត្រា', mkTable(['ខែ', 'ស្ថានភាព', 'សុទ្ធ ($)', ''], months.map(m => {
-      const r = wfGet(m), last = r.history[r.history.length - 1];
-      return [monthLabel(m), wfStatusBadge(r.status), last ? usd2(last.net) : '-', btn('បើក', () => { finMonth = m; renderBody(); })];
-    }), [2])));
-  }
-
-  // ------------------------------------------------------------ Payroll Journal ----
-  const JR_KEY = 'fin_journal_accts';
-  const JR_DEF = { expense: '6100 ចំណាយប្រាក់ខែ', ded: '2200 ប្រាក់កាត់ត្រូវបង់', adv: '1150 ប្រាក់ខែទី១ (បុរេប្រទាន)', pay: '2100 ប្រាក់ខែត្រូវបង់', cash: '1000 សាច់ប្រាក់ / ធនាគារ' };
-  const JR_LAB = { expense: 'ចំណាយប្រាក់ខែ (Dr)', ded: 'ប្រាក់កាត់ត្រូវបង់ (Cr)', adv: 'ប្រាក់ខែទី១/បុរេប្រទាន', pay: 'ប្រាក់ខែត្រូវបង់ (Cr/Dr)', cash: 'សាច់ប្រាក់/ធនាគារ (Cr)' };
-  const jrAccts = () => Object.assign({}, JR_DEF, getJson(JR_KEY, {}));
-
-  // o: {month, accts, byDept, paidAmt} → { lines:[{date,entry,account,desc,debit,credit,dept}], totD, totC, netDiff }
-  function journalLines(rows, o) {
-    const A = o.accts, L = [], ml = monthLabel(o.month);
-    let n = 0;
-    const eno = () => `PR-${o.month.replace('-', '')}-${z2(++n)}`;
-    const add = (date, entry, account, desc, debit, credit, dept) => { debit = r2(debit); credit = r2(credit); if (debit > 0 || credit > 0) L.push({ date, entry, account, desc, debit, credit, dept: dept || '' }); };
-    const dEnd = `${o.month}-${z2(lastDay(o.month))}`, d25 = `${o.month}-25`;
-    const advDue = r2(rows.reduce((a, r) => a + (r.advDue ? r.adv : 0), 0));
-    const ded = r2(rows.reduce((a, r) => a + r.deductions, 0));
-
-    if (advDue > 0) { const e = eno(); add(d25, e, A.adv, `ប្រាក់ខែទី១ ${ml}`, advDue, 0); add(d25, e, A.cash, `ទូទាត់ប្រាក់ខែទី១ ${ml}`, 0, advDue); }
-
-    const e2 = eno(); let dr = 0;
-    if (o.byDept) {
-      const m = new Map();
-      rows.forEach(r => { const k = String(r.e.dept || '').trim() || '(គ្មានផ្នែក)'; m.set(k, (m.get(k) || 0) + r.total + r.benefits); });
-      Array.from(m.keys()).sort().forEach(k => { const v = r2(m.get(k)); dr += v; add(dEnd, e2, A.expense, `ចំណាយប្រាក់ខែ ${ml}`, v, 0, k); });
-    } else { dr = r2(rows.reduce((a, r) => a + r.total + r.benefits, 0)); add(dEnd, e2, A.expense, `ចំណាយប្រាក់ខែ ${ml}`, dr, 0); }
-    dr = r2(dr);
-    const pay = r2(dr - ded - advDue);
-    add(dEnd, e2, A.ded, `ប្រាក់កាត់ ${ml}`, 0, ded);
-    add(dEnd, e2, A.adv, `កាត់ប្រាក់ខែទី១ដែលបានបើកមុន ${ml}`, 0, advDue);
-    add(dEnd, e2, A.pay, `ប្រាក់ខែសុទ្ធត្រូវបង់ ${ml}`, 0, pay);
-
-    const paid = r2(o.paidAmt || 0);
-    if (paid > 0) { const e3 = eno(); add(dEnd, e3, A.pay, `បើកប្រាក់ខែ ${ml}`, paid, 0); add(dEnd, e3, A.cash, `បើកប្រាក់ខែ ${ml}`, 0, paid); }
-
-    const totD = r2(L.reduce((a, x) => a + x.debit, 0)), totC = r2(L.reduce((a, x) => a + x.credit, 0));
-    return { lines: L, totD, totC, netDiff: r2(pay - rows.reduce((a, r) => a + r.net, 0)), pay };
-  }
-
-  const jrState = { byDept: false };
-  function paneJournal(body) {
-    const ld = loadMonth(finMonth);
-    body.appendChild(rowEl(...monthNav()));
-    if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    const wf = wfGet(finMonth);
-    const accts = jrAccts(), out = h('div');
-    const inputs = {};
-    Object.keys(JR_DEF).forEach(k => {
-      inputs[k] = h('input', { type: 'text', value: accts[k], style: 'min-width:210px' });
-      inputs[k].addEventListener('change', () => { const o = {}; Object.keys(inputs).forEach(x => { o[x] = inputs[x].value.trim() || JR_DEF[x]; }); lsSet(JR_KEY, JSON.stringify(o)); render(); });
-    });
-    const byDept = h('input', { type: 'checkbox' }); byDept.checked = jrState.byDept;
-    byDept.addEventListener('change', () => { jrState.byDept = byDept.checked; render(); });
-
-    const build = () => {
-      const pm = paidMonth(finMonth), paidAmt = Object.keys(pm).reduce((a, k) => a + num(pm[k] && pm[k].amt), 0);
-      const cur = {}; Object.keys(inputs).forEach(k => { cur[k] = inputs[k].value.trim() || JR_DEF[k]; });
-      return journalLines(ld.rows, { month: finMonth, accts: cur, byDept: byDept.checked, paidAmt });
-    };
-    const HEADS = ['កាលបរិច្ឆេទ', 'លេខ Entry', 'គណនី', 'ពិពណ៌នា', 'Debit ($)', 'Credit ($)', 'ផ្នែក'];
-    const render = () => {
-      out.textContent = '';
-      const j = build();
-      out.appendChild(rowEl(badge(j.totD === j.totC ? `✓ Debit = Credit ($${usd2(j.totD)})` : `⚠ មិនស្មើ៖ Dr ${usd2(j.totD)} / Cr ${usd2(j.totC)}`, j.totD === j.totC ? '' : 'late'),
-        Math.abs(j.netDiff) >= 0.01 ? badge(`⚠ ប្រាក់ខែត្រូវបង់ខុសពីផលបូកប្រាក់សុទ្ធ $${usd2(j.netDiff)} (ពិនិត្យប្រាក់កាត់/ប្រាក់ខែទី១)`, 'warn') : badge('✓ ស្មើផលបូកប្រាក់សុទ្ធបុគ្គលិក'),
-        h('span', { class: 'fin-muted', text: 'ស្ថានភាព៖ ' }), wfStatusBadge(wf.status)));
-      if (wf.status !== 'approved' && wf.status !== 'locked') out.appendChild(rowEl(badge('⚠ ខែនេះមិនទាន់អនុម័តទេ — Journal នេះជាសេចក្តីព្រាង', 'warn')));
-      out.appendChild(mkTable(HEADS, j.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit ? usd2(x.debit) : '', x.credit ? usd2(x.credit) : '', x.dept]).concat([['', '', '', 'សរុប', usd2(j.totD), usd2(j.totC), ''].map(c => h('b', { text: c }))]), [4, 5]));
-      out.appendChild(rowEl(
-        btn('⬇ CSV', () => { const jj = build(); download(`payroll-journal-${finMonth}.csv`, toCsv([['Date', 'Entry', 'Account', 'Description', 'Debit', 'Credit', 'Department']].concat(jj.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit || '', x.credit || '', x.dept]))), 'text/csv;charset=utf-8'); }),
-        btn('🖨 ព្រីន', () => { const jj = build(); openPrint(listHtml({ title: `Payroll Journal — ${monthLabel(finMonth)}`, sub: company(), heads: HEADS, rows: jj.lines.map(x => [x.date, x.entry, x.account, x.desc, x.debit ? usd2(x.debit) : '', x.credit ? usd2(x.credit) : '', x.dept]), foot: ['', '', '', 'សរុប', usd2(jj.totD), usd2(jj.totC), ''], right: [4, 5], landscape: true, fontHref: fontHref() })); })));
-    };
-    body.appendChild(card('📒 គណនី (កែបាន — រក្សាទុកក្នុង browser)', ...Object.keys(JR_DEF).map(k => rowEl(lab(JR_LAB[k] + ' ', inputs[k]))), rowEl(lab('បំបែកចំណាយតាមផ្នែក ', byDept))));
-    body.appendChild(out);
-    body.appendChild(h('p', { class: 'fin-muted', text: 'Entry ១ = ប្រាក់ខែទី១ (ទី២៥) · Entry ២ = បង្គរប្រាក់ខែ ចុងខែ · Entry ៣ = ការបើកប្រាក់សុទ្ធ (ពីផ្ទាំង «✅ ស្ថានភាពបើកប្រាក់»)។ ប្រាក់ខែទី១ ត្រូវបានដកតែបុគ្គលិកដែលដល់ថ្ងៃទូទាត់។ ប្រើរូបិយប័ណ្ណ USD។ ត្រូវផ្ទៀងផ្ទាត់ជាមួយគណនេយ្យករមុននាំចូល។' }));
-    render();
-  }
-
-  // ------------------------------------------------------------ ឧបករណ៍ Payroll ----
-  // ភ្ជាប់ទៅមុខងារដែលមានស្រាប់ក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (គណនា ព្រីន PDF Excel CSV បិទខែ ។ល។)
-  // ព្រោះគណនី Finance មើលផ្ទាំងនោះមិនបាន។ ប៊ូតុងនីមួយៗចុចប៊ូតុងដើមក្នុងផ្ទាំងនោះ ដោយតម្រឹមខែឲ្យដូចទំព័រនេះសិន។
-  const byId = id => document.getElementById(id);
-  const toolAdminOnly = b => /^monthly(Backup|Audit)Btn$/.test(b.id || '') || /backup|restore|ប្រវត្តិកែប្រែ/i.test(b.textContent || '');
-  function syncMonthly(force) {
-    const mm = byId('monthlyMonth');
-    if (!mm) return false;
-    if (force || mm.value !== finMonth) {
-      mm.value = finMonth;
-      if (typeof renderMonthlyTab === 'function') { try { renderMonthlyTab(); } catch (ex) { console.error('finance sync monthly', ex); } }
-    }
-    return true;
-  }
-
-  function paneTools(body) {
-    body.appendChild(rowEl(...monthNav()));
-    const run = byId('monthlyRunBtn');
-    if (!run || !syncMonthly()) { body.appendChild(empty('រកមិនឃើញផ្ទាំង «ប្រាក់ខែប្រចាំខែ» ក្នុងកម្មវិធី — មិនអាចភ្ជាប់មុខងារបានទេ')); return; }
-    const fin = isFinanceRole();
-    const proxy = (orig, cls) => {
-      const lock = fin && toolAdminOnly(orig);
-      const b = btn((orig.textContent || '').trim(), () => { syncMonthly(); orig.click(); }, cls);
-      if (lock) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; }
-      return b;
-    };
-    const skip = new Set(['monthlyLockBtn', 'monthlyUnlockBtn']);
-    const ctl = [];
-    const mode = byId('payCurrencyMode');
-    if (mode) {
-      const sel = h('select', null, Array.from(mode.options).map(o => h('option', { value: o.value, text: o.textContent })));
-      sel.value = mode.value;
-      sel.addEventListener('change', () => { mode.value = sel.value; if (typeof setPayMode === 'function') setPayMode(sel.value); });
-      ctl.push(sel);
-    }
-    Array.from(run.parentElement.querySelectorAll('button')).forEach(b => { if (!skip.has(b.id)) ctl.push(proxy(b, b === run ? '' : 'secondary')); });
-    body.appendChild(card('🛠 ឧបករណ៍ Payroll — ' + monthLabel(finMonth), rowEl(...ctl),
-      h('p', { class: 'fin-muted', text: 'ប៊ូតុងទាំងនេះដំណើរការដូចក្នុងផ្ទាំង «ប្រាក់ខែប្រចាំខែ» (ទិន្នន័យ និងទ្រង់ទ្រាយដូចគ្នា) ដោយតម្រឹមខែតាមទំព័រនេះ។' + (fin ? ' Backup/Restore និងប្រវត្តិកែប្រែ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។' : '') })));
-
-    const lockTxt = byId('monthlyLockText'), lockBtn = byId('monthlyLockBtn'), unBtn = byId('monthlyUnlockBtn'), days = byId('lockDisputeDays');
-    if (lockTxt) {
-      const parts = [];
-      if (days && lockBtn && lockBtn.style.display !== 'none') {
-        const di = h('input', { type: 'number', min: '0', max: '60', step: '1', value: days.value, style: 'width:70px' });
-        di.addEventListener('input', () => { days.value = di.value; days.dispatchEvent(new Event('input', { bubbles: true })); });
-        parts.push(lab('រយៈពេលតវ៉ា (ថ្ងៃ) ', di));
-      }
-      const mkLock = (orig, cls) => { const b = btn((orig.textContent || '').trim(), () => { syncMonthly(); orig.click(); setTimeout(renderBody, 900); }, cls); if (fin) { b.disabled = true; b.title = 'តែ admin ប៉ុណ្ណោះ'; } return b; };
-      if (lockBtn && lockBtn.style.display !== 'none') parts.push(mkLock(lockBtn, ''));
-      if (unBtn && unBtn.style.display !== 'none') parts.push(mkLock(unBtn, 'danger'));
-      body.appendChild(card('🔒 ការបិទខែ (ប្រព័ន្ធ)', h('div', { style: 'font-size:.85rem;margin:0 0 6px' }, lockTxt.textContent.trim() || '-'), rowEl(...parts),
-        h('p', { class: 'fin-muted', text: 'នេះជាការបិទខែពិតប្រាកដរបស់ប្រព័ន្ធ (payroll-close) ។' + (fin ? ' បិទ/បើកខែឡើងវិញ ជាសិទ្ធិ admin ប៉ុណ្ណោះ។' : '') })));
-    }
+    load();
   }
 
   // ------------------------------------------------------------ ទំព័រ ----
   const SUBS = [
     ['overview', '📊 សង្ខេប', paneOverview],
-    ['register', '🧾 បញ្ជីប្រាក់ខែ', paneRegister],
-    ['payslip', '💳 ប័ណ្ណប្រាក់ខែ', panePayslip],
     ['cash', '💵 បើកសាច់ប្រាក់', paneCash],
-    ['paid', '✅ ស្ថានភាពបើកប្រាក់', panePaid],
-    ['approve', '📋 អនុម័តប្រាក់ខែ', paneApprove],
-    ['tools', '🛠 ឧបករណ៍ Payroll', paneTools],
     ['trend', '📈 និន្នាការ', paneTrend],
-    ['annual', '📆 ប្រចាំឆ្នាំ', paneAnnual],
-    ['budget', '🎯 ថវិកា', paneBudget],
-    ['checks', '🔍 ពិនិត្យ', paneChecks],
-    ['journal', '📒 Journal', paneJournal],
-    ['access', '🔑 គណនី Finance', paneAccess] // admin ប៉ុណ្ណោះ — លាក់ពេល render តាម isFinanceRole()
+    ['budget', '🎯 ថវិកា', paneBudget]
   ];
-  const visibleSubs = () => SUBS.filter(x => x[0] !== 'access' || !isFinanceRole());
+  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess]); // admin ប៉ុណ្ណោះ
 
   function renderBody() {
     if (!bodyEl) return;
     bodyEl.textContent = '';
-    const vis = visibleSubs();
-    if (!vis.some(x => x[0] === sub)) sub = vis[0][0];
-    Array.from(tabsEl.children).forEach(b => {
-      const show = vis.some(x => x[0] === b.dataset.sub);
-      b.hidden = !show; b.style.display = show ? '' : 'none';
-      b.classList.toggle('on', b.dataset.sub === sub);
-    });
-    const def = vis.find(x => x[0] === sub) || vis[0];
+    Array.from(tabsEl.children).forEach(b => b.classList.toggle('on', b.dataset.sub === sub));
+    const def = SUBS.find(x => x[0] === sub) || SUBS[0];
     try {
       const r = def[2](bodyEl);
       if (r && typeof r.catch === 'function') r.catch(ex => { console.error('finance', ex); bodyEl.appendChild(empty('មានបញ្ហា៖ ' + (ex.message || ex))); });
@@ -1075,7 +624,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   }
   window.financeTools = {
-    summarize, auditRows, journalLines, payslipsHtml, slipLines, cashPlan, denominate, budgetStatus, notesText, monthsBack, shiftMonth, normalizeRow, loadMonth, payoutSheetHtml, reportHtml, monthLabel,
+    summarize, cashPlan, denominate, budgetStatus, notesText, monthsBack, shiftMonth, normalizeRow, loadMonth, payoutSheetHtml, reportHtml, monthLabel,
     panes: SUBS.reduce((o, x) => { o[x[0]] = x[2]; return o; }, {})
   };
 })();
