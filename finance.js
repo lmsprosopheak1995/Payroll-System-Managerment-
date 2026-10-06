@@ -773,69 +773,78 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     drawYear(false);
   }
 
-  // ------------------------------------------------------------ ផ្ទាំង៖ ឯកសារផ្ទេរប្រាក់ធនាគារ ----
-  const BANK_TBL = 'employee_bank_accounts';
-  const bankSt = { cur: 'USD', adv: false, remark: '' };
-  async function loadBanks() {
-    const { data, error } = await supabaseClient.from(BANK_TBL).select('*');
-    if (error) throw new Error(error.message + ' — សូមដំណើរការ salary_raises.sql (ផ្នែក employee_bank_accounts) ក្នុង Supabase ជាមុន');
-    return new Map((data || []).map(r => [String(r.employee_id), r]));
+  // ------------------------------------------------------------ ផ្ទាំង៖ ផ្ទេរប្រាក់ធនាគារ ----
+  // អានគណនីធនាគារ និងស្ថានភាព «បានបើក» ពី bank-pay.js (RPC bank_load ដូចគ្នា — ត្រូវការពាក្យសម្ងាត់ Admin)
+  const bankSt = { round: 'final', pw: null };
+  async function bankRpc(fn, args) {
+    let pw = bankSt.pw;
+    if (!pw) {
+      pw = typeof customPrompt === 'function' ? await customPrompt('បញ្ចូលពាក្យសម្ងាត់ Admin ដើម្បីមើលព័ត៌មានធនាគារ៖', true) : window.prompt('ពាក្យសម្ងាត់ Admin៖');
+      if (!pw) return { cancelled: true };
+    }
+    const { data, error } = await supabaseClient.rpc(fn, Object.assign({ p_password: pw }, args));
+    if (error) {
+      if (/unauthorized/i.test(error.message)) { bankSt.pw = null; return { error: { message: 'ពាក្យសម្ងាត់ Admin មិនត្រឹមត្រូវ' } }; }
+      if (/does not exist|Could not find/i.test(error.message)) return { error: { message: 'មិនទាន់ដំណើរការ bank-pay.sql ក្នុង Supabase' } };
+      return { error };
+    }
+    bankSt.pw = pw; // ទុកក្នុងអង្គចងចាំប៉ុណ្ណោះ (បាត់ពេល refresh)
+    return { data };
   }
   async function paneBank(body) {
     if (!sbOk()) { body.appendChild(empty('មិនឃើញការតភ្ជាប់ Supabase')); return; }
     const ld = loadMonth(finMonth);
     body.appendChild(rowEl(...monthNav()));
     if (!ld.rows.length) { body.appendChild(empty(noData(ld))); return; }
-    let banks;
-    try { banks = await loadBanks(); } catch (ex) { body.appendChild(card('🏦 ផ្ទេរប្រាក់ធនាគារ', empty(ex.message || String(ex)))); return; }
-    if (!bankSt.remark) bankSt.remark = 'ប្រាក់ខែ';
+    const res = await bankRpc('bank_load', { p_month: finMonth });
+    if (res.cancelled || res.error) {
+      body.appendChild(card('🏦 ផ្ទេរប្រាក់ធនាគារ', empty(res.cancelled ? 'បានបោះបង់ — ត្រូវការពាក្យសម្ងាត់ Admin ដើម្បីមើលព័ត៌មានធនាគារ' : 'អានព័ត៌មានធនាគារមិនបាន៖ ' + res.error.message),
+        rowEl(btn('🔑 បញ្ចូលពាក្យសម្ងាត់ម្តងទៀត', () => renderBody(), ''))));
+      return;
+    }
+    const info = {}, paid = {};
+    ((res.data && res.data.info) || []).forEach(r => { info[r.employee_id] = r; });
+    ((res.data && res.data.paid) || []).forEach(r => { paid[r.month + '|' + r.employee_id + '|' + (r.kind || 'final')] = r; });
     const out = h('div');
-    const selC = h('select', null, h('option', { value: 'USD', text: 'ដុល្លារ (USD)' }), h('option', { value: 'KHR', text: 'រៀល (KHR — បង្គត់ ១០០)' }));
-    selC.value = bankSt.cur;
-    const rate = h('input', { type: 'number', min: '1', step: '1', placeholder: String(rateNow()), style: 'width:100px' });
-    const remark = h('input', { type: 'text', value: bankSt.remark, style: 'width:170px' });
-    const cAdv = h('input', { type: 'checkbox' }); cAdv.checked = bankSt.adv;
-    const amountOf = (r, rt) => {
-      const usd = Math.max(0, r.net - (bankSt.adv ? r.adv : 0));
-      return bankSt.cur === 'KHR' ? Math.round(usd * rt / 100) * 100 : r2(usd);
-    };
+    const selR = h('select', null, h('option', { value: 'advance', text: 'ប្រាក់ខែទី១ · ថ្ងៃ 25' }), h('option', { value: 'final', text: 'ប្រាក់ខែទី២ · ថ្ងៃទី 10 (នៅសល់)' }));
+    selR.value = bankSt.round;
+    const locked = typeof isMonthLocked === 'function' && isMonthLocked(finMonth);
+    const hasAcc = i => !!(i && i.bank_name && i.account_no && i.account_name);
     const draw = () => {
       out.textContent = '';
-      const rt = num(rate.value) || rateNow();
-      const list = ld.rows.map(r => ({ r, b: banks.get(String(r.e.id)), amt: amountOf(r, rt) }));
-      const ok = list.filter(x => x.amt > 0 && x.b && x.b.account_no), missing = list.filter(x => x.amt > 0 && !(x.b && x.b.account_no));
-      const total = ok.reduce((a, x) => a + x.amt, 0);
-      out.appendChild(h('div', { class: 'fin-grid' }, statEl(`${ok.length} នាក់`, 'រួចរាល់ក្នុងឯកសារ'),
-        statEl(bankSt.cur === 'KHR' ? riel(total) + ' ៛' : '$' + usd2(total), 'ចំនួនផ្ទេរសរុប'),
-        statEl(`${missing.length} នាក់`, 'ខ្វះព័ត៌មានគណនី'), statEl(`${list.filter(x => x.amt <= 0).length} នាក់`, 'រំលង (សុទ្ធ ≤ 0)')));
-      if (missing.length) out.appendChild(rowEl(badge('⚠ ខ្វះគណនី៖ ' + missing.map(x => x.r.e.name).join(', '), 'warn')));
-      const rows = list.filter(x => x.amt > 0).map(x => {
-        const bn = h('input', { type: 'text', value: (x.b && x.b.bank_name) || '', placeholder: 'ABA / ACLEDA …', style: 'width:110px' });
-        const an = h('input', { type: 'text', value: (x.b && x.b.account_no) || '', placeholder: 'លេខគណនី', style: 'width:130px' });
-        const nm = h('input', { type: 'text', value: (x.b && x.b.account_name) || '', placeholder: x.r.e.name, style: 'width:140px' });
-        const save = async () => {
-          const row = { employee_id: String(x.r.e.id), bank_name: bn.value.trim(), account_no: an.value.trim(), account_name: nm.value.trim(), updated_at: new Date().toISOString() };
-          const { error } = await supabaseClient.from(BANK_TBL).upsert(row, { onConflict: 'employee_id' });
-          if (error) { say('រក្សាទុកមិនបាន៖ ' + error.message); return; }
-          banks.set(row.employee_id, row); draw();
-        };
-        [bn, an, nm].forEach(i => i.addEventListener('change', save));
-        return [x.r.e.name, x.r.e.dept || '-', bankSt.cur === 'KHR' ? riel(x.amt) + ' ៛' : usd2(x.amt), bn, an, nm];
+      const round = bankSt.round;
+      const list = ld.rows.map(r => {
+        const inf = info[r.e.id] || {};
+        const amt = round === 'advance' ? Math.max(0, r2(r.adv)) : r2(r.net);
+        const isPaid = !!paid[`${finMonth}|${r.e.id}|${round}`];
+        const issue = inf.issue || '';
+        const st = amt <= 0 ? 'zero' : isPaid ? 'paid' : !hasAcc(inf) ? 'missing' : issue ? 'issue' : 'ready';
+        return { r, inf, amt, st };
       });
-      out.appendChild(mkTable(['ឈ្មោះ', 'ផ្នែក', 'ចំនួនផ្ទេរ', 'ធនាគារ', 'លេខគណនី', 'ឈ្មោះគណនី'], rows, [2]));
-      out.appendChild(rowEl(btn('⬇ ទាញយកឯកសារផ្ទេរប្រាក់ (CSV)', () => {
-        if (!ok.length) { say('មិនមានបុគ្គលិកដែលមានលេខគណនី'); return; }
-        const rm = `${bankSt.remark} ${finMonth}`.trim();
-        download(`bank-transfer-${finMonth}-${bankSt.cur}.csv`, toCsv([['No', 'Employee ID', 'Account Name', 'Account Number', 'Bank', 'Amount', 'Currency', 'Remark']]
-          .concat(ok.map((x, i) => [i + 1, x.r.e.username || x.r.e.id, x.b.account_name || x.r.e.name, x.b.account_no, x.b.bank_name || '', bankSt.cur === 'KHR' ? x.amt : x.amt.toFixed(2), bankSt.cur, rm]))), 'text/csv;charset=utf-8');
-      }, ''), btn('⬇ បញ្ជីខ្វះគណនី (CSV)', () => download(`bank-missing-${finMonth}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក']].concat(missing.map(x => [x.r.e.username || x.r.e.id, x.r.e.name, x.r.e.dept || '']))), 'text/csv;charset=utf-8'))));
+      const ready = list.filter(x => x.st === 'ready'), total = ready.reduce((a, x) => a + x.amt, 0);
+      const cnt = k => list.filter(x => x.st === k).length;
+      out.appendChild(h('div', { class: 'fin-grid' }, statEl(`${ready.length} នាក់`, 'រួចរាល់ក្នុងឯកសារ'), statEl('$' + usd2(total), 'ចំនួនផ្ទេរសរុប'),
+        statEl(`${cnt('paid')} នាក់`, 'បានបើករួច'), statEl(`${cnt('missing')} នាក់`, 'ខ្វះព័ត៌មានគណនី'), statEl(`${cnt('issue')} នាក់`, 'គណនីមានបញ្ហា')));
+      if (bankSt.round === 'final' && !locked) out.appendChild(rowEl(badge(`🔓 ខែ ${finMonth} មិនទាន់បិទ — លេខអាចផ្លាស់ប្តូរ`, 'warn')));
+      const BADGE = { ready: ['✓ រួចរាល់', ''], paid: ['✓ បានបើករួច', ''], missing: ['ខ្វះព័ត៌មាន', 'warn'], issue: ['⚠ មានបញ្ហា', 'late'], zero: ['គ្មានទឹកប្រាក់', 'warn'] };
+      out.appendChild(mkTable(['ឈ្មោះ', 'ផ្នែក', 'ធនាគារ', 'លេខគណនី', 'ឈ្មោះគណនី', 'ចំនួនផ្ទេរ ($)', 'ស្ថានភាព'],
+        list.map(x => [x.r.e.name, x.r.e.dept || '-', x.inf.bank_name || '-', x.inf.account_no || '-', x.inf.account_name || '-', x.amt > 0 ? usd2(x.amt) : '-', badge(BADGE[x.st][0], BADGE[x.st][1])]), [5]));
+      const missing = list.filter(x => x.st === 'missing' || x.st === 'issue');
+      out.appendChild(rowEl(
+        btn('⬇ ទាញយកឯកសារផ្ទេរប្រាក់ (CSV)', () => {
+          if (!ready.length) { say('មិនមានបុគ្គលិកដែលរួចរាល់ (ឬបានបើករួចទាំងអស់)'); return; }
+          const ref = (round === 'advance' ? 'Salary advance ' : 'Salary ') + finMonth;
+          const q = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; }; // ការពារ formula injection
+          const lines = [['No', 'Account Name', 'Account Number', 'Bank', 'Amount (USD)', 'Remark', 'Employee ID', 'Employee Name'].map(q).join(',')];
+          ready.forEach((x, i) => lines.push([i + 1, x.inf.account_name, x.inf.account_no, x.inf.bank_name, x.amt.toFixed(2), ref, x.r.e.username || '', x.r.e.name || ''].map((v, c) => (c === 0 || c === 4) ? String(v) : q(v)).join(',')));
+          download(`bank_transfer_${finMonth}_${round}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+        }, ''),
+        btn('⬇ បញ្ជីខ្វះ/មានបញ្ហា (CSV)', () => download(`bank-missing-${finMonth}.csv`, toCsv([['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ស្ថានភាព']].concat(missing.map(x => [x.r.e.username || x.r.e.id, x.r.e.name, x.r.e.dept || '', BADGE[x.st][0]]))), 'text/csv;charset=utf-8')),
+        typeof window.openBankPay === 'function' ? btn('🏦 បើកផ្ទាំងពេញលេញ (កែគណនី / កត់ថាបានបើក)', () => { try { window.openBankPay(); } catch (ex) { say('បើកមិនបាន៖ ' + (ex.message || ex)); } }) : null));
     };
-    selC.addEventListener('change', () => { bankSt.cur = selC.value; draw(); });
-    rate.addEventListener('input', draw);
-    remark.addEventListener('input', () => { bankSt.remark = remark.value; });
-    cAdv.addEventListener('change', () => { bankSt.adv = cAdv.checked; draw(); });
-    body.appendChild(card('🏦 ឯកសារផ្ទេរប្រាក់ធនាគារ', rowEl(lab('រូបិយប័ណ្ណ ', selC), lab('អត្រា 1$ = ៛ ', rate), lab('កំណត់ចំណាំ ', remark), lab(h('span', null, cAdv, ' ដកប្រាក់ខែទី១ ដែលបានបើកហើយ'), '')), out));
-    body.appendChild(h('p', { class: 'fin-muted', text: 'ចំនួនផ្ទេរ = ប្រាក់សុទ្ធនៃខែនោះ (ដូចផ្ទាំង «បើកសាច់ប្រាក់»)។ វាយព័ត៌មានគណនីក្នុងតារាង — រក្សាទុកក្នុង Supabase ដោយស្វ័យប្រវត្តិ ហើយប្រើបានគ្រប់ខែ។ CSV ជាទម្រង់ទូទៅ៖ បើធនាគារ (ABA/ACLEDA…) ត្រូវការទម្រង់ជាក់លាក់ សូមចម្លងជួរចូលក្នុង Template របស់ធនាគារ។' }));
+    selR.addEventListener('change', () => { bankSt.round = selR.value; draw(); });
+    body.appendChild(card('🏦 ឯកសារផ្ទេរប្រាក់ធនាគារ', rowEl(lab('ដងបើកប្រាក់ ', selR)), out));
+    body.appendChild(h('p', { class: 'fin-muted', text: 'ទិន្នន័យគណនី និងស្ថានភាព «បានបើក» មកពីផ្នែក «បើកប្រាក់ខែតាមធនាគារ» ដូចគ្នា (ត្រូវការពាក្យសម្ងាត់ Admin ម្តងក្នុងមួយ session)។ ចំនួនផ្ទេរ៖ ដងទី១ = ប្រាក់ខែទី១ តាមច្បាប់ · ដងទី២ = ប្រាក់ខែសុទ្ធនៅសល់។ ឯកសារនេះរំលងអ្នកដែលបានបើករួច ខ្វះគណនី ឬគណនីមានបញ្ហា។ ការកែគណនី និងកត់ថាបានបើក ធ្វើក្នុងផ្ទាំងពេញលេញ។' }));
     draw();
   }
 
