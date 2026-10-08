@@ -16,8 +16,8 @@
   if (typeof AUDIT_LABELS !== 'undefined') Object.assign(AUDIT_LABELS, { employee_card: '🪪 កាតការងារបុគ្គលិក' });
 
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
-  const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (_) { return d; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* ignore */ } };
+  const lsGet = (k, d) => (window.appKV ? window.appKV.get(k, d) : d); // ចាប់ពីឥឡូវ រក្សាទុកក្នុង Supabase (kv-store.js)
+  const lsSet = (k, v) => { if (window.appKV) window.appKV.set(k, v); };
   const say = m => (typeof customAlert === 'function' ? customAlert(m) : Promise.resolve(window.alert(m)));
   const ask = m => (typeof customConfirm === 'function' ? customConfirm(m) : Promise.resolve(window.confirm(m)));
   const getEmp = id => (typeof employees !== 'undefined' && Array.isArray(employees)) ? employees.find(e => String(e.id) === String(id)) : null;
@@ -72,7 +72,7 @@
     if (k < 0) { k = 0; for (const ch of d) k = (k * 31 + ch.codePointAt(0)) >>> 0; }
     return PALETTE[k % PALETTE.length];
   };
-  // ជម្រើសកាត៖ ឡូហ្គោ ថ្ងៃចេញកាត/ផុតកំណត់ បង្ហាញទូរស័ព្ទ (ចងចាំក្នុង localStorage)
+  // ជម្រើសកាត៖ ឡូហ្គោ ថ្ងៃចេញកាត/ផុតកំណត់ បង្ហាញទូរស័ព្ទ (រក្សាទុកក្នុង Supabase តារាង app_kv)
   const LS_OPTS = 'wc_opts';
   const getOpts = () => { try { const o = JSON.parse(lsGet(LS_OPTS, '{}')); return (o && typeof o === 'object') ? o : {}; } catch (_) { return {}; } };
   const setOpt = (k, v) => { const o = getOpts(); o[k] = v; lsSet(LS_OPTS, JSON.stringify(o)); };
@@ -146,7 +146,7 @@
       if (!f) return;
       try {
         setOpt('logo', await logoFromFile(f));
-        if (!safeSrc(getOpts().logo)) throw new Error('រក្សាទុកឡូហ្គោមិនបាន (ទំហំចងចាំពេញ)');
+        if (!safeSrc(getOpts().logo)) throw new Error('រក្សាទុកឡូហ្គោមិនបាន');
         sync(); onChange();
       } catch (ex) { await say('ឡូហ្គោមិនបាន៖ ' + (ex.message || ex)); }
     });
@@ -480,7 +480,7 @@
             <label>សារខាងក្រោយកាត <input type="text" id="wcNote" placeholder="ឧ. បើរកឃើញកាតនេះ សូមទូរស័ព្ទ 012 345 678" style="min-width:300px"></label>
             <label><input type="checkbox" id="wcDeptColor"> ពណ៌កាតតាមផ្នែក</label>
           </div>
-          <p class="wc-note">ឈ្មោះក្រុមហ៊ុន និងសារត្រូវបានចងចាំក្នុងកម្មវិធីនេះ។ រូបថត ឈ្មោះ តួនាទី ផ្នែក ត្រូវបានយកពីទម្រង់បុគ្គលិក (កែតាមប៊ូតុង «✏️ កែ»)។</p>
+          <p class="wc-note">ឈ្មោះក្រុមហ៊ុន និងសារត្រូវបានរក្សាទុកក្នុង Supabase។ រូបថត ឈ្មោះ តួនាទី ផ្នែក ត្រូវបានយកពីទម្រង់បុគ្គលិក (កែតាមប៊ូតុង «✏️ កែ»)។</p>
           ${optsHtml('wc')}
           <div class="wc-cards">
             <div class="wc-cardwrap"><div>ខាងមុខ</div><div id="wcFront"></div></div>

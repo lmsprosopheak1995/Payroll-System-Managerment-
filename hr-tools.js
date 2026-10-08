@@ -23,8 +23,8 @@
   'use strict';
 
   // ------------------------------------------------------------ ឧបករណ៍ ----
-  const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (_) { return d; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* ignore */ } };
+  const lsGet = (k, d) => (window.appKV ? window.appKV.get(k, d) : d); // ចាប់ពីឥឡូវ រក្សាទុកក្នុង Supabase (kv-store.js)
+  const lsSet = (k, v) => { if (window.appKV) window.appKV.set(k, v); };
   const say = m => (typeof customAlert === 'function' ? customAlert(m) : Promise.resolve(window.alert(m)));
   const emps = () => (typeof employees !== 'undefined' && Array.isArray(employees)) ? employees : [];
   const z2 = n => String(n).padStart(2, '0');
@@ -729,7 +729,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
         const lk = document.querySelector('link[href*="fonts.googleapis.com"]');
         openPrint(certificateHtml(e, Object.assign({}, S, { issue: parseYMD(issue.value) || today0(), fontHref: lk ? lk.href : '' })));
       }, ''))));
-    body.appendChild(h('p', { class: 'hrt-muted', text: 'ក្នុងបង្អួចព្រីនអាចជ្រើស «Save as PDF»។ សូមពិនិត្យអត្ថបទមុនចុះហត្ថលេខា និងបោះត្រា។ អត្តលេខយកពី username (បើគ្មាន ប្រើ id)។ ព័ត៌មានដែលបានបំពេញត្រូវបានចងចាំលើ browser នេះ។' }));
+    body.appendChild(h('p', { class: 'hrt-muted', text: 'ក្នុងបង្អួចព្រីនអាចជ្រើស «Save as PDF»។ សូមពិនិត្យអត្ថបទមុនចុះហត្ថលេខា និងបោះត្រា។ អត្តលេខយកពី username (បើគ្មាន ប្រើ id)។ ព័ត៌មានដែលបានបំពេញត្រូវបានរក្សាទុកក្នុង Supabase (ប្រើរួមគ្នាគ្រប់ឧបករណ៍)។' }));
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ គំរូសារ ----
