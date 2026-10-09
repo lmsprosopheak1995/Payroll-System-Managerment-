@@ -13,13 +13,72 @@ let overtimeRequests = [];
 let payrollItems = [];
 
 // ==== Admin authentication gate ====
-// ការចូលប្រើទំព័រនេះទាមទារពាក្យសម្ងាត់អ្នកគ្រប់គ្រង។ session ស្ថិតនៅក្នុង sessionStorage
-// ប៉ុណ្ណោះ (ដូចទំព័របុគ្គលិក) ដូច្នេះនឹងត្រូវចូលគណនីម្ដងទៀតរាល់ពេលបើក tab/browser ថ្មី។
-const ADMIN_SESSION_KEY = 'admin_portal_session';
+// ការចូលប្រើទំព័រនេះទាមទារពាក្យសម្ងាត់អ្នកគ្រប់គ្រង (ឬគណនី Finance)។ ពេលចូលគណនីជោគជ័យ Supabase ចេញ «session token»
+// ហើយ session (តួនាទី អ្នកប្រើ ពេលផុតកំណត់) ត្រូវរក្សាទុក និងផ្ទៀងផ្ទាត់នៅក្នុង Supabase (តារាង app_sessions — មើល app-sessions.sql)។
+// browser ទុកតែ token (sessionStorage) ដូច្នេះការកែ sessionStorage ដោយដៃមិនអាចក្លែងជា admin បានទេ ហើយ admin អាចបញ្ចប់ session បាន។
+// បើមិនទាន់រត់ app-sessions.sql កម្មវិធីប្រើ flag ចាស់ (sessionStorage) ជាបណ្តោះអាសន្ន។
+const ADMIN_SESSION_KEY = 'admin_portal_session';   // flag ចាស់ — ប្រើតែពេលមិនទាន់រត់ app-sessions.sql
+const APP_SESSION_KEY = 'app_session_token';
+let sessionLegacyMode = false;
 
 function getAdminSession() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === '1'; }
 function setAdminSession() { sessionStorage.setItem(ADMIN_SESSION_KEY, '1'); }
 function clearAdminSession() { sessionStorage.removeItem(ADMIN_SESSION_KEY); }
+function getSessionToken() { return sessionStorage.getItem(APP_SESSION_KEY) || ''; }
+function setSessionToken(t) { sessionStorage.setItem(APP_SESSION_KEY, t); }
+function clearSessionToken() { sessionStorage.removeItem(APP_SESSION_KEY); }
+function isMissingFn(error) { return !!error && (error.code === 'PGRST202' || /could not find the function|does not exist/i.test(error.message || '')); }
+
+// session បច្ចុប្បន្ន៖ undefined = មិនទាន់ដឹង · null = មិនទាន់ចូល · {role:'admin'|'finance', user, expires_at}
+function setAppSession(sess) {
+  window.appSession = sess || null;
+  try { window.dispatchEvent(new CustomEvent('app:session', { detail: window.appSession })); } catch (_) { /* ignore */ }
+}
+
+async function validateAppSession() {
+  const { data, error } = await supabaseClient.rpc('validate_session', { p_token: getSessionToken() });
+  if (error) {
+    if (isMissingFn(error)) { // app-sessions.sql មិនទាន់រត់ → flag ចាស់
+      sessionLegacyMode = true;
+      return getAdminSession() ? { valid: true, role: 'admin', user: null, legacy: true } : null;
+    }
+    throw error;
+  }
+  if (data && data.valid) return data;
+  clearSessionToken();
+  return null;
+}
+
+// ត្រឡប់ true បើជោគជ័យ · false បើពាក្យសម្ងាត់ខុស · throw បើកំហុសផ្សេង
+async function createAdminSessionFor(pw) {
+  const { data, error } = await supabaseClient.rpc('create_admin_session', { p_admin_password: pw });
+  if (error) {
+    if (!isMissingFn(error)) throw error;
+    sessionLegacyMode = true;
+    const r = await supabaseClient.rpc('login_admin', { p_password: pw });
+    if (r.error) throw r.error;
+    if (!r.data) return false;
+    setAdminSession();
+    return true;
+  }
+  if (!data || !data.ok) return false;
+  setSessionToken(data.token);
+  return true;
+}
+
+// ពិនិត្យ session រាល់ ២ នាទី៖ បើ admin បញ្ចប់ session / បិទគណនី Finance → ត្រឡប់ទៅទំព័រចូលគណនី
+let sessionWatchTimer = null;
+function startSessionWatch() {
+  if (sessionWatchTimer || sessionLegacyMode) return;
+  sessionWatchTimer = setInterval(async () => {
+    const t = getSessionToken();
+    if (!t) return;
+    try {
+      const { data, error } = await supabaseClient.rpc('validate_session', { p_token: t });
+      if (!error && (!data || !data.valid)) { clearSessionToken(); location.reload(); }
+    } catch (_) { /* បណ្តាញមានបញ្ហា — ព្យាយាមម្តងទៀតលើកក្រោយ */ }
+  }, 120000);
+}
 
 function showAdminGate(view, errorMsg) {
   document.getElementById('adminGate').style.display = '';
@@ -36,20 +95,30 @@ function showAdminGate(view, errorMsg) {
 }
 
 async function checkAdminAuthAndInit() {
-  if (getAdminSession()) {
+  document.getElementById('adminGateLoading').style.display = '';
+  let sess = null;
+  try { sess = await validateAppSession(); }
+  catch (error) {
+    console.error('validate_session failed', error);
+    setAppSession(null);
+    showAdminGate('login', 'មិនអាចភ្ជាប់ទៅ Supabase បានទេ៖ ' + error.message);
+    return;
+  }
+  setAppSession(sess);
+  if (sess) {
     document.getElementById('adminGateLoading').style.display = 'none';
     document.getElementById('adminSetupCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('mainContainer').style.display = '';
     Object.keys(loadFailures).forEach(k => delete loadFailures[k]);
-    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null), loadSalaryRaises()]);
+    await Promise.all([loadData(), loadAttendance(), loadSettings(), loadLeaveRequests(), loadOvertimeRequests(), loadPayrollItems(), loadHolidays(), (typeof loadFeatureData === 'function' ? loadFeatureData() : null), (typeof loadPayrollClose === 'function' ? loadPayrollClose() : null)]);
     if (typeof loadAdvRulesRemote === 'function') await loadAdvRulesRemote();
     renderAll();
     if (typeof requestAdvanceSync === 'function') requestAdvanceSync(currentMonthlyMonth());
+    startSessionWatch();
     return;
   }
-  document.getElementById('adminGateLoading').style.display = '';
   const { data: isSet, error } = await supabaseClient.rpc('admin_password_is_set');
   if (error) {
     console.error('admin_password_is_set failed', error);
@@ -66,22 +135,27 @@ async function doAdminSetup() {
   if (p1 !== p2) { showAdminGate('setup', 'ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ'); return; }
   const { data, error } = await supabaseClient.rpc('set_admin_password', { p_old_password: null, p_new_password: p1 });
   if (error || !data) { showAdminGate('setup', 'កំណត់ពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + (error ? error.message : '')); return; }
-  setAdminSession();
+  try {
+    if (!(await createAdminSessionFor(p1))) { showAdminGate('login', 'សូមចូលគណនីដោយពាក្យសម្ងាត់ដែលទើបកំណត់'); return; }
+  } catch (e) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + e.message); return; }
   await checkAdminAuthAndInit();
 }
 
 async function doAdminLogin() {
   const pw = document.getElementById('adminLoginPassword').value;
   if (!pw) { showAdminGate('login', 'សូមបំពេញពាក្យសម្ងាត់'); return; }
-  const { data, error } = await supabaseClient.rpc('login_admin', { p_password: pw });
-  if (error) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
-  if (!data) { showAdminGate('login', 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+  let ok = false;
+  try { ok = await createAdminSessionFor(pw); }
+  catch (error) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
+  if (!ok) { showAdminGate('login', 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
   document.getElementById('adminLoginPassword').value = '';
-  setAdminSession();
   await checkAdminAuthAndInit();
 }
 
-function doAdminLogout() {
+async function doAdminLogout() {
+  const t = getSessionToken();
+  try { if (t) await supabaseClient.rpc('end_session', { p_token: t }); } catch (_) { /* ignore */ }
+  clearSessionToken();
   clearAdminSession();
   location.reload();
 }
@@ -529,28 +603,8 @@ async function removeHoliday(date) {
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
 
-// ==== ប្រវត្តិឡើងប្រាក់ខែ (salary_raises) — ប្រាក់ខែមូលដ្ឋានតាមថ្ងៃចាប់ពី ====
-let salaryRaises = []; // តែជួរ status='applied' តម្រៀបតាម effective_date
-async function loadSalaryRaises() {
-  try {
-    const { data, error } = await supabaseClient.from('salary_raises').select('*').eq('status', 'applied').order('effective_date', { ascending: true });
-    if (error) { salaryRaises = []; console.warn('salary_raises មិនទាន់អាចអាន (ប្រើ employees.salary ដដែល)', error.message); return; }
-    salaryRaises = (data || []).map(r => ({ empId: String(r.employee_id), eff: String(r.effective_date).slice(0, 10), old: parseFloat(r.old_salary) || 0, nw: parseFloat(r.new_salary) || 0 }));
-  } catch (ex) { salaryRaises = []; console.warn('loadSalaryRaises', ex); }
-}
-// ប្រាក់ខែមូលដ្ឋានរបស់បុគ្គលិកនៅថ្ងៃ date (YYYY-MM-DD)៖
-// បើមានការឡើងដែលចាប់ពីក្រោយថ្ងៃនោះ → ប្រាក់ខែមុនការឡើងដំបូងបំផុតនៃពួកវា (old) ; បើគ្មាន → employees.salary បច្ចុប្បន្ន
-function salaryOn(emp, date) {
-  const cur = parseFloat(emp && emp.salary) || 0;
-  if (!emp || !date || !salaryRaises.length) return cur;
-  const d = String(date).slice(0, 10), id = String(emp.id);
-  for (const r of salaryRaises) { if (r.empId === id && r.eff > d) return r.old; } // តម្រៀបតាមថ្ងៃ → ទីមួយ = ឡើងដំបូងបំផុតក្រោយ d
-  return cur;
-}
-const monthEndOf = month => { const [y, m] = String(month).split('-').map(Number); return `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
-
 function computeRow(emp, record, date) {
-  const salary = salaryOn(emp, date);
+  const salary = parseFloat(emp.salary) || 0;
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const hourlyRate = settings.standardHours > 0 ? dailyRate / settings.standardHours : 0;
 
@@ -1778,7 +1832,7 @@ function calcLeaveBalanceRow(emp, year, rules) {
   // នៅសល់ → ផ្ទេរទៅឆ្នាំក្រោយ (ក្នុងកំណត់) ឯលើសពីនោះ = បើកលុយជំនួស
   const carryOut = rules.carryOver ? Math.min(rules.carryMaxDays, Math.max(0, remaining)) : 0;
   const cashDays = round2(Math.max(0, remaining) - carryOut);
-  const dailyRate = settings.workDaysPerMonth > 0 ? salaryOn(emp, `${year}-12-31`) / settings.workDaysPerMonth : 0;
+  const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
   const cashAmount = round2(cashDays * dailyRate);
   // ច្បាប់មានប្រាក់ខែ (ពិសេស) — កូតាផ្ទាល់ខ្លួន មិនកាត់សមាមាត្រ
   const paidQuota = months > 0 ? rules.paidQuotaDays : 0;
@@ -2561,7 +2615,7 @@ function dedItemId(empId, month) { return `auto_ded_${empId}_${month}`; }
 
 // គណនាថ្ងៃយឺត/ថ្ងៃច្បាប់ និងចំនួនប្រាក់ត្រូវកាត់សម្រាប់បុគ្គលិកម្នាក់ក្នុងមួយខែ
 function calcDeductionRow(emp, month) {
-  const salary = salaryOn(emp, monthEndOf(month)); // ប្រើអត្រាបច្ចុប្បន្ននៅចុងខែ
+  const salary = parseFloat(emp.salary) || 0;
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   const exRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
   const startMin = lateStartMinutes(getEmpShift(emp.id));
@@ -2793,7 +2847,7 @@ function calcBonusRow(emp, month, rules) {
   const months = monthsOfService(emp.startDate, asOfDate);
   const years = months / 12;
   const eligible = rules.mode === 'manual' ? true : months >= rules.minMonths;
-  const salary = salaryOn(emp, asOfDate);
+  const salary = parseFloat(emp.salary) || 0;
   const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
   let amount = 0;
   if (eligible) {
@@ -3152,7 +3206,7 @@ function exportMonthlyCSV() {
   const rows = monthlyRows(month);
   if (!rows.length) { customAlert('មិនមានទិន្នន័យ'); return; }
   const headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែមូលដ្ឋាន($)', 'ថ្ងៃធ្វើការ', 'ច្បាប់', 'OT(ម៉ោង)', 'តាមវត្តមាន($)', 'អត្ថប្រយោជន៍($)', 'ប្រាក់កាត់($)', 'ប្រាក់ខែសុទ្ធ($)', 'ប្រាក់ខែសុទ្ធ(៛)', 'ថ្ងៃធ្វើការ (ទី១-ថ្ងៃកំណត់)', 'ថ្ងៃត្រូវធ្វើការ', 'ប្រាក់ខែទី១($)'];
-  const lines = rows.map(({ e, t, adv }, i) => [i + 1, e.username || '', e.name, e.dept || '', salaryOn(e, monthEndOf(month)).toFixed(2),
+  const lines = rows.map(({ e, t, adv }, i) => [i + 1, e.username || '', e.name, e.dept || '', (parseFloat(e.salary) || 0).toFixed(2),
     t.workDays, t.leaveDays, t.otHours.toFixed(2), t.total.toFixed(2), t.benefitsUSD.toFixed(2), t.deductionsUSD.toFixed(2), t.net.toFixed(2), Math.round(t.netRiel), adv.workedDays, adv.requiredDays, adv.amount.toFixed(2)]);
   const csv = '\uFEFF' + headers.join(',') + '\n' + lines.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a');

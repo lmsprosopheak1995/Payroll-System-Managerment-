@@ -445,7 +445,8 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   }
 
   // ------------------------------------------------------------ ផ្ទាំង៖ គណនី Finance (admin ប៉ុណ្ណោះ) ----
-  const isFinanceRole = () => { try { return sessionStorage.getItem('finance_portal_role') === '1'; } catch (_) { return false; } };
+  // តួនាទីមកពី session ដែល Supabase ផ្ទៀងផ្ទាត់ (script.js → window.appSession)
+  const isFinanceRole = () => !!(window.appSession && window.appSession.role === 'finance');
 
   // ពាក្យសម្ងាត់ admin ទុកក្នុងអង្គចងចាំ (មិនរក្សាទុកលើថាស) ១០ នាទី ដើម្បីកុំវាយរាល់ប្រតិបត្តិការ
   let adminPwMem = null, adminPwTimer = null;
@@ -474,6 +475,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
   const fmtWhen = v => { if (!v) return '-'; const d = new Date(v); return isNaN(d) ? '-' : d.toLocaleString(); };
 
   async function paneAccess(body) {
+    if (isFinanceRole()) { body.appendChild(empty('ផ្ទាំងនេះសម្រាប់អ្នកគ្រប់គ្រង (admin) ប៉ុណ្ណោះ')); return; }
     const url = new URL('finance.html', location.href).href;
     const urlInput = h('input', { type: 'text', readonly: 'readonly', value: url, style: 'width:min(460px,100%)' });
     body.appendChild(card('🔗 តំណរទំព័រចូល Finance',
@@ -533,7 +535,9 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
         listBox.textContent = '⚠ ' + rpcErr(ex) + ' — ប្រហែលមិនទាន់រត់ finance-auth.sql ក្នុង Supabase';
       }
     }
-    body.appendChild(card('👥 គណនី Finance', rowEl(btn('🔄 ផ្ទុកឡើងវិញ', load), btn('🔒 ចាក់សោវិញ', () => { lockAdmin(); renderBody(); })), listBox));
+    body.appendChild(card('👥 គណនី Finance', rowEl(btn('🔄 ផ្ទុកឡើងវិញ', load), btn('🚪 បញ្ចប់ session Finance ទាំងអស់', async () => {
+      if (await askYes('បញ្ចប់ session របស់អ្នក Finance ទាំងអស់? ពួកគេនឹងត្រូវចូលគណនីម្តងទៀត (ក្នុងរយៈពេល ≤ ២ នាទី)។')) run(() => call('revoke_sessions', { p_role: 'finance' }), n => `✓ បានបញ្ចប់ ${n} session`);
+    }), btn('🔒 ចាក់សោវិញ', () => { lockAdmin(); renderBody(); })), listBox));
 
     // ---- ជំហាន ៣៖ បង្កើតគណនីថ្មី ----
     const fromEmp = h('select', { style: 'min-width:220px;max-width:100%' }, h('option', { value: '', text: '— ជ្រើសពីបុគ្គលិក (ស្រេចចិត្ត) —' }),
@@ -569,7 +573,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
       rowEl(lab('ជ្រើសពីបុគ្គលិក ', fromEmp)),
       rowEl(uName, fName),
       rowEl(pwNew, btn('🎲 បង្កើតពាក្យសម្ងាត់', () => { pwNew.value = genPassword(); }), createBtn),
-      h('p', { class: 'fin-muted', text: 'ម្នាក់ៗមានឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់ផ្ទាល់ខ្លួន។ ពាក្យសម្ងាត់ត្រូវបាន hash ក្នុង Supabase ហើយការចូលខុស ៥ ដងនឹងចាក់សោគណនីនោះ ៦០ វិនាទី។ ក្រោយចូល អ្នក Finance ឃើញតែទំព័រ Finance។' }),
+      h('p', { class: 'fin-muted', text: 'ម្នាក់ៗមានឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់ផ្ទាល់ខ្លួន។ ពាក្យសម្ងាត់ត្រូវបាន hash ក្នុង Supabase ហើយការចូលខុស ៥ ដងនឹងចាក់សោគណនីនោះ ៦០ វិនាទី។ ក្រោយចូល អ្នក Finance ឃើញតែទំព័រ Finance។ Session ត្រូវបានរក្សាទុក និងផ្ទៀងផ្ទាត់ក្នុង Supabase (អាយុ ១២ ម៉ោង) — បិទ/លុប/ប្តូរពាក្យសម្ងាត់គណនី នឹងបញ្ចប់ session របស់គាត់ដោយស្វ័យប្រវត្តិ។' }),
       h('p', { class: 'fin-badge warn', text: '⚠ ការរឹតបន្តឹងនេះជាកម្រិតចំណុចប្រទាក់ (UI) ដូច admin ដែរ ព្រោះកម្មវិធីប្រើ anon key ជាមួយ RLS បើកទូលាយ។' })));
     load();
   }
@@ -616,7 +620,7 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
     ['trend', '📈 និន្នាការ', paneTrend, 'reports'],
     ['budget', '🎯 ថវិកា', paneBudget, 'reports']
   ].concat(PAYROLL_TABS.map(d => [d.key, d.label, body => mountPayroll(d, body), 'payroll']));
-  if (!isFinanceRole()) SUBS.push(['access', '🔑 គណនី Finance', paneAccess, 'admin']); // admin ប៉ុណ្ណោះ
+  SUBS.push(['access', '🔑 គណនី Finance', paneAccess, 'admin']); // admin ប៉ុណ្ណោះ (លាក់សម្រាប់ Finance តាម session)
 
   function renderBody() {
     if (!bodyEl) return;
@@ -651,6 +655,13 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
       if (x[3] && x[3] !== lastGroup) { lastGroup = x[3]; return [h('span', { class: 'fin-sep', text: GROUPS[x[3]] || '' }), b]; }
       return b;
     }).flat());
+    const syncRoleUi = () => {
+      if (!isFinanceRole()) return;
+      Array.from(tabsEl.children).forEach(c => { if ((c.dataset && c.dataset.sub === 'access') || (c.className === 'fin-sep' && c.textContent === GROUPS.admin)) c.style.display = 'none'; });
+      if (sub === 'access') { sub = 'overview'; renderBody(); }
+    };
+    window.addEventListener('app:session', syncRoleUi);
+    syncRoleUi();
     // ចាកចេញពីទំព័រ Finance (admin) → ដាក់ផ្ទាំង Payroll ត្រឡប់កន្លែងដើម ដើម្បីឲ្យម៉ឺនុយ Payrolls ធម្មតាដំណើរការ
     const origShowTab = window.showTab;
     if (typeof origShowTab === 'function' && !origShowTab.__finUnmount) {
