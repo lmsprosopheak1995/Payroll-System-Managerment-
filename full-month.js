@@ -7,8 +7,11 @@
    ដំឡើង៖ index.html ដាក់ក្រោម bank-pay.js៖  <script src="full-month.js"></script>
    ① ដំណើរការ full-month.sql ក្នុង Supabase ជាមុន (បន្ថែម 3 column ក្នុង app_settings)
    លក្ខខណ្ឌ (ចំនួនព្រីម / យឺតអនុញ្ញាត / ច្បាប់) រក្សាក្នុង Supabase ទាំងអស់ — មិនប្រើ localStorage
+   ប្រភេទច្បាប់ដែល «មិនរាប់ជាច្បាប់» (ឧ. ច្បាប់មានប្រាក់ខែ/សម្រាកមានប្រាក់ឈ្នួល) → មិនធ្វើឲ្យមិនពេញខែ៖ ជ្រើសក្នុងប្រអប់លក្ខខណ្ឌ
+   រក្សាទុកក្នុង Supabase តារាង app_kv (key fm_leave_exempt) តាម kv-store.js — លំនាំដើម៖ ច្បាប់មានប្រាក់ខែ (ពិសេស) + ច្បាប់ប្រចាំឆ្នាំ
    លុបវាចេញ → ត្រលប់ទៅដើមវិញ
-   ត្រូវការ៖ employees, payrollItems, payrollEmployeesForMonth, summarizeEmpMonth, calcDeductionRow,
+   ត្រូវការ៖ employees, payrollItems, payrollEmployeesForMonth, summarizeEmpMonth, calcDeductionRow, partialLeaveInfo,
+             attendance, leaveRequests, LEAVE_TYPE_LABELS, settings,
             countUnmarkedDays, daysInMonth, isMonthLocked, guardLocked, upsertPayrollItemRow,
             deletePayrollItemRow, currentMonthlyMonth, todayStr, logAudit, customAlert, customConfirm
    ========================================================================== */
@@ -17,6 +20,52 @@
 
   const OLD_KEY = 'fullmonth_rules_v1'; // ប្រើតែដើម្បីផ្ទេរតម្លៃចាស់ឡើង Supabase ម្តង
   const DEF = { amount: 10, leaveBreaks: true, allowLate: 0 };
+  const DEF_EXEMPT = ['paid', 'annual']; // ច្បាប់មានប្រាក់ខែ (ពិសេស) + ច្បាប់ប្រចាំឆ្នាំ = សម្រាកមានប្រាក់ឈ្នួល
+  const EXEMPT_KEY = 'fm_leave_exempt';
+
+  // ---- ប្រភេទច្បាប់ដែល «មិនរាប់» ជាច្បាប់ (រក្សាទុកក្នុង Supabase តាម appKV / តារាង app_kv) ----
+  function getExempt() {
+    try {
+      if (window.appKV) {
+        const raw = window.appKV.get(EXEMPT_KEY, null);
+        if (raw !== null && raw !== '') { const a = JSON.parse(raw); if (Array.isArray(a)) return a.map(String); }
+      }
+    } catch (e) { /* ប្រើលំនាំដើម */ }
+    return DEF_EXEMPT.slice();
+  }
+  function setExempt(arr) { if (window.appKV) window.appKV.set(EXEMPT_KEY, JSON.stringify(arr)); }
+
+  // ចំនួនថ្ងៃច្បាប់តាមប្រភេទ (តក្កវិជ្ជាដូច calcDeductionRow ក្នុង script.js៖ ច្បាប់ពេញថ្ងៃ + កន្លះថ្ងៃ/តាមម៉ោង)
+  function leaveByType(emp, month) {
+    const out = {};
+    const norm = t => (LEAVE_TYPE_LABELS[t] ? t : 'other');
+    const approved = leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved');
+    const stdH = settings.standardHours > 0 ? settings.standardHours : 8;
+    daysInMonth(month).forEach(date => {
+      partialLeaveInfo(emp.id, date).items.forEach(({ r: rq, h }) => { const t = norm(rq.leave_type); out[t] = (out[t] || 0) + h / stdH; });
+      const rec = attendance[date] && attendance[date][emp.id];
+      if (rec && rec.status === 'leave') {
+        const req = approved.find(r => r.start_date <= date && date <= r.end_date);
+        const t = norm(req && req.leave_type);
+        out[t] = (out[t] || 0) + 1;
+      }
+    });
+    return out;
+  }
+
+  // total = ថ្ងៃច្បាប់សរុប (d.leaveDays) → ត្រឡប់ថ្ងៃដែលរាប់ (មិនមែនសម្រាកមានប្រាក់ឈ្នួល) និងថ្ងៃដែលមិនរាប់
+  function leaveBreakDays(emp, month, total) {
+    const ex = new Set(getExempt());
+    if (!ex.size || !(total > 0)) return { counted: total, exempt: 0 };
+    try {
+      const by = leaveByType(emp, month);
+      let exempt = 0;
+      Object.keys(by).forEach(t => { if (ex.has(t)) exempt += by[t]; });
+      exempt = Math.min(exempt, total);
+      const counted = total - exempt;
+      return { counted: counted < 1e-9 ? 0 : counted, exempt };
+    } catch (e) { console.warn('full-month: leaveByType', e); return { counted: total, exempt: 0 }; } // ដួល → ដូចដើម (រាប់ទាំងអស់)
+  }
   let rules = { ...DEF };
   let rulesReady = false;   // true ក្រោយទាញពី Supabase បាន
   let rulesError = '';
@@ -93,10 +142,11 @@
     if (emp.status !== 'active') why.push('ឈប់ការងារ');
     if (emp.startDate && emp.startDate > dates[0]) why.push('ចូលធ្វើការកណ្តាលខែ');
     if (absent > 0) why.push(`អវត្តមាន ${num(absent)}`);
-    if (rules.leaveBreaks && leave > 0) why.push(`ច្បាប់ ${num(leave)}`);
+    const lb = rules.leaveBreaks ? leaveBreakDays(emp, month, leave) : { counted: 0, exempt: 0 };
+    if (rules.leaveBreaks && lb.counted > 0) why.push(`ច្បាប់ ${num(lb.counted)}`);
     if (late > rules.allowLate) why.push(`យឺត ${late} ដង`);
     if (unmarked > 0) why.push(`មិនទាន់កត់ ${unmarked} ថ្ងៃ`);
-    return { work: t.workDays || 0, absent, leave, late, unmarked, full: why.length === 0, why };
+    return { work: t.workDays || 0, absent, leave, leaveExempt: lb.exempt, late, unmarked, full: why.length === 0, why };
   }
 
   const monthEnded = m => { const ds = daysInMonth(m); return todayStr() > ds[ds.length - 1]; };
@@ -142,11 +192,12 @@
     overlay.innerHTML = `
       <div class="fm-box" role="dialog" aria-modal="true">
         <h2>⭐ ព្រីមពេញខែ <span id="fmMonthTxt" style="font-weight:500;color:var(--text-muted)"></span></h2>
-        <p class="fm-note">ពេញខែ = គ្មានអវត្តមាន · គ្មានថ្ងៃមិនទាន់កត់ · (ច្បាប់/យឺត តាមលក្ខខណ្ឌខាងក្រោម) · មិនចូលធ្វើការកណ្តាលខែ។ ➕ បន្ថែមព្រីម ឬ ➖ កាត់ព្រីម ចូលក្នុងប្រាក់ខែ/Payslip ភ្លាម។</p>
+        <p class="fm-note">ពេញខែ = គ្មានអវត្តមាន · គ្មានថ្ងៃមិនទាន់កត់ · (ច្បាប់/យឺត តាមលក្ខខណ្ឌខាងក្រោម — សម្រាកមានប្រាក់ឈ្នួលមិនរាប់ជាច្បាប់) · មិនចូលធ្វើការកណ្តាលខែ។ ➕ បន្ថែមព្រីម ឬ ➖ កាត់ព្រីម ចូលក្នុងប្រាក់ខែ/Payslip ភ្លាម។</p>
         <div class="fm-rules">
           <div><label>ចំនួនព្រីម ($)</label><input type="number" id="fmAmount" min="0" step="0.01"></div>
           <div><label>យឺតអនុញ្ញាត (ដង/ខែ)</label><input type="number" id="fmLate" min="0" step="1"></div>
           <label style="display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:.78rem;color:inherit"><input type="checkbox" id="fmLeave"> ច្បាប់ → មិនពេញខែ</label>
+          <div id="fmExemptBox" style="flex:1 0 100%"></div>
         </div>
         <div class="fm-bar">
           <button class="secondary" id="fmPrev" title="ខែមុន">◀</button>
@@ -177,6 +228,11 @@
     $('fmAmount').addEventListener('change', () => { rules.amount = Math.max(0, parseFloat($('fmAmount').value) || 0); saveRules(); render(); });
     $('fmLate').addEventListener('change', () => { rules.allowLate = Math.max(0, parseInt($('fmLate').value, 10) || 0); saveRules(); render(); });
     $('fmLeave').addEventListener('change', () => { rules.leaveBreaks = $('fmLeave').checked; saveRules(); render(); });
+    $('fmExemptBox').addEventListener('change', e => {
+      if (!e.target.closest('input[data-ex]')) return;
+      setExempt(Array.from($('fmExemptBox').querySelectorAll('input[data-ex]:checked')).map(i => i.dataset.ex));
+      render();
+    });
     $('fmMonth').addEventListener('change', e => setMonth(e.target.value));
     $('fmPrev').addEventListener('click', () => setMonth(shiftMonth(curMonth, -1)));
     $('fmNext').addEventListener('click', () => setMonth(shiftMonth(curMonth, 1)));
@@ -208,7 +264,19 @@
     $('fmBody').innerHTML = '<tr><td colspan="13" style="padding:16px">កំពុងផ្ទុក...</td></tr>';
     await loadRules();
     $('fmAmount').value = rules.amount; $('fmLate').value = rules.allowLate; $('fmLeave').checked = !!rules.leaveBreaks;
+    renderExempt();
     render();
+  }
+
+  // ប្រអប់ជ្រើសប្រភេទច្បាប់ដែល «មិនរាប់» ជាច្បាប់ (សម្រាកមានប្រាក់ឈ្នួល)
+  function renderExempt() {
+    const box = overlay.querySelector('#fmExemptBox');
+    const labels = (typeof LEAVE_TYPE_LABELS !== 'undefined' && LEAVE_TYPE_LABELS) || {};
+    const ex = new Set(getExempt());
+    box.innerHTML = `<label style="margin-bottom:5px">ប្រភេទច្បាប់ដែល «មិនរាប់» ជាច្បាប់ — សម្រាកមានប្រាក់ឈ្នួល មិនធ្វើឲ្យមិនពេញខែ</label>`
+      + `<div style="display:flex;flex-wrap:wrap;gap:6px 16px">`
+      + Object.keys(labels).map(k => `<label style="display:flex;gap:5px;align-items:center;margin:0;font-size:.78rem;color:inherit"><input type="checkbox" data-ex="${esc(k)}" ${ex.has(k) ? 'checked' : ''}> ${esc(labels[k])}</label>`).join('')
+      + `</div>` + (window.appKV ? '' : `<div class="fm-warn">⚠ មិនអាចរក្សាទុកការជ្រើសនេះក្នុង Supabase បានទេ (kv-store.js មិនទាន់ផ្ទុក) — ប្រើលំនាំដើម៖ ច្បាប់មានប្រាក់ខែ (ពិសេស) + ច្បាប់ប្រចាំឆ្នាំ</div>`);
   }
 
   function setMonth(m) {
@@ -219,6 +287,7 @@
   function render() {
     const $ = id => overlay.querySelector('#' + id);
     $('fmMonthTxt').textContent = curMonth;
+    $('fmExemptBox').style.opacity = rules.leaveBreaks ? '1' : '.45';
     $('fmMonth').value = curMonth;
     const locked = isMonthLocked(curMonth), ended = monthEnded(curMonth);
     $('fmStatus').innerHTML = (!rulesReady ? `<div class="fm-warn">⚠️ មិនអាចផ្ទុក/រក្សាទុកលក្ខខណ្ឌក្នុង Supabase បាន៖ ${esc(rulesError || 'មិនស្គាល់')}<br>ប៊ូតុង "ផ្តល់/កាត់ទាំងអស់" ត្រូវបានបិទ រហូតដល់ដោះស្រាយ។ <button class="secondary fm-act" id="fmRetry">↻ ព្យាយាមម្តងទៀត</button></div>` : (rulesError ? `<div class="fm-warn">⚠️ រក្សាទុកលក្ខខណ្ឌមិនជោគជ័យ៖ ${esc(rulesError)}</div>` : ''))
@@ -236,7 +305,7 @@
       const dis = locked ? 'disabled' : '';
       return `<tr data-id="${esc(e.id)}">
         <td>${i + 1}</td><td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td><td>${esc(e.dept || '')}</td>
-        <td>${num(c.work)}</td><td>${c.absent ? `<b class="fm-no">${num(c.absent)}</b>` : '0'}</td><td>${c.leave ? num(c.leave) : '0'}</td><td>${c.late || '0'}</td><td>${c.unmarked || '0'}</td>
+        <td>${num(c.work)}</td><td>${c.absent ? `<b class="fm-no">${num(c.absent)}</b>` : '0'}</td><td>${c.leave ? num(c.leave) : '0'}${rules.leaveBreaks && c.leaveExempt > 1e-9 ? `<div class="fm-ok" style="font-size:.66rem;font-weight:500">មានប្រាក់ឈ្នួល ${num(c.leaveExempt)}</div>` : ''}</td><td>${c.late || '0'}</td><td>${c.unmarked || '0'}</td>
         <td>${c.full ? '<span class="fm-ok">✓ ពេញខែ</span>' : `<span class="fm-no">✕ មិនពេញខែ</span><div class="fm-why">${esc(c.why.join(' · '))}</div>`}</td>
         <td>${cur}</td>
         <td style="text-align:right"><input type="number" class="fm-amt" min="0" step="0.01" value="${r2(amt)}" ${dis}></td>
@@ -331,4 +400,5 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.openFullMonth = open;
+  window.fullMonthCalc = calcFull; // សម្រាប់សាកល្បង/ពិនិត្យ
 })();
