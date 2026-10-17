@@ -53,6 +53,37 @@
     return out;
   }
 
+  // ច្បាប់កន្លះថ្ងៃ/តាមម៉ោង ក្នុងខែ (សម្រាប់បង្ហាញសញ្ញា) — យកពី partialLeaveInfo ដូចការគណនាប្រាក់ខែ
+  function partialsOf(emp, month) {
+    const out = [];
+    if (typeof partialLeaveInfo !== 'function') return out;
+    const std = settings.standardHours > 0 ? settings.standardHours : 8;
+    daysInMonth(month).forEach(date => {
+      let items = [];
+      try { items = partialLeaveInfo(emp.id, date).items || []; } catch (e) { items = []; }
+      items.forEach(({ r: rq, h }) => {
+        const u = typeof leaveUnitOf === 'function' ? leaveUnitOf(rq) : { unit: h >= std / 2 - 1e-9 ? 'half' : 'hour', period: 'am', hours: h };
+        out.push({ date, type: LEAVE_TYPE_LABELS[rq.leave_type] ? rq.leave_type : 'other', unit: u.unit, period: u.period, hours: u.unit === 'hour' ? (u.hours || h) : 0, w: h / std });
+      });
+    });
+    return out;
+  }
+
+  // សញ្ញា «🕐 កន្លះថ្ងៃ» + បញ្ជីថ្ងៃ (✓ = មិនរាប់ជាច្បាប់/មានប្រាក់ឈ្នួល · ✕ = រាប់ជាច្បាប់ ធ្វើឲ្យមិនពេញខែ)
+  function partialBadgeHtml(c) {
+    const ps = (c && c.partials) || [];
+    if (!ps.length) return '';
+    const ex = new Set(getExempt());
+    const short = t => String((LEAVE_TYPE_LABELS[t] || t)).replace(/^ច្បាប់\s*/, '').trim();
+    const line = p => `${p.date.slice(8)} · ${short(p.type)} · ${p.unit === 'half' ? (p.period === 'pm' ? 'រសៀល' : 'ព្រឹក') : num(p.hours) + ' ម៉ោង'} ${ex.has(p.type) || !rules.leaveBreaks ? '✓' : '✕'}`;
+    const all = ps.map(line);
+    const nHalf = ps.filter(p => p.unit === 'half').length, nHour = ps.length - nHalf;
+    const title = (nHalf ? `កន្លះថ្ងៃ ${nHalf}` : '') + (nHalf && nHour ? ' · ' : '') + (nHour ? `តាមម៉ោង ${nHour}` : '');
+    return `<div class="fm-half" title="${esc(all.join('\n'))}">🕐 ${esc(title)}</div>`
+      + all.slice(0, 3).map(t => `<div class="fm-halfi">${esc(t)}</div>`).join('')
+      + (all.length > 3 ? `<div class="fm-halfi">+${all.length - 3} ទៀត</div>` : '');
+  }
+
   // total = ថ្ងៃច្បាប់សរុប (d.leaveDays) → ត្រឡប់ថ្ងៃដែលរាប់ (មិនមែនសម្រាកមានប្រាក់ឈ្នួល) និងថ្ងៃដែលមិនរាប់
   function leaveBreakDays(emp, month, total) {
     const ex = new Set(getExempt());
@@ -146,7 +177,7 @@
     if (rules.leaveBreaks && lb.counted > 0) why.push(`ច្បាប់ ${num(lb.counted)}`);
     if (late > rules.allowLate) why.push(`យឺត ${late} ដង`);
     if (unmarked > 0) why.push(`មិនទាន់កត់ ${unmarked} ថ្ងៃ`);
-    return { work: t.workDays || 0, absent, leave, leaveExempt: lb.exempt, late, unmarked, full: why.length === 0, why };
+    return { work: t.workDays || 0, absent, leave, leaveExempt: lb.exempt, partials: partialsOf(emp, month), late, unmarked, full: why.length === 0, why };
   }
 
   const monthEnded = m => { const ds = daysInMonth(m); return todayStr() > ds[ds.length - 1]; };
@@ -156,7 +187,7 @@
     const f = overlay.querySelector('#fmF').value;
     rows = payrollEmployeesForMonth(curMonth)
       .map(e => ({ e, c: calcFull(e, curMonth), add: payrollItems.find(p => p.id === addId(e.id, curMonth)), cut: payrollItems.find(p => p.id === cutId(e.id, curMonth)) }))
-      .filter(r => (!q || ((r.e.name || '') + ' ' + (r.e.username || '')).toLowerCase().includes(q)) && (!f || (f === 'full' ? r.c.full : !r.c.full)))
+      .filter(r => (!q || ((r.e.name || '') + ' ' + (r.e.username || '')).toLowerCase().includes(q)) && (!f || (f === 'full' ? r.c.full : f === 'half' ? r.c.partials.length > 0 : !r.c.full)))
       .sort((a, b) => (a.e.dept || '').localeCompare(b.e.dept || '') || (a.e.name || '').localeCompare(b.e.name || ''));
   }
 
@@ -168,6 +199,8 @@
 .fm-box{width:100%;max-width:1180px;max-height:94vh;overflow:auto;border-radius:16px;background:var(--card-bg,#fff);color:var(--text,#0f1b2d);border:1px solid var(--border,#e1e8ef);padding:16px 18px;box-shadow:0 24px 64px rgba(15,27,45,.35)}
 .fm-box h2{margin:0 0 4px;font-size:1.05rem}
 .fm-note{font-size:.76rem;color:var(--text-muted,#5b6b80);margin:0 0 6px}
+.fm-half{display:inline-block;margin-top:2px;font-size:.66rem;font-weight:600;line-height:1.5;color:#92400e;background:#fef3c7;border-radius:6px;padding:1px 7px;white-space:nowrap}
+.fm-halfi{font-size:.64rem;line-height:1.45;color:var(--text-muted,#5b6b80);white-space:nowrap}
 .fm-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
 .fm-bar input,.fm-bar select{font-size:.8rem;padding:6px 8px}
 .fm-rules{display:flex;gap:14px;flex-wrap:wrap;align-items:end;padding:10px 12px;border:1px solid var(--border,#e1e8ef);border-radius:12px;margin:8px 0}
@@ -192,7 +225,7 @@
     overlay.innerHTML = `
       <div class="fm-box" role="dialog" aria-modal="true">
         <h2>⭐ ព្រីមពេញខែ <span id="fmMonthTxt" style="font-weight:500;color:var(--text-muted)"></span></h2>
-        <p class="fm-note">ពេញខែ = គ្មានអវត្តមាន · គ្មានថ្ងៃមិនទាន់កត់ · (ច្បាប់/យឺត តាមលក្ខខណ្ឌខាងក្រោម — សម្រាកមានប្រាក់ឈ្នួលមិនរាប់ជាច្បាប់) · មិនចូលធ្វើការកណ្តាលខែ។ ➕ បន្ថែមព្រីម ឬ ➖ កាត់ព្រីម ចូលក្នុងប្រាក់ខែ/Payslip ភ្លាម។</p>
+        <p class="fm-note">ពេញខែ = គ្មានអវត្តមាន · គ្មានថ្ងៃមិនទាន់កត់ · (ច្បាប់/យឺត តាមលក្ខខណ្ឌខាងក្រោម — សម្រាកមានប្រាក់ឈ្នួលមិនរាប់ជាច្បាប់) · 🕐 = មានច្បាប់កន្លះថ្ងៃ/តាមម៉ោង (✓ មិនរាប់ · ✕ រាប់ជាច្បាប់) · មិនចូលធ្វើការកណ្តាលខែ។ ➕ បន្ថែមព្រីម ឬ ➖ កាត់ព្រីម ចូលក្នុងប្រាក់ខែ/Payslip ភ្លាម។</p>
         <div class="fm-rules">
           <div><label>ចំនួនព្រីម ($)</label><input type="number" id="fmAmount" min="0" step="0.01"></div>
           <div><label>យឺតអនុញ្ញាត (ដង/ខែ)</label><input type="number" id="fmLate" min="0" step="1"></div>
@@ -204,7 +237,7 @@
           <input type="month" id="fmMonth">
           <button class="secondary" id="fmNext" title="ខែក្រោយ">▶</button>
           <input type="text" id="fmQ" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px">
-          <select id="fmF"><option value="">ទាំងអស់</option><option value="full">ពេញខែ</option><option value="part">មិនពេញខែ</option></select>
+          <select id="fmF"><option value="">ទាំងអស់</option><option value="full">ពេញខែ</option><option value="part">មិនពេញខែ</option><option value="half">🕐 មានច្បាប់កន្លះថ្ងៃ/ម៉ោង</option></select>
           <button id="fmAddAll">➕ ផ្តល់ព្រីម អ្នកពេញខែទាំងអស់</button>
           <button class="secondary" id="fmCutAll">➖ កាត់ព្រីម អ្នកមិនពេញខែទាំងអស់</button>
           <span class="fm-sum" id="fmSum"></span>
@@ -297,15 +330,16 @@
     const rt = $('fmRetry'); if (rt) rt.addEventListener('click', open);
     buildRows();
     let nFull = 0, nPart = 0, sumAdd = 0, sumCut = 0;
-    rows.forEach(r => { r.c.full ? nFull++ : nPart++; if (r.add) sumAdd += Number(r.add.amount) || 0; if (r.cut) sumCut += Number(r.cut.amount) || 0; });
-    $('fmSum').textContent = `ពេញខែ ${nFull} នាក់ · មិនពេញខែ ${nPart} នាក់ · ព្រីមបានបន្ថែម +$${money(sumAdd)} · បានកាត់ −$${money(sumCut)}`;
+    let nHalf = 0;
+    rows.forEach(r => { if (r.c.partials.length) nHalf++; r.c.full ? nFull++ : nPart++; if (r.add) sumAdd += Number(r.add.amount) || 0; if (r.cut) sumCut += Number(r.cut.amount) || 0; });
+    $('fmSum').textContent = `ពេញខែ ${nFull} នាក់ · មិនពេញខែ ${nPart} នាក់${nHalf ? ` · 🕐 មានច្បាប់កន្លះថ្ងៃ/ម៉ោង ${nHalf} នាក់` : ''} · ព្រីមបានបន្ថែម +$${money(sumAdd)} · បានកាត់ −$${money(sumCut)}`;
     $('fmBody').innerHTML = rows.length ? rows.map(({ e, c, add, cut }, i) => {
       const cur = add ? `<span class="fm-add">➕ +$${money(add.amount)}</span>` : (cut ? `<span class="fm-cut">➖ −$${money(cut.amount)}</span>` : '<span style="color:var(--text-muted)">—</span>');
       const amt = add ? add.amount : (cut ? cut.amount : rules.amount);
       const dis = locked ? 'disabled' : '';
       return `<tr data-id="${esc(e.id)}">
         <td>${i + 1}</td><td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td><td>${esc(e.dept || '')}</td>
-        <td>${num(c.work)}</td><td>${c.absent ? `<b class="fm-no">${num(c.absent)}</b>` : '0'}</td><td>${c.leave ? num(c.leave) : '0'}${rules.leaveBreaks && c.leaveExempt > 1e-9 ? `<div class="fm-ok" style="font-size:.66rem;font-weight:500">មានប្រាក់ឈ្នួល ${num(c.leaveExempt)}</div>` : ''}</td><td>${c.late || '0'}</td><td>${c.unmarked || '0'}</td>
+        <td>${num(c.work)}</td><td>${c.absent ? `<b class="fm-no">${num(c.absent)}</b>` : '0'}</td><td>${c.leave ? num(c.leave) : '0'}${partialBadgeHtml(c)}${rules.leaveBreaks && c.leaveExempt > 1e-9 ? `<div class="fm-ok" style="font-size:.66rem;font-weight:500">មានប្រាក់ឈ្នួល ${num(c.leaveExempt)}</div>` : ''}</td><td>${c.late || '0'}</td><td>${c.unmarked || '0'}</td>
         <td>${c.full ? '<span class="fm-ok">✓ ពេញខែ</span>' : `<span class="fm-no">✕ មិនពេញខែ</span><div class="fm-why">${esc(c.why.join(' · '))}</div>`}</td>
         <td>${cur}</td>
         <td style="text-align:right"><input type="number" class="fm-amt" min="0" step="0.01" value="${r2(amt)}" ${dis}></td>
@@ -401,4 +435,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.openFullMonth = open;
   window.fullMonthCalc = calcFull; // សម្រាប់សាកល្បង/ពិនិត្យ
+  window.fullMonthBadge = partialBadgeHtml;
 })();
