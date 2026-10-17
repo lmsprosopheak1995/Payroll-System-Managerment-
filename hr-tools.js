@@ -442,7 +442,7 @@ textarea.hrt-ta{width:100%;min-height:150px;box-sizing:border-box;margin:8px 0;p
     return 7 * 60;
   }
 
-  function computeAttendance(list, att, ym, now, lateStartFn) {
+  function computeAttendance(list, att, ym, now, lateStartFn, partialFn) {
     const t = now || today0();
     const rows = list.filter(e => e.status === 'active').map(e => ({ e, present: 0, absent: 0, leave: 0, late: 0, lateMin: 0, noOut: 0, streak: 0, run: 0 }));
     const dates = Object.keys(att || {}).filter(d => d.indexOf(ym) === 0).sort();
@@ -455,9 +455,11 @@ textarea.hrt-ta{width:100%;min-height:150px;box-sizing:border-box;margin:8px 0;p
         const st = String(rec.status || '');
         if (st === 'present') {
           r.present++; totals.present++; r.run = 0;
+          // ច្បាប់កន្លះថ្ងៃ (ព្រឹក) ឬតាមម៉ោង → មិនរាប់ជាយឺត · ច្បាប់កន្លះថ្ងៃ (រសៀល)/តាមម៉ោង → មិនរាប់ជាភ្លេចស្កេនចេញ
+          const pl = partialFn ? partialFn(r.e.id, d) : null;
           const m = hm(rec.checkin);
-          if (m != null) { const lm = m - lateStartFn(r.e.id); if (lm > 0) { r.late++; r.lateMin += lm; totals.late++; totals.lateMin += lm; } }
-          if (past && rec.checkin && !rec.checkout) r.noOut++;
+          if (m != null && !(pl && (pl.am || pl.hourly))) { const lm = m - lateStartFn(r.e.id); if (lm > 0) { r.late++; r.lateMin += lm; totals.late++; totals.lateMin += lm; } }
+          if (past && rec.checkin && !rec.checkout && !(pl && (pl.pm || pl.hourly))) r.noOut++;
         } else if (st === 'absent') {
           r.absent++; totals.absent++; r.run++; if (r.run > r.streak) r.streak = r.run;
         } else if (st.indexOf('leave') === 0) {
@@ -469,9 +471,14 @@ textarea.hrt-ta{width:100%;min-height:150px;box-sizing:border-box;margin:8px 0;p
   }
 
   const leaveDays = (s, en) => Math.max(1, dayDiff(en, s) + 1);
+  // ឯកតាច្បាប់ ត្រូវកូដក្នុង reason ដូច script.js៖ [#half:am|pm] / [#hour:N]
+  const partialUnit = r => { const m = String((r && r.reason) || '').match(/\[#(half|hour):([^\]]+)\]/); return m ? { kind: m[1], v: m[2] } : null; };
+  const unitWeight = (r, std) => { const u = partialUnit(r); if (!u) return null; if (u.kind === 'half') return 0.5; const h = parseFloat(u.v); return h > 0 ? Math.min(1, h / (std || 8)) : 0; };
+  const unitLabelOf = r => { const u = partialUnit(r); if (!u) return ''; if (u.kind === 'half') return u.v === 'pm' ? ' · កន្លះថ្ងៃ (រសៀល)' : ' · កន្លះថ្ងៃ (ព្រឹក)'; return ` · តាមម៉ោង (${parseFloat(u.v) || 0} ម៉ោង)`; };
 
-  function computeLeave(list, reqs, now) {
+  function computeLeave(list, reqs, now, stdHours) {
     const t = now || today0();
+    const std = stdHours > 0 ? stdHours : 8;
     const byId = new Map(list.map(e => [String(e.id), e]));
     const norm = reqs.filter(r => r && r.status === 'approved').map(r => ({ r, e: byId.get(String(r.employee_id)), s: parseYMD(r.start_date), en: parseYMD(r.end_date || r.start_date) })).filter(x => x.e && x.s && x.en);
     const today = norm.filter(x => x.s <= t && x.en >= t);
@@ -482,7 +489,8 @@ textarea.hrt-ta{width:100%;min-height:150px;box-sizing:border-box;margin:8px 0;p
     norm.forEach(x => {
       const s = x.s < y0 ? y0 : x.s, en = x.en > y1 ? y1 : x.en;
       if (en < s) return;
-      const days = leaveDays(s, en);
+      const w = unitWeight(x.r, std);
+      const days = w != null ? w : leaveDays(s, en); // កន្លះថ្ងៃ = 0.5 ថ្ងៃ (មិនមែន 1)
       const k = String(x.e.id);
       if (!usage.has(k)) usage.set(k, { e: x.e, days: 0, n: 0 });
       const u = usage.get(k); u.days += days; u.n++;
@@ -625,7 +633,7 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
     const mi = h('input', { type: 'month', value: attYM });
     mi.addEventListener('change', () => { if (mi.value) { attYM = mi.value; renderBody(); } });
     const att = (typeof attendance !== 'undefined' && attendance) ? attendance : {};
-    const r = computeAttendance(emps(), att, attYM, null, lateStartOf);
+    const r = computeAttendance(emps(), att, attYM, null, lateStartOf, (id, d) => { try { return typeof partialLeaveInfo === 'function' ? partialLeaveInfo(id, d) : null; } catch (_) { return null; } });
     const rows = r.rows.slice().sort((a, b) => String(a.e.name).localeCompare(String(b.e.name)));
     const heads = ['ឈ្មោះ', 'ផ្នែក', 'មកធ្វើការ', 'អវត្តមាន', 'ច្បាប់', 'យឺត (ដង)', 'យឺត (នាទី)', 'ភ្លេចស្កេនចេញ'];
     const cells = x => [x.e.name, x.e.dept || '-', x.present, x.absent, x.leave, x.late, x.lateMin, x.noOut];
@@ -651,19 +659,19 @@ table{border-collapse:collapse;margin:4mm 0 4mm 10mm}td{padding:1mm 4mm 1mm 0;ve
   function paneLeave(body) {
     const reqs = (typeof leaveRequests !== 'undefined' && Array.isArray(leaveRequests)) ? leaveRequests : [];
     if (!reqs.length) body.appendChild(empty('មិនទាន់មានទិន្នន័យសំណើច្បាប់ (ឬមិនទាន់ផ្ទុក)។ សូមបើកផ្ទាំង Leave / Overtime ម្តងសិន។'));
-    const d = computeLeave(emps(), reqs, null);
+    const d = computeLeave(emps(), reqs, null, (typeof settings !== 'undefined' && settings && settings.standardHours) || 8);
     body.appendChild(h('div', { class: 'hrt-grid' },
       statEl(String(d.today.length), 'ឈប់ច្បាប់ថ្ងៃនេះ'), statEl(String(d.upcoming.length), 'ចាប់ផ្តើមក្នុង ១៤ ថ្ងៃខាងមុខ'), statEl(String(d.pending.length), 'រង់ចាំអនុម័ត')));
     const range = x => (x.s.getTime() === x.en.getTime() ? fmt(x.s) : `${fmt(x.s)} → ${fmt(x.en)}`);
-    body.appendChild(card('🌴 ឈប់ច្បាប់ថ្ងៃនេះ', d.today.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.today.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type), range(x), editBtn(x.e)])) : empty('គ្មាននរណាឈប់ច្បាប់ថ្ងៃនេះ')));
-    body.appendChild(card('📆 នឹងឈប់ក្នុង ១៤ ថ្ងៃខាងមុខ', d.upcoming.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.upcoming.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type), range(x), editBtn(x.e)])) : empty('គ្មាន')));
+    body.appendChild(card('🌴 ឈប់ច្បាប់ថ្ងៃនេះ', d.today.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.today.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type) + unitLabelOf(x.r), range(x), editBtn(x.e)])) : empty('គ្មាននរណាឈប់ច្បាប់ថ្ងៃនេះ')));
+    body.appendChild(card('📆 នឹងឈប់ក្នុង ១៤ ថ្ងៃខាងមុខ', d.upcoming.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'ប្រភេទ', 'រយៈពេល', ''], d.upcoming.map(x => [x.e.name, x.e.dept || '-', leaveLabel(x.r.leave_type) + unitLabelOf(x.r), range(x), editBtn(x.e)])) : empty('គ្មាន')));
     body.appendChild(card(`⏳ រង់ចាំអនុម័ត (${d.pending.length})`,
-      d.pending.length ? mkTable(['ឈ្មោះ', 'ប្រភេទ', 'ពីថ្ងៃ', 'ដល់ថ្ងៃ', 'មូលហេតុ'], d.pending.map(x => [x.e.name, leaveLabel(x.r.leave_type), x.r.start_date || '-', x.r.end_date || x.r.start_date || '-', x.r.reason || '-'])) : empty('គ្មានសំណើរង់ចាំ'),
+      d.pending.length ? mkTable(['ឈ្មោះ', 'ប្រភេទ', 'ពីថ្ងៃ', 'ដល់ថ្ងៃ', 'មូលហេតុ'], d.pending.map(x => [x.e.name, leaveLabel(x.r.leave_type) + unitLabelOf(x.r), x.r.start_date || '-', x.r.end_date || x.r.start_date || '-', x.r.reason || '-'])) : empty('គ្មានសំណើរង់ចាំ'),
       d.pending.length ? rowEl(btn('➡ ទៅផ្ទាំង Leave / Overtime', () => { if (typeof showTab === 'function') showTab('requests'); })) : null));
     const yr = today0().getFullYear();
     body.appendChild(card(`📊 ថ្ងៃឈប់ច្បាប់ដែលបានអនុម័តក្នុងឆ្នាំ ${yr} (ថ្ងៃតាមប្រតិទិន)`,
-      d.usage.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'សំណើ', 'សរុប (ថ្ងៃ)'], d.usage.slice(0, 15).map(u => [u.e.name, u.e.dept || '-', String(u.n), String(u.days)])) : empty('មិនទាន់មាន'),
-      d.byType.length ? mkTable(['ប្រភេទ', 'ថ្ងៃសរុប'], d.byType.map(x => [leaveLabel(x[0]), String(x[1])])) : null));
+      d.usage.length ? mkTable(['ឈ្មោះ', 'ផ្នែក', 'សំណើ', 'សរុប (ថ្ងៃ)'], d.usage.slice(0, 15).map(u => [u.e.name, u.e.dept || '-', String(u.n), String(+u.days.toFixed(2))])) : empty('មិនទាន់មាន'),
+      d.byType.length ? mkTable(['ប្រភេទ', 'ថ្ងៃសរុប'], d.byType.map(x => [leaveLabel(x[0]), String(+x[1].toFixed(2))])) : null));
     body.appendChild(h('p', { class: 'hrt-muted', text: 'ការរាប់ថ្ងៃគិតតាមចន្លោះ «ពីថ្ងៃ–ដល់ថ្ងៃ» (រួមទាំងថ្ងៃអាទិត្យ/បុណ្យ) ដូច្នេះជាតម្លៃប្រហែល មិនមែនសមតុល្យច្បាប់ផ្លូវការទេ — សូមមើលផ្ទាំង «ច្បាប់ប្រចាំឆ្នាំ» សម្រាប់សមតុល្យ។' }));
   }
 
