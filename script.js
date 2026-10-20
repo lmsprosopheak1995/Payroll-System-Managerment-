@@ -895,7 +895,7 @@ async function quickAddItem() {
 
 // ==== ជម្រើសច្បាប់ក្នុង dropdown ស្ថានភាពវត្តមាន ====
 const ATT_PAID_TAG = '[ជ្រើសពីវត្តមាន]';
-const ATT_OPTION_LABELS = { ...STATUS_LABELS, leave_annual: 'ច្បាប់ប្រចាំឆ្នាំ (បំណាច់ឆ្នាំ)', leave_paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', leave_custom: '➕ កន្លះថ្ងៃ / តាមម៉ោង / ប្រភេទផ្សេង…' };
+const ATT_OPTION_LABELS = { ...STATUS_LABELS, leave_annual: 'សម្រាកបំណាច់ឆ្នាំ', leave_paid: 'សម្រាកមានប្រាក់ឈ្នូល', leave_custom: '➕ កន្លះថ្ងៃ / តាមម៉ោង / ប្រភេទផ្សេង…' };
 
 function attStatusSelectValue(date, empId, status) {
   if (status !== 'leave') return status;
