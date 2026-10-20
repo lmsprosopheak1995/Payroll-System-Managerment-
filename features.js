@@ -479,6 +479,7 @@ function fmtMin(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + 
 function renderShift() {
   const body = byId('shiftBody');
   if (!body) return;
+  if (!scanFlags.loaded && !scanFlags.loading) loadScanFlags();
   showTableWarn('shiftWarn', 'shifts');
   const active = activeEmployeesList();
   const countFor = id => active.filter(e => getEmpShift(e.id).id === id).length;
@@ -498,8 +499,72 @@ function renderShift() {
     const opts = [`<option value="default"${cur === 'default' ? ' selected' : ''}>${escapeHtml(DEFAULT_SHIFT.name)} (លំនាំដើម)</option>`]
       .concat(shifts.map(r => `<option value="${escapeHtml(r.id)}"${cur === r.id ? ' selected' : ''}>${escapeHtml(r.name)} (${escapeHtml(r.start_time)}–${escapeHtml(r.end_time)})</option>`)).join('');
     return `<tr><td>${escapeHtml(e.username || '-')}</td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept || '-')}</td>
-      <td><select onchange="assignShift('${escapeHtml(e.id)}', this.value)">${opts}</select></td></tr>`;
+      <td><select onchange="assignShift('${escapeHtml(e.id)}', this.value)">${opts}</select></td>
+      <td>${scanBtnHtml(e.id)}</td></tr>`;
   }).join('');
+  renderScanGlobal();
+}
+
+// ------------------------------------------- បិទ/បើកការស្កេន (Admin) ---
+// រក្សាទុកក្នុង app_settings៖ scan_enabled (បិទទាំងអស់) និង scan_off_ids (បុគ្គលិកដែលត្រូវបិទ) — រត់ scan-toggle.sql ជាមុន
+let scanFlags = { enabled: true, offIds: [], loaded: false, loading: false, missing: false };
+async function fetchScanFlags() {
+  const { data, error } = await supabaseClient.from('app_settings').select('scan_enabled, scan_off_ids').eq('id', 1).maybeSingle();
+  if (error) { console.warn('scan flags:', error.message); scanFlags.missing = true; return false; }
+  scanFlags.missing = false;
+  scanFlags.enabled = !data || data.scan_enabled !== false;
+  scanFlags.offIds = Array.isArray(data && data.scan_off_ids) ? data.scan_off_ids.map(String) : [];
+  return true;
+}
+async function loadScanFlags() {
+  if (scanFlags.loading) return;
+  scanFlags.loading = true;
+  await fetchScanFlags();
+  scanFlags.loading = false; scanFlags.loaded = true;
+  renderShift();
+}
+async function saveScanFlags() {
+  const { error } = await supabaseClient.from('app_settings').update({ scan_enabled: scanFlags.enabled, scan_off_ids: scanFlags.offIds }).eq('id', 1);
+  if (error) { console.error(error); customAlert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message + '\n(សូមរត់ scan-toggle.sql ក្នុង Supabase ជាមុន)'); return false; }
+  return true;
+}
+async function toggleScanGlobal() {
+  if (scanFlags.missing) { customAlert('សូមរត់ scan-toggle.sql ក្នុង Supabase ជាមុន'); return; }
+  await fetchScanFlags();                       // យកតម្លៃចុងក្រោយ កុំសរសេរជាន់លើអ្នកគ្រប់គ្រងផ្សេង
+  const next = !scanFlags.enabled;
+  if (!next && !confirm('បិទការស្កេនសម្រាប់បុគ្គលិកទាំងអស់?')) { renderShift(); return; }
+  const prev = scanFlags.enabled;
+  scanFlags.enabled = next;
+  if (!(await saveScanFlags())) scanFlags.enabled = prev;
+  renderShift();
+}
+async function toggleEmpScan(empId) {
+  if (scanFlags.missing) { customAlert('សូមរត់ scan-toggle.sql ក្នុង Supabase ជាមុន'); return; }
+  await fetchScanFlags();
+  const id = String(empId), prev = scanFlags.offIds.slice();
+  scanFlags.offIds = prev.includes(id) ? prev.filter(x => x !== id) : prev.concat(id);
+  if (!(await saveScanFlags())) scanFlags.offIds = prev;
+  renderShift();
+}
+function scanBtnHtml(empId) {
+  if (scanFlags.missing) return '<span style="color:var(--text-muted);">—</span>';
+  const off = scanFlags.offIds.includes(String(empId));
+  const style = 'padding:4px 14px;min-width:72px;font-size:0.8rem;color:#fff;border:0;border-radius:999px;cursor:pointer;background:' + (off ? '#dc2626' : '#16a34a') + ';' + (scanFlags.enabled ? '' : 'opacity:0.5;');
+  return `<button type="button" style="${style}" onclick="toggleEmpScan('${escapeHtml(empId)}')" title="ចុចដើម្បីប្តូរ">${off ? '⛔ បិទ' : '✓ បើក'}</button>`;
+}
+function renderScanGlobal() {
+  const box = byId('scanGlobalBox'), warn = byId('scanFlagWarn');
+  if (!box) return;
+  if (warn) {
+    warn.style.display = scanFlags.missing ? '' : 'none';
+    warn.textContent = scanFlags.missing ? '⚠ មិនទាន់អាចបិទ/បើកការស្កេនបាន — សូមរត់ scan-toggle.sql ក្នុង Supabase (SQL Editor) រួច refresh' : '';
+  }
+  if (scanFlags.missing) { box.innerHTML = ''; return; }
+  const on = scanFlags.enabled;
+  const offCount = scanFlags.offIds.length;
+  box.innerHTML = `<span style="font-weight:700;color:${on ? '#16a34a' : '#dc2626'};">${on ? '🟢 ការស្កេនកំពុងបើក' : '🔴 ការស្កេនត្រូវបានបិទសម្រាប់បុគ្គលិកទាំងអស់'}</span>`
+    + `<button type="button" class="${on ? 'danger' : ''}" onclick="toggleScanGlobal()">${on ? '⛔ បិទការស្កេនទាំងអស់' : '✓ បើកការស្កេនទាំងអស់'}</button>`
+    + (offCount ? `<span style="color:var(--text-muted);font-size:0.85rem;">បុគ្គលិកដែលបិទដាច់ដោយឡែក៖ ${offCount} នាក់</span>` : '');
 }
 
 function resetShiftForm() {

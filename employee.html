@@ -472,6 +472,7 @@ const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
   workplaceCode: null,
+  scanEnabled: true, scanOffIds: [],
 };
 
 let currentEmployee = null; // { id, name, salary }
@@ -727,6 +728,8 @@ async function loadSettings() {
     carryOver: data.annual_carry_enabled === true,
     carryMaxDays: data.annual_carry_max != null && parseFloat(data.annual_carry_max) >= 0 ? parseFloat(data.annual_carry_max) : 5,
     carryFromYear: parseInt(data.annual_carry_from, 10) || new Date().getFullYear(),
+    scanEnabled: data.scan_enabled !== false,                                   // Admin បិទការស្កេនទាំងអស់
+    scanOffIds: Array.isArray(data.scan_off_ids) ? data.scan_off_ids.map(String) : [],   // Admin បិទការស្កេនដាច់ដោយឡែក
   };
 }
 
@@ -1202,6 +1205,10 @@ function scanOpenText() {
 }
 
 function scanLockInfo() {
+  // Admin បិទដោយដៃ (ទាំងអស់ ឬដាច់ដោយឡែក)
+  if (settings.scanEnabled === false) return { locked: true, msg: 'អ្នកគ្រប់គ្រងបានបិទការស្កេនបណ្តោះអាសន្ន' };
+  const me = getSession();
+  if (me && Array.isArray(settings.scanOffIds) && settings.scanOffIds.includes(String(me.id))) return { locked: true, msg: 'ការស្កេនរបស់អ្នកត្រូវបានបិទដោយអ្នកគ្រប់គ្រង' };
   const now = new Date();
   const openText = scanOpenText();
   if (now.getHours() * 60 + now.getMinutes() < scanOpenMinutes()) return { locked: true, msg: 'ការស្កេនបិទ — នឹងបើកវិញនៅម៉ោង ' + openText };
@@ -1231,12 +1238,18 @@ function applyScanLockUI() {
 
 async function refreshScanLock() {
   if (!getSession()) return;
+  const { data: fl, error: fe } = await supabaseClient.from('app_settings').select('scan_enabled, scan_off_ids').eq('id', 1).maybeSingle();
+  if (!fe && fl) {
+    settings.scanEnabled = fl.scan_enabled !== false;
+    settings.scanOffIds = Array.isArray(fl.scan_off_ids) ? fl.scan_off_ids.map(String) : [];
+  }
   const rec = await getTodayRecord();
   if (rec) scanCheckedOutDate = rec.checkout ? todayStr() : '';
   applyScanLockUI();
 }
 setInterval(() => { if (!document.hidden) applyScanLockUI(); }, 30000);   // បើកវិញស្វ័យប្រវត្តិពេលដល់ម៉ោង / ប្តូរថ្ងៃ
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshScanLock(); });
+setInterval(() => { if (!document.hidden && getSession()) refreshScanLock(); }, 60000);   // ទទួលការបិទ/បើកពី Admin ក្នុងរយៈ ១ នាទី
 
 // ==== In-page QR self-scan (clock tab) ====
 let empHtml5QrCodeInstance = null;
