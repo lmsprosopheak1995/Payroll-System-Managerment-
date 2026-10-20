@@ -61,7 +61,7 @@
       </div>
     </div>
     <button class="nav-item" data-tab="requests"><span class="ico">📝</span><span class="lbl">Leave / Overtime <span id="pendingReqBadge"></span></span></button>
-    <button class="nav-item" data-tab="leavebalance"><span class="ico">🌴</span><span class="lbl">ច្បាប់ប្រចាំឆ្នាំ / មានប្រាក់ខែ</span></button>
+    <button class="nav-item" data-tab="leavebalance"><span class="ico">🌴</span><span class="lbl">សម្រាកបំណាច់ឆ្នាំ / មានប្រាក់ឈ្នូល</span></button>
     <button class="nav-item" data-tab="notify"><span class="ico">🔔</span><span class="lbl">Push Notifications</span></button>
     <button class="nav-item" data-tab="feedback"><span class="ico">💬</span><span class="lbl">Feedback <span id="fbNewBadge"></span></span></button>
     <button class="nav-item" data-tab="shift"><span class="ico">🕒</span><span class="lbl">Shift</span></button>
@@ -268,7 +268,7 @@
           <input type="number" id="lbQuotaDays" min="0" step="0.5" style="width:150px;">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>ច្បាប់មានប្រាក់ខែ (ពិសេស) ក្នុងមួយឆ្នាំ (ថ្ងៃ)</label>
+          <label>សម្រាកមានប្រាក់ឈ្នូល ក្នុងមួយឆ្នាំ (ថ្ងៃ)</label>
           <input type="number" id="lbPaidQuota" min="0" step="0.5" style="width:150px;">
         </div>
         <label style="display:flex;gap:4px;align-items:center;font-size:0.75rem;">
@@ -296,7 +296,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃចូលធ្វើការ</th><th>កូតាប្រចាំឆ្នាំ (ថ្ងៃ)</th><th>ផ្ទេរមកពីឆ្នាំមុន</th><th>ប្រើអស់ (ថ្ងៃ)</th><th>នៅសល់ (ថ្ងៃ)</th><th>ផ្ទេរទៅឆ្នាំក្រោយ</th><th>បើកជំនួស (ថ្ងៃ)</th><th>បើកជំនួស ($)</th><th>មានប្រាក់ខែ៖ កូតា</th><th>មានប្រាក់ខែ៖ ប្រើ</th><th>មានប្រាក់ខែ៖ នៅសល់</th><th>ថ្ងៃអវត្តមាន</th><th>សកម្មភាព</th></tr>
+          <tr><th>អត្តលេខ</th><th>ឈ្មោះ</th><th>ថ្ងៃចូលធ្វើការ</th><th>កូតាប្រចាំឆ្នាំ (ថ្ងៃ)</th><th>ផ្ទេរមកពីឆ្នាំមុន</th><th>ប្រើអស់ (ថ្ងៃ)</th><th>នៅសល់ (ថ្ងៃ)</th><th>ផ្ទេរទៅឆ្នាំក្រោយ</th><th>បើកជំនួស (ថ្ងៃ)</th><th>បើកជំនួស ($)</th><th>មានប្រាក់ឈ្នូល៖ កូតា</th><th>មានប្រាក់ឈ្នូល៖ ប្រើ</th><th>មានប្រាក់ឈ្នូល៖ នៅសល់</th><th>ថ្ងៃអវត្តមាន</th><th>សកម្មភាព</th></tr>
         </thead>
         <tbody id="lbBody"></tbody>
       </table>
@@ -338,9 +338,9 @@
           <label>ប្រភេទច្បាប់ដែលត្រូវកាត់ប្រាក់ខែ (១ថ្ងៃ = ប្រាក់ខែ ÷ ថ្ងៃធ្វើការ)</label>
           <div style="display:flex; gap:10px; flex-wrap:wrap; font-size:0.75rem;">
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="annual"> ប្រចាំឆ្នាំ</label>
-            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="paid"> មានប្រាក់ខែ (ពិសេស)</label>
-            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="sick"> ឈឺ</label>
-            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="unpaid"> គ្មានប្រាក់ខែ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="paid"> សម្រាកមានប្រាក់ឈ្នូល</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="sick"> សម្រាកឈឺ</label>
+            <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="unpaid"> សម្រាកគ្មានប្រាក់ឈ្នូល</label>
             <label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" class="ded-leave-type" value="other"> ផ្សេងៗ / កត់ដោយដៃ</label>
           </div>
         </div>

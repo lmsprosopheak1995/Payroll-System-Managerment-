@@ -1175,7 +1175,7 @@ function partialLeaveInfo(empId, date) {
 }
 
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', maternity: 'ច្បាប់សម្រាលកូន', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'សម្រាកបំណាច់ឆ្នាំ', paid: 'សម្រាកមានប្រាក់ឈ្នូល', sick: 'សម្រាកឈឺ', maternity: 'សម្រាកសម្រាលកូន', unpaid: 'សម្រាកគ្មានប្រាក់ឈ្នូល', other: 'ផ្សេងៗ' };
 
 async function loadLeaveRequests() {
   const { data, error } = await fetchAllRows('leave_requests', [{ col: 'created_at', asc: false }, { col: 'id' }]);
@@ -1695,7 +1695,7 @@ async function approveLeaveRequest(id) {
     const year = parseInt(req.start_date.slice(0, 4), 10);
     const days = leaveWeightDays(req);
     const remaining = emp ? calcLeaveBalanceRow(emp, year, lbRules).paidRemaining : 0;
-    if (days > remaining && !(await customConfirm(`ច្បាប់មានប្រាក់ខែនៅសល់ ${remaining} ថ្ងៃ ប៉ុន្តែសំណើនេះសុំ ${days} ថ្ងៃ។ នៅតែអនុម័ត?`))) return;
+    if (days > remaining && !(await customConfirm(`សម្រាកមានប្រាក់ឈ្នូលនៅសល់ ${remaining} ថ្ងៃ ប៉ុន្តែសំណើនេះសុំ ${days} ថ្ងៃ។ នៅតែអនុម័ត?`))) return;
   }
   const { error } = await supabaseClient.from('leave_requests')
     .update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id);
@@ -1943,7 +1943,7 @@ function renderLeaveBalanceTab() {
     <div class="stat-card"><div class="num">${sum.used.toFixed(1)}</div><div class="label">ប្រើអស់សរុប (ថ្ងៃ)</div></div>
     <div class="stat-card"><div class="num">${sum.remaining.toFixed(1)}</div><div class="label">នៅសល់សរុប (ថ្ងៃ)</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(sum.cash)}</div><div class="label">ត្រូវបើកជំនួសសរុប ($)</div></div>
-    <div class="stat-card"><div class="num">${sum.paidUsed.toFixed(1)}</div><div class="label">ច្បាប់មានប្រាក់ខែ ប្រើសរុប (ថ្ងៃ)</div></div>`;
+    <div class="stat-card"><div class="num">${sum.paidUsed.toFixed(1)}</div><div class="label">សម្រាកមានប្រាក់ឈ្នូល ប្រើសរុប (ថ្ងៃ)</div></div>`;
 
   const empty = document.getElementById('lbEmpty');
   if (rows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
