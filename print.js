@@ -217,7 +217,7 @@ function attendancePrintPage(emp, month) {
     <table>
       <thead><tr>
         <th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th>
-        <th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា (ម៉ោង)</th><th>ថែមម៉ោង (ម៉ោង)</th><th>សម្រាក (ម៉ោង)</th><th>ប្រាក់សម្រាក ($)</th><th>ប្រាក់បាយ (៛)</th><th>សរុប ($)</th>
+        <th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា (ម៉ោង)</th><th>ថែមម៉ោង (ម៉ោង)</th><th>ច្បាប់ Leave (ម៉ោង)</th><th>ច្បាប់ Leave ($)</th><th>ប្រាក់បាយ (៛)</th><th>សរុប ($)</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr class="total">
