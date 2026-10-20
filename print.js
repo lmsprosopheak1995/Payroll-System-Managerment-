@@ -176,31 +176,45 @@ function summarizeEmpMonth(emp, month) {
 // ---------------------------------------------------------------------------
 function attendancePrintPage(emp, month) {
   const sh = getEmpShift(emp.id);
+  const f4 = typeof fmtUSD4 === 'function' ? fmtUSD4 : (x => (Math.round((x || 0) * 10000) / 10000).toFixed(4));
   const fm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-  const tot = { late: 0, work: 0, normal: 0, ot: 0, leaveH: 0, leavePay: 0, food: 0, total: 0, riel: 0 };
+  const tot = { late: 0, work: 0, normal: 0, workPay: 0, ot: 0, otPay: 0, leaveH: 0, leavePay: 0, food: 0, foodOt: 0, total: 0, riel: 0 };
+  // ឈ្មោះស្ថានភាពដូចតារាងលើអេក្រង់ (ឧ. សម្រាកមានប្រាក់ឈ្នូល / សម្រាកបំណាច់ឆ្នាំ)
+  const statusLabel = (date, r) => {
+    let key = r.status;
+    if (typeof attStatusSelectValue === 'function') key = attStatusSelectValue(date, emp.id, r.status);
+    const L = (typeof ATT_OPTION_LABELS !== 'undefined') ? ATT_OPTION_LABELS : null;
+    if (L && L[key] && key !== 'leave_custom') return L[key];
+    return STATUS_LABELS[r.status] || '-';
+  };
+  const cell = (cls, v, zero) => `<td class="${cls}${zero ? ' z' : ''}">${v}</td>`;
   const rows = daysInMonth(month).map(date => {
     const rec = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, rec, date);
+    const workPay = r.workPay || 0, leaveHours = r.leaveHours || 0, leavePay = r.leavePay || 0;
     if (r.late) tot.late++;
     if (r.status === 'present') tot.work++;
-    tot.normal += r.normalHours; tot.ot += r.otHours;
-    tot.leaveH += (r.leaveHours || 0); tot.leavePay += (r.leavePay || 0);
-    tot.food += r.foodPayRiel + r.foodOtPayRiel; tot.total += r.total; tot.riel += r.riel;
-    const foodRiel = r.foodPayRiel + r.foodOtPayRiel;
+    tot.normal += r.normalHours; tot.workPay += workPay; tot.ot += r.otHours; tot.otPay += r.otPay;
+    tot.leaveH += leaveHours; tot.leavePay += leavePay;
+    tot.food += r.foodPayRiel; tot.foodOt += r.foodOtPayRiel; tot.total += r.total; tot.riel += r.riel;
     const dayCls = r.mult > 1 ? (holidays[date] !== undefined ? 'hol' : 'sun') : '';
     return `<tr class="${dayCls}">
       <td>${date.slice(8)}</td>
       <td class="dn">${printEsc(weekdayLabel(date))}</td>
-      <td>${printEsc(r.checkin || '-')}</td><td>${printEsc(r.breakOut || '-')}</td>
-      <td>${printEsc(r.breakIn || '-')}</td><td>${printEsc(r.checkout || '-')}</td>
-      <td>${r.late ? 'យឺត' : '-'}</td>
-      <td>${printEsc(STATUS_LABELS[r.status] || '-')}</td>
-      <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
-      <td>${r.leavePay ? '$' + fmtUSD(r.leavePay) : '-'}</td>
-      <td>${foodRiel ? fmtRiel(foodRiel) : '-'}</td>
-      <td class="r">$${fmtUSD(r.total)}</td></tr>`;
+      <td class="c-work">${printEsc(r.checkin || '-')}</td><td class="c-work">${printEsc(r.breakOut || '-')}</td>
+      <td class="c-work">${printEsc(r.breakIn || '-')}</td><td class="c-work">${printEsc(r.checkout || '-')}</td>
+      <td class="c-work">${r.late ? 'យឺត' : '-'}</td>
+      <td class="c-work">${printEsc(statusLabel(date, r))}</td>
+      ${cell('c-nor g-s', r.normalHours ? fmtHours(r.normalHours) : '-', !r.normalHours)}
+      ${cell('c-nor', '$' + f4(workPay), !workPay)}
+      ${cell('c-ot g-s', r.otHours ? fmtHours(r.otHours) : '-', !r.otHours)}
+      ${cell('c-ot', '$' + f4(r.otPay), !r.otPay)}
+      ${cell('c-lv g-s' + (leaveHours ? ' has' : ''), leaveHours ? fmtHours(leaveHours) : '-', !leaveHours)}
+      ${cell('c-lv' + (leavePay ? ' has' : ''), '$' + f4(leavePay), !leavePay)}
+      ${cell('c-fd g-s', r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-', !r.foodPayRiel)}
+      ${cell('c-fd', r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-', !r.foodOtPayRiel)}
+      <td class="c-tt g-s"><strong>$${f4(r.total)}</strong></td>
+      <td class="c-tt">${fmtRiel(r.riel)} ៛</td></tr>`;
   }).join('');
 
   const t = summarizeEmpMonth(emp, month);
@@ -214,15 +228,50 @@ function attendancePrintPage(emp, month) {
       <div><strong>ផ្នែក៖</strong> ${printEsc(emp.dept || '-')}</div>
       <div><strong>វេន៖</strong> ${printEsc(sh.name)} (${fm(sh.start)}–${fm(sh.end)})</div>
     </div>
-    <table>
-      <thead><tr>
-        <th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th>
-        <th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា (ម៉ោង)</th><th>ថែមម៉ោង (ម៉ោង)</th><th>ច្បាប់ Leave (ម៉ោង)</th><th>ច្បាប់ Leave ($)</th><th>ប្រាក់បាយ (៛)</th><th>សរុប ($)</th>
-      </tr></thead>
+    <style>
+      table.att th, table.att td { font-size: 9.5px; padding: 3px 2px; }
+      table.att th.c-work { background: #e0e7ff !important; border-bottom: 3px solid #6366f1; }
+      table.att th.c-nor  { background: #d1fae5 !important; border-bottom: 3px solid #10b981; }
+      table.att th.c-ot   { background: #ffedd5 !important; border-bottom: 3px solid #f97316; }
+      table.att th.c-lv   { background: #ede9fe !important; border-bottom: 3px solid #a855f7; color: #6d28d9; }
+      table.att th.c-fd   { background: #fef9c3 !important; border-bottom: 3px solid #eab308; }
+      table.att th.c-tt   { background: #e0f2fe !important; border-bottom: 3px solid #0ea5e9; }
+      table.att td.c-work { background: #f5f6ff !important; }
+      table.att td.c-nor  { background: #f0fdf7 !important; }
+      table.att td.c-ot   { background: #fff7ed !important; }
+      table.att td.c-lv   { background: #f5f0ff !important; }
+      table.att td.c-fd   { background: #fefce8 !important; }
+      table.att td.c-tt   { background: #f0f9ff !important; }
+      table.att td.c-lv.has { background: #e9d5ff !important; color: #6d28d9; font-weight: 700; }
+      table.att td.z { color: #9ca3af; }
+      table.att .g-s { border-left: 2px solid #64748b; }
+      table.att td.c-tt strong { color: #0369a1; }
+      table.att tfoot td { font-weight: 700; background: #f3f4f6 !important; }
+    </style>
+    <table class="att">
+      <thead>
+        <tr>
+          <th rowspan="2">ថ្ងៃទី</th><th rowspan="2">ថ្ងៃ</th><th colspan="4" class="c-work">ម៉ោងធ្វើការ</th>
+          <th rowspan="2" class="c-work">យឺត</th><th rowspan="2" class="c-work">ស្ថានភាព</th>
+          <th rowspan="2" class="c-nor g-s">ធម្មតា (ម៉ោង)</th><th rowspan="2" class="c-nor">ប្រាក់ខែ</th>
+          <th rowspan="2" class="c-ot g-s">ថែមម៉ោង (ម៉ោង)</th><th rowspan="2" class="c-ot">ប្រាក់ថែមម៉ោង</th>
+          <th colspan="2" class="c-lv g-s">ច្បាប់ Leave</th>
+          <th rowspan="2" class="c-fd g-s">បាយថ្ងៃត្រង់</th><th rowspan="2" class="c-fd">បាយថែមម៉ោង</th>
+          <th rowspan="2" class="c-tt g-s">សរុប ($)</th><th rowspan="2" class="c-tt">សរុប (៛)</th>
+        </tr>
+        <tr>
+          <th class="c-work">ចូល</th><th class="c-work">ចេញ</th><th class="c-work">ចូល</th><th class="c-work">ចេញ</th>
+          <th class="c-lv g-s">ម៉ោង Hour</th><th class="c-lv">ប្រាក់ Pay</th>
+        </tr>
+      </thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="total">
+      <tfoot><tr>
         <td colspan="6">សរុប</td><td>${tot.late || '-'}</td><td>${tot.work} ថ្ងៃ</td>
-        <td>${fmtHours(tot.normal)}</td><td>${fmtHours(tot.ot)}</td><td>${tot.leaveH ? fmtHours(tot.leaveH) : '-'}</td><td>${tot.leavePay ? '$' + fmtUSD(tot.leavePay) : '-'}</td><td>${fmtRiel(tot.food)}</td><td class="r">$${fmtUSD(tot.total)}</td>
+        <td>${fmtHours(tot.normal)}</td><td>$${f4(tot.workPay)}</td>
+        <td>${fmtHours(tot.ot)}</td><td>$${f4(tot.otPay)}</td>
+        <td>${tot.leaveH ? fmtHours(tot.leaveH) : '-'}</td><td>$${f4(tot.leavePay)}</td>
+        <td>${fmtRiel(tot.food)} ៛</td><td>${fmtRiel(tot.foodOt)} ៛</td>
+        <td>$${f4(tot.total)}</td><td>${fmtRiel(tot.riel)} ៛</td>
       </tr></tfoot>
     </table>
     <div class="legend"><span><i class="sun"></i>ថ្ងៃអាទិត្យ</span><span><i class="hol"></i>ថ្ងៃបុណ្យ</span></div>
