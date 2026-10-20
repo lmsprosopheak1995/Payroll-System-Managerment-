@@ -1191,6 +1191,7 @@ function toggleEmpScanner() {
 }
 
 function startEmpScanner() {
+  primeScanBeep();
   if (typeof Html5Qrcode === 'undefined') {
     customAlert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
     return;
@@ -1291,7 +1292,37 @@ const SCAN_VERIFY_TEXT = {
   checkout: 'កត់ម៉ោងចេញបានជោគជ័យ',
   done: 'អ្នកបានកត់ត្រាគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ',
 };
+const SCAN_VERIFY_AUTOCLOSE_MS = 6000;   // ពេលបិទ popup ស្វ័យប្រវត្តិ (មិល្លីវិនាទី) — ប្តូរលេខនេះបាន
 let scanVerifyTimer = null;
+
+// សំឡេង "ពីប" ពេលស្កេនជាប់ (WebAudio — មិនត្រូវការ file សំឡេង)
+let scanAudioCtx = null;
+function primeScanBeep() {              // ហៅពេលអ្នកប្រើចុចប៊ូតុងស្កេន ដើម្បី browser អនុញ្ញាតសំឡេង
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!scanAudioCtx) scanAudioCtx = new AC();
+    if (scanAudioCtx.state === 'suspended') scanAudioCtx.resume();
+  } catch (e) { /* ignore */ }
+}
+function playScanBeep(kind) {
+  try {
+    primeScanBeep();
+    const ctx = scanAudioCtx;
+    if (!ctx) return;
+    const tones = kind === 'info' ? [[660, 0, 0.16]] : [[1000, 0, 0.12], [1400, 0.16, 0.14]];   // [Hz, ចាប់ផ្តើម(វិ), រយៈពេល(វិ)]
+    tones.forEach(([f, at, dur]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const t0 = ctx.currentTime + at;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    });
+  } catch (e) { /* ignore */ }
+}
 function closeScanVerifyPopup() {
   clearTimeout(scanVerifyTimer);
   const el = document.getElementById('scanVerifyOverlay');
@@ -1332,7 +1363,8 @@ function showScanVerifyPopup(step, time) {
   ov.addEventListener('click', e => { if (e.target === ov || e.target.classList.contains('sv-btn')) closeScanVerifyPopup(); });
   document.body.appendChild(ov);
   try { if (navigator.vibrate) navigator.vibrate(isDone ? 80 : [120, 60, 120]); } catch (e) { /* ignore */ }
-  scanVerifyTimer = setTimeout(closeScanVerifyPopup, 6000);
+  playScanBeep(isDone ? 'info' : 'ok');
+  scanVerifyTimer = setTimeout(closeScanVerifyPopup, SCAN_VERIFY_AUTOCLOSE_MS);
 }
 
 document.getElementById('actEAddBtn').addEventListener('click', addActivityEmp);
