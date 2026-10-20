@@ -1199,13 +1199,26 @@ function startEmpScanner() {
   document.getElementById('empScanHint').style.display = '';
   document.getElementById('empScanToggleBtn').textContent = '⏹ បញ្ឈប់ការស្កេន';
   document.getElementById('empScanResult').textContent = '';
-  empHtml5QrCodeInstance = new Html5Qrcode('empQrReader');
-  empHtml5QrCodeInstance.start(
-    { facingMode: 'environment' },
-    { fps: 10, qrbox: 220 },
-    (decodedText) => handleEmpScan(decodedText),
-    () => {}
-  ).then(() => {
+  // ស្កេនលឿន៖ ប្រើ BarcodeDetector ដែលភ្ជាប់មកជាមួយ browser (បើមាន) · រកតែ QR · fps ខ្ពស់ · ប្រអប់ស្កេនធំ · រូបភាពច្បាស់ + focus ស្វ័យប្រវត្តិ
+  const makeScanner = () => new Html5Qrcode('empQrReader', {
+    verbose: false,
+    formatsToSupport: typeof Html5QrcodeSupportedFormats !== 'undefined' ? [Html5QrcodeSupportedFormats.QR_CODE] : undefined,
+    experimentalFeatures: { useBarcodeDetector: true },
+  });
+  const qrbox = (w, h) => { const s = Math.floor(Math.min(w, h) * 0.8); return { width: s, height: s }; };
+  const fastCfg = {
+    fps: 25, disableFlip: true, qrbox,
+    videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] },
+  };
+  const begin = cfg => {
+    empHtml5QrCodeInstance = makeScanner();
+    return empHtml5QrCodeInstance.start({ facingMode: 'environment' }, cfg, (decodedText) => handleEmpScan(decodedText), () => {});
+  };
+  begin(fastCfg).catch(err => {
+    // សិទ្ធិកាមេរ៉ាត្រូវបានបដិសេធ → បង្ហាញកំហុសតែម្តង; បើ browser មិនគាំទ្រការកំណត់លឿន → សាកម្តងទៀតជាមួយការកំណត់ធម្មតា
+    if (/NotAllowed|Permission/i.test(String((err && (err.name || err.message)) || err))) throw err;
+    return begin({ fps: 20, disableFlip: true, qrbox });
+  }).then(() => {
     empScannerRunning = true;
   }).catch(() => {
     document.getElementById('empQrReader').style.display = 'none';
