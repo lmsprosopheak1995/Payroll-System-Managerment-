@@ -633,7 +633,7 @@ function computeRow(emp, record, date) {
   const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours + hourlyRate * leavePayHours);
   const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
 // ច្បាប់/សម្រាក៖ ម៉ោង + ប្រាក់ (សម្រាប់បង្ហាញដាច់ដោយឡែក — normalPay និង total នៅដដែល)
-const leaveHours = status === 'leave' ? (settings.standardHours > 0 ? settings.standardHours : 8) : leavePayHours;
+const leaveHours = status === 'leave' ? 0 : leavePayHours; // ច្បាប់ពេញថ្ងៃ៖ បង្ហាញតែប្រាក់ (ម៉ោងទទេ) តាមទម្រង់ក្រដាស
 const leavePay = round4(status === 'leave' ? dailyRate : hourlyRate * leavePayHours);
   // Food allowances are set and displayed in Riel; convert to USD only for the USD total.
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
