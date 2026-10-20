@@ -155,6 +155,7 @@
       <div class="banner-dots" id="homeDots"></div>
       <div class="home-scan" style="margin:14px 16px 0;">
         <button class="big-btn" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
+        <p id="empScanLockNote" style="display:none;font-size:0.78rem;text-align:center;margin:8px 0 0;color:var(--text-muted);font-weight:600;"></p>
         <div id="empQrReader" style="display:none; margin-top:10px;"></div>
         <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
         <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
@@ -1170,6 +1171,7 @@ function switchEmpTab(tab) {
   document.getElementById('feedbackTabContent').classList.toggle('active', tab === 'feedback');
   document.getElementById('notifyTabContent').classList.toggle('active', tab === 'notify');
   if (tab !== 'home') stopEmpScanner();
+  else refreshScanLock();
   if (tab === 'attendance') renderAttendanceTabEmp();
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
@@ -1179,6 +1181,62 @@ function switchEmpTab(tab) {
   if (tab === 'notify') renderNotifyEmp();
   if (tab === 'profile') renderProfileExtras();
 }
+
+// ==== បិទការស្កេនក្រោយចេញពីធ្វើការរួច — បើកវិញម៉ោង 6:00 ព្រឹក ====
+const SCAN_OPEN_HOUR = 6;               // ម៉ោងបើកការស្កេនធម្មតា (6 = 6:00 ព្រឹក) — ប្តូរលេខនេះបាន
+const SCAN_EARLY_BUFFER_MIN = 60;       // បើវេនចាប់ផ្តើមមុន 6:00 → បើកស្កេនមុនម៉ោងចូលវេនប៉ុន្មាននាទី
+let scanCheckedOutDate = '';            // ថ្ងៃដែលបុគ្គលិកបានកត់ម៉ោងចេញរួច
+
+// ម៉ោងបើកស្កេន (គិតជានាទីក្នុងថ្ងៃ)៖ 6:00 ឬមុនម៉ោងចូលវេនរបស់បុគ្គលិក (តាមណាដែលមុនជាង)
+function scanOpenMinutes() {
+  let open = SCAN_OPEN_HOUR * 60;
+  try {
+    const start = lateStartMinutes(getEmpShift());
+    if (typeof start === 'number' && !isNaN(start)) open = Math.min(open, Math.max(0, start - SCAN_EARLY_BUFFER_MIN));
+  } catch (e) { /* ប្រើ 6:00 */ }
+  return open;
+}
+function scanOpenText() {
+  const m = scanOpenMinutes();
+  return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') + ' ព្រឹក';
+}
+
+function scanLockInfo() {
+  const now = new Date();
+  const openText = scanOpenText();
+  if (now.getHours() * 60 + now.getMinutes() < scanOpenMinutes()) return { locked: true, msg: 'ការស្កេនបិទ — នឹងបើកវិញនៅម៉ោង ' + openText };
+  if (scanCheckedOutDate && scanCheckedOutDate === todayStr()) return { locked: true, msg: 'អ្នកបានចេញពីការងាររួចហើយ — ការស្កេនបិទ នឹងបើកវិញនៅម៉ោង ' + openText + 'ស្អែក' };
+  return { locked: false, msg: '' };
+}
+
+function applyScanLockUI() {
+  const btn = document.getElementById('empScanToggleBtn');
+  if (!btn) return;
+  const go = document.getElementById('goScanBtn');
+  const note = document.getElementById('empScanLockNote');
+  const info = scanLockInfo();
+  const label = info.locked ? '🔒 ការស្កេនបិទ' : '📷 ស្កេនកូដ QR កន្លែងធ្វើការ';
+  if (info.locked) {
+    if (empScannerRunning) stopEmpScanner();
+    document.getElementById('empQrReader').style.display = 'none';
+    document.getElementById('empScanHint').style.display = 'none';
+  }
+  if (info.locked || !empScannerRunning) btn.textContent = label;
+  btn.disabled = info.locked;
+  btn.style.opacity = info.locked ? '0.55' : '';
+  btn.style.cursor = info.locked ? 'not-allowed' : '';
+  if (go) { go.disabled = info.locked; go.textContent = label; go.style.opacity = info.locked ? '0.55' : ''; go.style.cursor = info.locked ? 'not-allowed' : ''; }
+  if (note) { note.textContent = info.msg; note.style.display = info.locked ? '' : 'none'; }
+}
+
+async function refreshScanLock() {
+  if (!getSession()) return;
+  const rec = await getTodayRecord();
+  if (rec) scanCheckedOutDate = rec.checkout ? todayStr() : '';
+  applyScanLockUI();
+}
+setInterval(() => { if (!document.hidden) applyScanLockUI(); }, 30000);   // បើកវិញស្វ័យប្រវត្តិពេលដល់ម៉ោង / ប្តូរថ្ងៃ
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshScanLock(); });
 
 // ==== In-page QR self-scan (clock tab) ====
 let empHtml5QrCodeInstance = null;
@@ -1191,6 +1249,7 @@ function toggleEmpScanner() {
 }
 
 function startEmpScanner() {
+  if (scanLockInfo().locked) { applyScanLockUI(); return; }
   primeScanBeep();
   if (typeof Html5Qrcode === 'undefined') {
     customAlert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
@@ -1239,6 +1298,7 @@ function stopEmpScanner() {
       document.getElementById('empQrReader').style.display = 'none';
       document.getElementById('empScanHint').style.display = 'none';
       document.getElementById('empScanToggleBtn').textContent = '📷 ស្កេនកូដ QR កន្លែងធ្វើការ';
+      applyScanLockUI();
     }).catch(() => {});
   }
 }
@@ -1258,6 +1318,7 @@ async function checkWpGeo() {
 async function handleEmpScan(decodedText) {
   if (empScanBusy) return;
   empScanBusy = true;
+  if (scanLockInfo().locked) { empScanBusy = false; stopEmpScanner(); applyScanLockUI(); return; }
   const scannedCode = (decodedText || '').trim();
   const resultEl = document.getElementById('empScanResult');
   const fail = msg => { resultEl.style.color = 'var(--danger)'; resultEl.textContent = msg; setTimeout(() => { empScanBusy = false; }, 1500); };
@@ -1358,6 +1419,7 @@ function showScanVerifyPopup(step, time) {
       ${time ? `<div class="sv-time">${time}</div>` : ''}
       <p class="sv-meta">${(s.name || '').replace(/[<>&]/g, '')}</p>
       <p class="sv-meta">${todayStr()}</p>
+      ${step === 'checkout' ? `<p class="sv-meta" style="margin-top:8px;font-weight:600;">🔒 ការស្កេនបិទ — បើកវិញម៉ោង ${scanOpenText()}ស្អែក</p>` : ''}
       <button class="sv-btn" type="button" style="${isDone ? 'background:#3b82f6;' : ''}">យល់ព្រម</button>
     </div>`;
   ov.addEventListener('click', e => { if (e.target === ov || e.target.classList.contains('sv-btn')) closeScanVerifyPopup(); });
@@ -1392,6 +1454,8 @@ async function renderClockBox() {
   const box = document.getElementById('clockBox');
   box.innerHTML = '<div class="status-line">កំពុងផ្ទុក...</div>';
   const rec = await getTodayRecord();
+  scanCheckedOutDate = (rec && rec.checkout) ? todayStr() : '';
+  applyScanLockUI();
   const time = nowTimeStr();
 
   if (!rec || !rec.checkin) {
