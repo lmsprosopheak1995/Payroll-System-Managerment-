@@ -753,22 +753,22 @@ function renderAttendanceTab() {
     return `<tr>
       <td>${date}</td>
       <td>${dayLabelHl(date)}</td>
-      <td><input type="time" value="${r.checkin}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkin',this.value)" style="width:115px;"></td>
-      <td><input type="time" value="${r.breakOut}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakOut',this.value)" style="width:115px;"></td>
-      <td><input type="time" value="${r.breakIn}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakIn',this.value)" style="width:115px;"></td>
-      <td><input type="time" value="${r.checkout}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkout',this.value)" style="width:115px;"></td>
-      <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
-      <td><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select></td>
-      <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>$${fmtUSD4(r.workPay)}</td>
-      <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>$${fmtUSD4(r.otPay)}</td>
-      <td>${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
-      <td>$${fmtUSD4(r.leavePay)}</td>
-      <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
-      <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
-      <td><strong>$${fmtUSD4(r.total)}</strong></td>
-      <td>${fmtRiel(r.riel)} ៛</td>
+      <td class="c-work"><input type="time" value="${r.checkin}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkin',this.value)" style="width:115px;"></td>
+      <td class="c-work"><input type="time" value="${r.breakOut}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakOut',this.value)" style="width:115px;"></td>
+      <td class="c-work"><input type="time" value="${r.breakIn}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakIn',this.value)" style="width:115px;"></td>
+      <td class="c-work"><input type="time" value="${r.checkout}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkout',this.value)" style="width:115px;"></td>
+      <td class="c-work">${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
+      <td class="c-work"><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select></td>
+      <td class="c-nor g-s${r.normalHours ? '' : ' z'}">${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
+      <td class="c-nor${r.workPay ? '' : ' z'}">$${fmtUSD4(r.workPay)}</td>
+      <td class="c-ot g-s${r.otHours ? ' has' : ' z'}">${r.otHours ? fmtHours(r.otHours) : '-'}</td>
+      <td class="c-ot${r.otPay ? ' has' : ' z'}">$${fmtUSD4(r.otPay)}</td>
+      <td class="c-lv g-s${r.leaveHours ? ' has' : ' z'}">${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
+      <td class="c-lv${r.leavePay ? ' has' : ' z'}">$${fmtUSD4(r.leavePay)}</td>
+      <td class="c-fd g-s${r.foodPayRiel ? '' : ' z'}">${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
+      <td class="c-fd${r.foodOtPayRiel ? '' : ' z'}">${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
+      <td class="c-tt g-s"><strong>$${fmtUSD4(r.total)}</strong></td>
+      <td class="c-tt">${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
 
