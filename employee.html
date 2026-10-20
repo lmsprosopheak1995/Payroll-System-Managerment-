@@ -153,6 +153,12 @@
       <div class="home-head"><div class="h-avatar" id="homeAvatar"></div><div><div class="h-hello">សួស្តី 👋</div><div class="h-name" id="homeName"></div></div></div>
       <div class="banner-track" id="homeBanner"></div>
       <div class="banner-dots" id="homeDots"></div>
+      <div class="home-scan" style="margin:14px 16px 0;">
+        <button class="big-btn" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
+        <div id="empQrReader" style="display:none; margin-top:10px;"></div>
+        <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
+        <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
+      </div>
       <div class="menu-card">
         <button class="menu-row" data-go="clock" style="--c:#f59e0b"><span class="menu-ico">🕐</span><span class="lbl">កត់ត្រាវត្តមាន</span><span class="go">›</span></button>
         <button class="menu-row" data-go="activities" style="--c:#ef4444"><span class="menu-ico">📍</span><span class="lbl">សកម្មភាព</span><span class="go">›</span></button>
@@ -200,10 +206,7 @@
       <div class="portal-card" style="margin-bottom:14px;">
         <div class="clock-box" id="clockBox"></div>
         <div style="margin-top:14px;">
-          <button class="big-btn" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
-          <div id="empQrReader" style="display:none; margin-top:10px;"></div>
-          <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
-          <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
+          <button class="big-btn" id="goScanBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
         </div>
       </div>
       <div class="portal-card history">
@@ -1063,7 +1066,7 @@ function renderHomeBanner() {
     ? list.map(r => r.image
       ? `<div class="banner has-img"><img src="${escapeHtml(r.image)}" alt=""><div class="cap"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div></div>`
       : `<div class="banner"><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.body || '')}</p></div>`).join('')
-    : '<div class="banner"><h3>សូមស្វាគមន៍</h3><p>ចុច «កត់ត្រាវត្តមាន» ដើម្បីស្កេន QR ចូល/ចេញការងារ</p></div>';
+    : '<div class="banner"><h3>សូមស្វាគមន៍</h3><p>ចុច «ស្កេនកូដ QR» ខាងលើ ដើម្បីស្កេនចូល/ចេញការងារ</p></div>';
   document.getElementById('homeDots').innerHTML = list.length > 1 ? list.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('') : '';
 }
 function updateBannerDots() {
@@ -1166,7 +1169,7 @@ function switchEmpTab(tab) {
   document.getElementById('activitiesTabContent').classList.toggle('active', tab === 'activities');
   document.getElementById('feedbackTabContent').classList.toggle('active', tab === 'feedback');
   document.getElementById('notifyTabContent').classList.toggle('active', tab === 'notify');
-  if (tab !== 'clock') stopEmpScanner();
+  if (tab !== 'home') stopEmpScanner();
   if (tab === 'attendance') renderAttendanceTabEmp();
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
@@ -1269,6 +1272,7 @@ document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('clic
 document.getElementById('subBack').addEventListener('click', () => switchEmpTab('home'));
 document.getElementById('homeBanner').addEventListener('scroll', updateBannerDots, { passive: true });
 document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
+document.getElementById('goScanBtn').addEventListener('click', () => { switchEmpTab('home'); if (!empScannerRunning) startEmpScanner(); });
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
 document.getElementById('payrollMonthInput').addEventListener('change', () => { renderPayrollSummary(); renderPayrollHistoryEmp(); });
 document.getElementById('payHistoryRangeEmp').addEventListener('change', renderPayrollHistoryEmp);
@@ -1292,25 +1296,25 @@ async function renderClockBox() {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">អ្នកមិនទាន់កត់ត្រាម៉ោងចូលថ្ងៃនេះទេ</div>
-      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចូល</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចូល</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការនៅទំព័រដើម ដើម្បីកត់ត្រា</small></div>
     `;
   } else if (!rec.break_out) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូលធ្វើការម៉ោង <strong>${rec.checkin}</strong></div>
-      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចេញបាយ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចេញបាយ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការនៅទំព័រដើម ដើម្បីកត់ត្រា</small></div>
     `;
   } else if (!rec.break_in) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ <strong>${rec.break_out}</strong></div>
-      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចូលវិញ (ក្រោយបាយ)</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ចូលវិញ (ក្រោយបាយ)</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការនៅទំព័រដើម ដើម្បីកត់ត្រា</small></div>
     `;
   } else if (!rec.checkout) {
     box.innerHTML = `
       <div class="time">${time}</div>
       <div class="status-line">ចូល ${rec.checkin} · ចេញបាយ ${rec.break_out} · ចូលវិញ <strong>${rec.break_in}</strong></div>
-      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចេញ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការខាងក្រោម ដើម្បីកត់ត្រា</small></div>
+      <div class="next-step">👉 ជំហានបន្ទាប់៖ <strong>ម៉ោងចេញ</strong><br><small>សូមស្កេនកូដ QR កន្លែងធ្វើការនៅទំព័រដើម ដើម្បីកត់ត្រា</small></div>
     `;
   } else {
     box.innerHTML = `
