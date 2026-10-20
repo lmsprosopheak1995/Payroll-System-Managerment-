@@ -632,6 +632,9 @@ function computeRow(emp, record, date) {
   if (status === 'present' && leavePayHours > 0 && normalHours + leavePayHours >= settings.standardHours - 1e-9) fullDay = true;
   const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours + hourlyRate * leavePayHours);
   const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
+// ច្បាប់/សម្រាក៖ ម៉ោង + ប្រាក់ (សម្រាប់បង្ហាញដាច់ដោយឡែក — normalPay និង total នៅដដែល)
+const leaveHours = status === 'leave' ? (settings.standardHours > 0 ? settings.standardHours : 8) : leavePayHours;
+const leavePay = round4(status === 'leave' ? dailyRate : hourlyRate * leavePayHours);
   // Food allowances are set and displayed in Riel; convert to USD only for the USD total.
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
   const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
@@ -644,7 +647,7 @@ function computeRow(emp, record, date) {
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
 
-  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leavePayHours };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leavePayHours, leaveHours, leavePay };
 }
 
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
@@ -756,9 +759,11 @@ function renderAttendanceTab() {
       <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
       <td><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select></td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>$${fmtUSD4(r.normalPay)}</td>
+      <td>$${fmtUSD4(Math.max(0, Math.round((r.normalPay - r.leavePay) * 10000) / 10000))}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
       <td>$${fmtUSD4(r.otPay)}</td>
+      <td>${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
+      <td>$${fmtUSD4(r.leavePay)}</td>
       <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
       <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
       <td><strong>$${fmtUSD4(r.total)}</strong></td>
@@ -1091,14 +1096,14 @@ function exportAttendanceCSV() {
   const emp = activeEmployees.find(e => e.id === empId) || activeEmployees[0];
   const month = currentAttendanceMonth();
   const dates = daysInMonth(month);
-  const headers = ['ថ្ងៃទី', 'ថ្ងៃ', 'ចូល', 'ចេញអាហារ', 'ចូលអាហារវិញ', 'ចេញ', 'យឺត', 'ស្ថានភាព', 'ធម្មតា(ម៉ោង)', 'ប្រាក់ខែ($)', 'ថែមម៉ោង(ម៉ោង)', 'ប្រាក់ថែមម៉ោង($)', 'បាយថ្ងៃត្រង់(៛)', 'បាយថែមម៉ោង(៛)', 'សរុប($)', 'សរុប(៛)'];
+  const headers = ['ថ្ងៃទី', 'ថ្ងៃ', 'ចូល', 'ចេញអាហារ', 'ចូលអាហារវិញ', 'ចេញ', 'យឺត', 'ស្ថានភាព', 'ធម្មតា(ម៉ោង)', 'ប្រាក់ខែ($)', 'ថែមម៉ោង(ម៉ោង)', 'ប្រាក់ថែមម៉ោង($)', 'សម្រាក(ម៉ោង)', 'ប្រាក់សម្រាក($)', 'បាយថ្ងៃត្រង់(៛)', 'បាយថែមម៉ោង(៛)', 'សរុប($)', 'សរុប(៛)'];
   const rows = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, record, date);
     return [
       date, weekdayLabel(date), r.checkin, r.breakOut, r.breakIn, r.checkout, r.late ? 'យឺត' : '-',
-      STATUS_LABELS[r.status] || '-', r.normalHours.toFixed(2), r.normalPay.toFixed(4),
-      r.otHours.toFixed(2), r.otPay.toFixed(4), Math.round(r.foodPayRiel), Math.round(r.foodOtPayRiel),
+      STATUS_LABELS[r.status] || '-', r.normalHours.toFixed(2), Math.max(0, r.normalPay - r.leavePay).toFixed(4),
+      r.otHours.toFixed(2), r.otPay.toFixed(4), r.leaveHours.toFixed(2), r.leavePay.toFixed(4), Math.round(r.foodPayRiel), Math.round(r.foodOtPayRiel),
       r.total.toFixed(4), Math.round(r.riel)
     ];
   });
