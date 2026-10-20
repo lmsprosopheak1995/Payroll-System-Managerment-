@@ -177,13 +177,14 @@ function summarizeEmpMonth(emp, month) {
 function attendancePrintPage(emp, month) {
   const sh = getEmpShift(emp.id);
   const fm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-  const tot = { late: 0, work: 0, normal: 0, ot: 0, food: 0, total: 0, riel: 0 };
+  const tot = { late: 0, work: 0, normal: 0, ot: 0, leaveH: 0, leavePay: 0, food: 0, total: 0, riel: 0 };
   const rows = daysInMonth(month).map(date => {
     const rec = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, rec, date);
     if (r.late) tot.late++;
     if (r.status === 'present') tot.work++;
     tot.normal += r.normalHours; tot.ot += r.otHours;
+    tot.leaveH += (r.leaveHours || 0); tot.leavePay += (r.leavePay || 0);
     tot.food += r.foodPayRiel + r.foodOtPayRiel; tot.total += r.total; tot.riel += r.riel;
     const foodRiel = r.foodPayRiel + r.foodOtPayRiel;
     const dayCls = r.mult > 1 ? (holidays[date] !== undefined ? 'hol' : 'sun') : '';
@@ -196,6 +197,8 @@ function attendancePrintPage(emp, month) {
       <td>${printEsc(STATUS_LABELS[r.status] || '-')}</td>
       <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
       <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
+      <td>${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
+      <td>${r.leavePay ? '$' + fmtUSD(r.leavePay) : '-'}</td>
       <td>${foodRiel ? fmtRiel(foodRiel) : '-'}</td>
       <td class="r">$${fmtUSD(r.total)}</td></tr>`;
   }).join('');
@@ -214,12 +217,12 @@ function attendancePrintPage(emp, month) {
     <table>
       <thead><tr>
         <th>ថ្ងៃទី</th><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th>
-        <th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា (ម៉ោង)</th><th>ថែមម៉ោង (ម៉ោង)</th><th>ប្រាក់បាយ (៛)</th><th>សរុប ($)</th>
+        <th>យឺត</th><th>ស្ថានភាព</th><th>ធម្មតា (ម៉ោង)</th><th>ថែមម៉ោង (ម៉ោង)</th><th>សម្រាក (ម៉ោង)</th><th>ប្រាក់សម្រាក ($)</th><th>ប្រាក់បាយ (៛)</th><th>សរុប ($)</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr class="total">
         <td colspan="6">សរុប</td><td>${tot.late || '-'}</td><td>${tot.work} ថ្ងៃ</td>
-        <td>${fmtHours(tot.normal)}</td><td>${fmtHours(tot.ot)}</td><td>${fmtRiel(tot.food)}</td><td class="r">$${fmtUSD(tot.total)}</td>
+        <td>${fmtHours(tot.normal)}</td><td>${fmtHours(tot.ot)}</td><td>${tot.leaveH ? fmtHours(tot.leaveH) : '-'}</td><td>${tot.leavePay ? '$' + fmtUSD(tot.leavePay) : '-'}</td><td>${fmtRiel(tot.food)}</td><td class="r">$${fmtUSD(tot.total)}</td>
       </tr></tfoot>
     </table>
     <div class="legend"><span><i class="sun"></i>ថ្ងៃអាទិត្យ</span><span><i class="hol"></i>ថ្ងៃបុណ្យ</span></div>
