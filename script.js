@@ -629,6 +629,7 @@ function computeRow(emp, record, date) {
   // ម៉ោងច្បាប់ (កន្លះថ្ងៃ/តាមម៉ោង) ដែលបង់ប្រាក់ — បូកជាមួយម៉ោងធ្វើការ មិនឱ្យលើសម៉ោងស្តង់ដារ
   const pl = emp && emp.id ? partialLeaveInfo(emp.id, date) : { paidHours: 0 };
   const leavePayHours = status === 'leave' ? 0 : Math.min(pl.paidHours, Math.max(0, settings.standardHours - normalHours));
+  const workedFullDay = fullDay; // ធ្វើការគ្រប់ម៉ោងពិតប្រាកដ (មិនរាប់ម៉ោងច្បាប់)
   if (status === 'present' && leavePayHours > 0 && normalHours + leavePayHours >= settings.standardHours - 1e-9) fullDay = true;
   const normalPay = round4(status === 'leave' ? dailyRate : hourlyRate * mult * normalHours + hourlyRate * leavePayHours);
   const otPay = round4(hourlyRate * Math.max(settings.otMultiplier, mult) * otHours);
@@ -638,7 +639,8 @@ const leavePay = round4(status === 'leave' ? dailyRate : hourlyRate * leavePayHo
 const workPay = status === 'leave' ? 0 : round4(hourlyRate * mult * normalHours); // ប្រាក់ម៉ោងធ្វើការពិត (បង្គត់ដាច់ដោយឡែក ដើម្បីមិនឱ្យលើស/ខ្វះ 0.0001)
   // Food allowances are set and displayed in Riel; convert to USD only for the USD total.
   // ប្រាក់បាយធម្មតា៖ ត្រូវធ្វើការគ្រប់ 8 ម៉ោងទើបបាន (ច្បាប់ចាត់ទុកជាថ្ងៃពេញ)
-  const foodPayRiel = (status === 'leave' || fullDay) ? settings.foodDaily : 0;
+  // ថ្ងៃសម្រាក/ច្បាប់ (ពេញថ្ងៃ ឬកន្លះថ្ងៃ/តាមម៉ោង) មិនមានប្រាក់បាយ — បានតែថ្ងៃដែលធ្វើការគ្រប់ម៉ោងពិតប្រាកដ ហើយគ្មានម៉ោងច្បាប់
+  const foodPayRiel = (status === 'present' && workedFullDay && leavePayHours <= 0) ? settings.foodDaily : 0;
   // ប្រាក់បាយ OT៖ បន្ថែម foodOT រៀងរាល់ 2 ម៉ោង OT (OT 2ម៉ោង = 1 ដង, OT 4ម៉ោង = 2 ដង)
   const foodOtPayRiel = Math.floor(otHours / SHIFT.otMealBlockHours + 1e-9) * settings.foodOT;
   const exchangeRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
@@ -2674,7 +2676,8 @@ function calcDeductionRow(emp, month) {
   });
 
   const round4 = n => Math.round(n * 10000) / 10000;
-  const perLeaveDay = dailyRate + (deductRules.leaveFood ? (settings.foodDaily || 0) / exRate : 0);
+  // ថ្ងៃច្បាប់មិនមានប្រាក់បាយទៀតទេ (មើល computeRow) ដូច្នេះមិនកាត់ប្រាក់បាយ ដើម្បីកុំកាត់ស្ទួន
+  const perLeaveDay = dailyRate;
   // យឺត + ចេញមុន សរុបក្នុងមួយខែ៖ ក្នុងកំណត់ (graceMinutes) មិនកាត់; លើសពីនោះទើបកាត់
   const violMinutes = lateMinutes + earlyMinutes;
   const grace = deductRules.graceMinutes;
