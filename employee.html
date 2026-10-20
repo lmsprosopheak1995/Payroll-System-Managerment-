@@ -1270,12 +1270,69 @@ async function handleEmpScan(decodedText) {
   resultEl.textContent = '✓ បានស្គាល់អត្តសញ្ញាណ កំពុងកត់ត្រា...';
   stopEmpScanner();
   const rec = await getTodayRecord();
-  if (!rec || !rec.checkin) await clockIn();
-  else if (!rec.break_out) await clockBreakOut();
-  else if (!rec.break_in) await clockBreakIn();
-  else if (!rec.checkout) await clockOut();
-  else resultEl.textContent = 'ℹ អ្នកបានកត់ត្រាគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ';
+  let step = '', time = false;
+  if (!rec || !rec.checkin) { step = 'checkin'; time = await clockIn(); }
+  else if (!rec.break_out) { step = 'break_out'; time = await clockBreakOut(); }
+  else if (!rec.break_in) { step = 'break_in'; time = await clockBreakIn(); }
+  else if (!rec.checkout) { step = 'checkout'; time = await clockOut(); }
+  else { step = 'done'; resultEl.textContent = 'ℹ អ្នកបានកត់ត្រាគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ'; showScanVerifyPopup('done', ''); }
+  if (step !== 'done') {
+    if (time) { resultEl.textContent = ''; showScanVerifyPopup(step, time); }
+    else { resultEl.style.color = 'var(--danger)'; resultEl.textContent = '✕ កត់ត្រាមិនជោគជ័យ សូមព្យាយាមម្តងទៀត'; }
+  }
   empScanBusy = false;
+}
+
+// Popup បញ្ជាក់ (verification) ពេលស្កេនជាប់ និងកត់ត្រារួច
+const SCAN_VERIFY_TEXT = {
+  checkin: 'កត់ម៉ោងចូលបានជោគជ័យ',
+  break_out: 'កត់ម៉ោងចេញសម្រាកបានជោគជ័យ',
+  break_in: 'កត់ម៉ោងចូលពីសម្រាកបានជោគជ័យ',
+  checkout: 'កត់ម៉ោងចេញបានជោគជ័យ',
+  done: 'អ្នកបានកត់ត្រាគ្រប់ជំហានរួចសម្រាប់ថ្ងៃនេះ',
+};
+let scanVerifyTimer = null;
+function closeScanVerifyPopup() {
+  clearTimeout(scanVerifyTimer);
+  const el = document.getElementById('scanVerifyOverlay');
+  if (el) el.remove();
+}
+function showScanVerifyPopup(step, time) {
+  closeScanVerifyPopup();
+  if (!document.getElementById('scanVerifyStyle')) {
+    const st = document.createElement('style');
+    st.id = 'scanVerifyStyle';
+    st.textContent = `
+      #scanVerifyOverlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.55);animation:svFade .2s ease-out;}
+      #scanVerifyOverlay .sv-card{width:100%;max-width:320px;background:var(--card-bg,#fff);color:var(--text,#111827);border-radius:20px;padding:26px 20px 20px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.3);animation:svPop .3s cubic-bezier(.2,1.3,.4,1);}
+      #scanVerifyOverlay .sv-ring{width:76px;height:76px;margin:0 auto 14px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--success,#16a34a);}
+      #scanVerifyOverlay .sv-ring.info{background:#3b82f6;}
+      #scanVerifyOverlay .sv-ring svg{width:40px;height:40px;fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:svDraw .45s .15s ease-out forwards;}
+      #scanVerifyOverlay .sv-title{font-size:1.05rem;font-weight:700;margin:0 0 6px;}
+      #scanVerifyOverlay .sv-time{font-size:2rem;font-weight:800;letter-spacing:.5px;margin:4px 0;color:var(--success,#16a34a);}
+      #scanVerifyOverlay .sv-meta{font-size:.8rem;color:var(--text-muted,#6b7280);margin:2px 0;}
+      #scanVerifyOverlay .sv-btn{margin-top:16px;width:100%;border:0;border-radius:12px;padding:12px;font-size:.95rem;font-weight:700;color:#fff;background:var(--success,#16a34a);cursor:pointer;font-family:inherit;}
+      @keyframes svFade{from{opacity:0}to{opacity:1}}
+      @keyframes svPop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+      @keyframes svDraw{to{stroke-dashoffset:0}}`;
+    document.head.appendChild(st);
+  }
+  const s = getSession() || {};
+  const isDone = step === 'done';
+  const ov = document.createElement('div');
+  ov.id = 'scanVerifyOverlay';
+  ov.innerHTML = `<div class="sv-card" role="dialog" aria-live="polite">
+      <div class="sv-ring${isDone ? ' info' : ''}"><svg viewBox="0 0 24 24">${isDone ? '<path d="M12 8h.01M11 12h1v5h1"/>' : '<path d="M5 13l4 4L19 7"/>'}</svg></div>
+      <p class="sv-title">${SCAN_VERIFY_TEXT[step] || 'កត់ត្រារួចរាល់'}</p>
+      ${time ? `<div class="sv-time">${time}</div>` : ''}
+      <p class="sv-meta">${(s.name || '').replace(/[<>&]/g, '')}</p>
+      <p class="sv-meta">${todayStr()}</p>
+      <button class="sv-btn" type="button" style="${isDone ? 'background:#3b82f6;' : ''}">យល់ព្រម</button>
+    </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov || e.target.classList.contains('sv-btn')) closeScanVerifyPopup(); });
+  document.body.appendChild(ov);
+  try { if (navigator.vibrate) navigator.vibrate(isDone ? 80 : [120, 60, 120]); } catch (e) { /* ignore */ }
+  scanVerifyTimer = setTimeout(closeScanVerifyPopup, 6000);
 }
 
 document.getElementById('actEAddBtn').addEventListener('click', addActivityEmp);
@@ -1340,44 +1397,52 @@ async function renderClockBox() {
 async function clockBreakOut() {
   const session = getSession();
   const today = todayStr();
+  const time = nowTimeStr();
   const { error } = await supabaseClient.from('attendance')
-    .update({ break_out: nowTimeStr() })
+    .update({ break_out: time })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return false; }
   await renderClockBox();
   await renderHistory();
+  return time;
 }
 
 async function clockBreakIn() {
   const session = getSession();
   const today = todayStr();
+  const time = nowTimeStr();
   const { error } = await supabaseClient.from('attendance')
-    .update({ break_in: nowTimeStr() })
+    .update({ break_in: time })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return false; }
   await renderClockBox();
   await renderHistory();
+  return time;
 }
 
 async function clockIn() {
   const session = getSession();
   const today = todayStr();
-  const row = { date: today, employee_id: session.id, status: 'present', checkin: nowTimeStr(), checkout: '', break_out: '', break_in: '' };
+  const time = nowTimeStr();
+  const row = { date: today, employee_id: session.id, status: 'present', checkin: time, checkout: '', break_out: '', break_in: '' };
   const { error } = await supabaseClient.from('attendance').upsert(row, { onConflict: 'date,employee_id' });
-  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return false; }
   await renderClockBox();
   await renderHistory();
+  return time;
 }
 
 async function clockOut() {
   const session = getSession();
   const today = todayStr();
+  const time = nowTimeStr();
   const { error } = await supabaseClient.from('attendance')
-    .update({ checkout: nowTimeStr() })
+    .update({ checkout: time })
     .eq('date', today).eq('employee_id', session.id);
-  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return; }
+  if (error) { customAlert('កត់ត្រាមិនជោគជ័យ៖ ' + error.message); return false; }
   await renderClockBox();
   await renderHistory();
+  return time;
 }
 
 async function renderHistory() {
