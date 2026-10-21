@@ -710,7 +710,7 @@ async function doLogin() {
   if (!username || !password) { showLogin('សូមបំពេញអត្តលេខ និងពាក្យសម្ងាត់'); return; }
   // ចូលគណនីដោយទទួល token session (create_employee_session) — បើ function មិនទាន់មាន ត្រឡប់ទៅវិធីចាស់ (login_employee)
   const r = await supabaseClient.rpc('create_employee_session', { p_username: username, p_password: password });
-  if (r.error && /PGRST202|could not find the function|does not exist/i.test((r.error.code || '') + ' ' + (r.error.message || ''))) {
+  if (r.error && /PGRST202|could not find the function|does not exist|violates check constraint|app_sessions_role_check/i.test((r.error.code || '') + ' ' + (r.error.message || ''))) {
     const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password: password });
     if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
     if (!data || data.length === 0) { showLogin('អត្តលេខ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
