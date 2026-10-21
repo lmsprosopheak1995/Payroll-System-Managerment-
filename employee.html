@@ -71,6 +71,24 @@
   .att-mini-table { width:100%; border-collapse:collapse; font-size:0.7rem; }
   .att-mini-table th, .att-mini-table td { padding:5px 4px; border-bottom:1px solid var(--border); text-align:center; }
   .att-mini-table th { color:var(--text-muted); font-weight:600; font-size:0.63rem; }
+/* ចែកពណ៌តាមក្រុមជួរ ដូចតារាងវត្តមាន Admin */
+.att-mini-table th.c-work { background:rgba(99,102,241,.16); box-shadow:inset 0 -3px 0 #6366f1; }
+.att-mini-table th.c-nor  { background:rgba(16,185,129,.18); box-shadow:inset 0 -3px 0 #10b981; }
+.att-mini-table th.c-ot   { background:rgba(249,115,22,.18); box-shadow:inset 0 -3px 0 #f97316; }
+.att-mini-table th.c-lv   { background:rgba(168,85,247,.26); box-shadow:inset 0 -3px 0 #a855f7; color:#8b5cf6; font-weight:700; }
+.att-mini-table th.c-fd   { background:rgba(234,179,8,.22); box-shadow:inset 0 -3px 0 #eab308; }
+.att-mini-table th.c-tt   { background:rgba(14,165,233,.22); box-shadow:inset 0 -3px 0 #0ea5e9; }
+.att-mini-table td.c-work { background:rgba(99,102,241,.05); }
+.att-mini-table td.c-nor  { background:rgba(16,185,129,.07); }
+.att-mini-table td.c-ot   { background:rgba(249,115,22,.07); }
+.att-mini-table td.c-lv   { background:rgba(168,85,247,.10); }
+.att-mini-table td.c-fd   { background:rgba(234,179,8,.09); }
+.att-mini-table td.c-tt   { background:rgba(14,165,233,.09); }
+.att-mini-table .g-s      { border-left:2px solid rgba(100,116,139,.35); }
+.att-mini-table td.z      { color:rgba(100,116,139,.65); }
+.att-mini-table td.c-lv.has { background:rgba(168,85,247,.24); color:#8b5cf6; font-weight:700; }
+.att-mini-table td.c-ot.has { color:#ea580c; font-weight:600; }
+.att-mini-table td.c-tt strong { color:#0284c7; }
   .payroll-line { display:flex; justify-content:space-between; font-size:0.8rem; padding:7px 2px; border-bottom:1px solid var(--border); }
   .payroll-line.total { font-weight:700; font-size:0.9rem; border-bottom:none; padding-top:12px; }
   #payslipTemplate { display:none; position:fixed; left:-9999px; top:0; width:680px; background:#ffffff; color:#111827; padding:32px; font-family:'Kantumruy Pro','Noto Sans Khmer','Khmer OS',system-ui,sans-serif; }
@@ -229,23 +247,26 @@
               <tr>
                 <th rowspan="2">ថ្ងៃទី</th>
                 <th rowspan="2">ថ្ងៃ</th>
-                <th colspan="4">ម៉ោងធ្វើការ</th>
-                <th rowspan="2">យឺត</th>
-                <th rowspan="2">ស្ថានភាព</th>
-                <th rowspan="2">ធម្មតា (ម៉ោង)</th>
-                <th rowspan="2">ប្រាក់ខែ</th>
-                <th rowspan="2">ថែមម៉ោង (ម៉ោង)</th>
-                <th rowspan="2">ប្រាក់ថែមម៉ោង</th>
-                <th rowspan="2">បាយថ្ងៃត្រង់</th>
-                <th rowspan="2">បាយថែមម៉ោង</th>
-                <th rowspan="2">សរុប ($)</th>
-                <th rowspan="2">សរុប (៛)</th>
+                <th colspan="4" class="c-work">ម៉ោងធ្វើការ</th>
+                <th rowspan="2" class="c-work">យឺត</th>
+                <th rowspan="2" class="c-work">ស្ថានភាព</th>
+                <th rowspan="2" class="c-nor g-s">ធម្មតា (ម៉ោង)</th>
+                <th rowspan="2" class="c-nor">ប្រាក់ខែ</th>
+                <th rowspan="2" class="c-ot g-s">ថែមម៉ោង (ម៉ោង)</th>
+                <th rowspan="2" class="c-ot">ប្រាក់ថែមម៉ោង</th>
+                <th colspan="2" class="c-lv g-s">ច្បាប់ Leave</th>
+                <th rowspan="2" class="c-fd g-s">បាយថ្ងៃត្រង់</th>
+                <th rowspan="2" class="c-fd">បាយថែមម៉ោង</th>
+                <th rowspan="2" class="c-tt g-s">សរុប ($)</th>
+                <th rowspan="2" class="c-tt">សរុប (៛)</th>
               </tr>
               <tr>
-                <th>ចូល</th>
-                <th>ចេញ</th>
-                <th>ចូល</th>
-                <th>ចេញ</th>
+                <th class="c-work">ចូល</th>
+                <th class="c-work">ចេញ</th>
+                <th class="c-work">ចូល</th>
+                <th class="c-work">ចេញ</th>
+                <th class="c-lv g-s">ម៉ោង Hour</th>
+                <th class="c-lv">ប្រាក់ Pay</th>
               </tr>
             </thead>
             <tbody id="empAttBody"></tbody>
@@ -261,11 +282,11 @@
         <div class="form-group">
           <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ប្រភេទច្បាប់</label>
           <select id="leaveType" onchange="updateLeaveTypeHint()">
-            <option value="annual">ច្បាប់ប្រចាំឆ្នាំ</option>
-            <option value="paid">ច្បាប់មានប្រាក់ខែ (ពិសេស)</option>
-            <option value="sick">ច្បាប់ឈឺ</option>
-            <option value="maternity">ច្បាប់សម្រាលកូន</option>
-            <option value="unpaid">ច្បាប់គ្មានប្រាក់ខែ</option>
+            <option value="annual">សម្រាកបំណាច់ឆ្នាំ</option>
+            <option value="paid">សម្រាកមានប្រាក់ឈ្នូល</option>
+            <option value="sick">សម្រាកឈឺ</option>
+            <option value="maternity">សម្រាកសម្រាលកូន</option>
+            <option value="unpaid">សម្រាកគ្មានប្រាក់ឈ្នូល</option>
             <option value="other">ផ្សេងៗ</option>
           </select>
           <div id="leaveTypeHint" style="display:none;margin-top:6px;font-size:0.72rem;color:var(--text-muted);"></div>
@@ -465,8 +486,10 @@ function leaveWeightDays(req) {
 }
 // ម៉ោងច្បាប់មិនពេញថ្ងៃ (បង់ប្រាក់) តាមថ្ងៃ សម្រាប់គណនាប្រាក់ខែប៉ាន់ស្មាន
 let partialLeaveByDate = {};
+let leaveTypeByDate = {};   // ប្រភេទច្បាប់តាមថ្ងៃ (annual / paid / ...) សម្រាប់បង្ហាញឈ្មោះស្ថានភាពដូច Admin
 async function loadMyPartialLeaves() {
   partialLeaveByDate = {};
+  leaveTypeByDate = {};
   const session = getSession();
   if (!session) return;
   const { data, error } = await supabaseClient.from('leave_requests')
@@ -474,6 +497,7 @@ async function loadMyPartialLeaves() {
   if (error) return;
   const std = settings.standardHours > 0 ? settings.standardHours : 8;
   (data || []).forEach(r => {
+    datesInRange(r.start_date, r.end_date).forEach(dt => { leaveTypeByDate[dt] = r.leave_type; });
     const u = leaveUnitOf(r);
     if (u.unit === 'day' || r.leave_type === 'unpaid') return;
     const h = u.unit === 'half' ? std / 2 : Math.min(u.hours, std);
@@ -481,7 +505,16 @@ async function loadMyPartialLeaves() {
   });
 }
 
-const LEAVE_TYPE_LABELS = { annual: 'ច្បាប់ប្រចាំឆ្នាំ', paid: 'ច្បាប់មានប្រាក់ខែ (ពិសេស)', sick: 'ច្បាប់ឈឺ', maternity: 'ច្បាប់សម្រាលកូន', unpaid: 'ច្បាប់គ្មានប្រាក់ខែ', other: 'ផ្សេងៗ' };
+const LEAVE_TYPE_LABELS = { annual: 'សម្រាកបំណាច់ឆ្នាំ', paid: 'សម្រាកមានប្រាក់ឈ្នូល', sick: 'សម្រាកឈឺ', maternity: 'សម្រាកសម្រាលកូន', unpaid: 'សម្រាកគ្មានប្រាក់ឈ្នូល', other: 'ផ្សេងៗ' };
+// ឈ្មោះស្ថានភាពក្នុងតារាងវត្តមាន (ដូច dropdown Admin)
+function empStatusLabel(date, status) {
+  if (status === 'leave') {
+    const ty = leaveTypeByDate[date];
+    if (ty === 'annual') return 'សម្រាកបំណាច់ឆ្នាំ';
+    if (ty === 'paid') return 'សម្រាកមានប្រាក់ឈ្នូល';
+  }
+  return STATUS_LABELS[status] || '-';
+}
 const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
@@ -664,12 +697,16 @@ function computeRow(salary, record, date) {
   const foodPayRiel = (status === 'present' && workedFullDay && leavePayHours <= 0) ? settings.foodDaily : 0;
   // ប្រាក់បាយ OT៖ បន្ថែម foodOT រៀងរាល់ 2 ម៉ោង OT (OT 2ម៉ោង = 1 ដង, OT 4ម៉ោង = 2 ដង)
   const foodOtPayRiel = Math.floor(otHours / SHIFT.otMealBlockHours + 1e-9) * settings.foodOT;
+  // ច្បាប់/សម្រាក៖ ម៉ោង + ប្រាក់ បង្ហាញដាច់ដោយឡែក (ដូច Admin) — ច្បាប់ពេញថ្ងៃ បង្ហាញតែប្រាក់; total នៅដដែល
+  const leaveHours = status === 'leave' ? 0 : leavePayHours;
+  const leavePay = round4(status === 'leave' ? dailyRate : hourlyRate * leavePayHours);
+  const workPay = status === 'leave' ? 0 : round4(hourlyRate * mult * normalHours);
   const exchangeRate = settings.exchangeRate > 0 ? settings.exchangeRate : 1;
   const foodPay = round4(foodPayRiel / exchangeRate);
   const foodOtPay = round4(foodOtPayRiel / exchangeRate);
   const total = round4(normalPay + otPay + foodPay + foodOtPay);
   const riel = Math.round(total * settings.exchangeRate);
-  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult };
+  return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leaveHours, leavePay, workPay };
 }
 
 function todayStr() {
@@ -1673,7 +1710,7 @@ async function loadMonthAttendance(month) {
 async function renderAttendanceTabEmp() {
   const month = document.getElementById('attMonthInput').value || todayStr().slice(0, 7);
   const tbody = document.getElementById('empAttBody');
-  tbody.innerHTML = '<tr><td colspan="16">កំពុងផ្ទុក...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="18">កំពុងផ្ទុក...</td></tr>';
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
@@ -1690,20 +1727,22 @@ async function renderAttendanceTabEmp() {
     return `<tr${dayKind(date) ? ` data-day="${dayKind(date)}"` : ''}>
       <td style="white-space:nowrap;">${date}</td>
       <td>${dayLabelHl(date)}</td>
-      <td>${r.checkin || '-'}</td>
-      <td>${r.breakOut || '-'}</td>
-      <td>${r.breakIn || '-'}</td>
-      <td>${r.checkout || '-'}</td>
-      <td>${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
-      <td>${STATUS_LABELS[r.status] || '-'}</td>
-      <td>${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
-      <td>$${fmtUSD4(r.normalPay)}</td>
-      <td>${r.otHours ? fmtHours(r.otHours) : '-'}</td>
-      <td>$${fmtUSD4(r.otPay)}</td>
-      <td>${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
-      <td>${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
-      <td><strong>$${fmtUSD4(r.total)}</strong></td>
-      <td>${fmtRiel(r.riel)} ៛</td>
+      <td class="c-work">${r.checkin || '-'}</td>
+      <td class="c-work">${r.breakOut || '-'}</td>
+      <td class="c-work">${r.breakIn || '-'}</td>
+      <td class="c-work">${r.checkout || '-'}</td>
+      <td class="c-work">${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
+      <td class="c-work">${empStatusLabel(date, r.status)}</td>
+      <td class="c-nor g-s${r.normalHours ? '' : ' z'}">${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
+      <td class="c-nor${r.workPay ? '' : ' z'}">$${fmtUSD4(r.workPay)}</td>
+      <td class="c-ot g-s${r.otHours ? ' has' : ' z'}">${r.otHours ? fmtHours(r.otHours) : '-'}</td>
+      <td class="c-ot${r.otPay ? ' has' : ' z'}">$${fmtUSD4(r.otPay)}</td>
+      <td class="c-lv g-s${r.leaveHours ? ' has' : ' z'}">${r.leaveHours ? fmtHours(r.leaveHours) : '-'}</td>
+      <td class="c-lv${r.leavePay ? ' has' : ' z'}">$${fmtUSD4(r.leavePay)}</td>
+      <td class="c-fd g-s${r.foodPayRiel ? '' : ' z'}">${r.foodPayRiel ? fmtRiel(r.foodPayRiel) + ' ៛' : '-'}</td>
+      <td class="c-fd${r.foodOtPayRiel ? '' : ' z'}">${r.foodOtPayRiel ? fmtRiel(r.foodOtPayRiel) + ' ៛' : '-'}</td>
+      <td class="c-tt g-s"><strong>$${fmtUSD4(r.total)}</strong></td>
+      <td class="c-tt">${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
 
@@ -2112,7 +2151,7 @@ function printAttendanceEmp() {
   printTable.querySelectorAll('tr[data-day]').forEach(tr => {
     const c = HL[tr.dataset.day];
     if (!c) return;
-    tr.querySelectorAll('td').forEach(td => { td.style.cssText += `;background:${c.bg} !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;`; });
+    Array.from(tr.querySelectorAll('td')).slice(0, 2).forEach(td => { td.style.cssText += `;background:${c.bg} !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;`; });
     tr.querySelectorAll('.day-hl').forEach(sp => { sp.style.cssText = `font-weight:700;color:${c.fg};`; });
   });
   const legend = `<div style="margin-top:8px;font-size:10px;color:#374151;display:flex;gap:16px;align-items:center;">
@@ -2127,6 +2166,24 @@ function printAttendanceEmp() {
       <div><strong>តួនាទី៖</strong> ${escapeHtml(currentEmployee.position || '-')}</div>
       <div><strong>វេន៖</strong> ${escapeHtml(sh.name)} (${fmtMinEmp(sh.start)}–${fmtMinEmp(sh.end)})</div>
     </div>
+    <style>
+      table.att-mini-table th, table.att-mini-table td { font-size:9.5px; padding:3px 2px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      table.att-mini-table th.c-work { background:#e0e7ff !important; border-bottom:3px solid #6366f1; }
+      table.att-mini-table th.c-nor  { background:#d1fae5 !important; border-bottom:3px solid #10b981; }
+      table.att-mini-table th.c-ot   { background:#ffedd5 !important; border-bottom:3px solid #f97316; }
+      table.att-mini-table th.c-lv   { background:#ede9fe !important; border-bottom:3px solid #a855f7; color:#6d28d9; }
+      table.att-mini-table th.c-fd   { background:#fef9c3 !important; border-bottom:3px solid #eab308; }
+      table.att-mini-table th.c-tt   { background:#e0f2fe !important; border-bottom:3px solid #0ea5e9; }
+      table.att-mini-table td.c-work { background:#f5f6ff !important; }
+      table.att-mini-table td.c-nor  { background:#f0fdf7 !important; }
+      table.att-mini-table td.c-ot   { background:#fff7ed !important; }
+      table.att-mini-table td.c-lv   { background:#f5f0ff !important; }
+      table.att-mini-table td.c-fd   { background:#fefce8 !important; }
+      table.att-mini-table td.c-tt   { background:#f0f9ff !important; }
+      table.att-mini-table td.c-lv.has { background:#e9d5ff !important; color:#6d28d9; font-weight:700; }
+      table.att-mini-table td.z { color:#9ca3af; }
+      table.att-mini-table .g-s { border-left:2px solid #64748b; }
+    </style>
     ${printTable.outerHTML}
     ${legend}
     <div style="margin-top:10px;font-size:10px;color:#6b7280;">បោះពុម្ពនៅថ្ងៃទី ${todayStr()}</div>
