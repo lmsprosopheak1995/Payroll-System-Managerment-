@@ -420,7 +420,21 @@
 <script>
 const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc3pmY3hsa2dmcmxqZnFzYWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTIyNzcsImV4cCI6MjEwNTI2ODI3N30.KEjw8VKbrFgSnNGkd0rqCneEvAaJ9ENuGFT5M4eu0jk';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ផ្ញើ token session របស់បុគ្គលិកជា header (x-app-session) ដើម្បីឱ្យ RLS ផ្ទៀងផ្ទាត់ (មើល session-policies.sql)
+const EMP_TOKEN_KEY = 'emp_portal_token';
+function getEmpToken() { try { return sessionStorage.getItem(EMP_TOKEN_KEY) || ''; } catch (e) { return ''; } }
+const sessionFetch = (input, init) => {
+  const tok = getEmpToken();
+  if (tok) {
+    try {
+      const headers = new Headers((init && init.headers) || {});
+      headers.set('x-app-session', tok);
+      return fetch(input, Object.assign({}, init, { headers }));
+    } catch (e) { /* ignore */ }
+  }
+  return fetch(input, init);
+};
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: sessionFetch } });
 
 const SESSION_KEY = 'emp_portal_session';
 const KHMER_WEEKDAYS = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
@@ -694,10 +708,24 @@ async function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
   if (!username || !password) { showLogin('សូមបំពេញអត្តលេខ និងពាក្យសម្ងាត់'); return; }
-  const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password: password });
-  if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
-  if (!data || data.length === 0) { showLogin('អត្តលេខ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
-  setSession({ id: data[0].id, name: data[0].name });
+  // ចូលគណនីដោយទទួល token session (create_employee_session) — បើ function មិនទាន់មាន ត្រឡប់ទៅវិធីចាស់ (login_employee)
+  const r = await supabaseClient.rpc('create_employee_session', { p_username: username, p_password: password });
+  if (r.error && /PGRST202|could not find the function|does not exist/i.test((r.error.code || '') + ' ' + (r.error.message || ''))) {
+    const { data, error } = await supabaseClient.rpc('login_employee', { p_username: username, p_password: password });
+    if (error) { showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
+    if (!data || data.length === 0) { showLogin('អត្តលេខ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+    sessionStorage.removeItem(EMP_TOKEN_KEY);
+    setSession({ id: data[0].id, name: data[0].name });
+  } else if (r.error) {
+    if (/too_many_attempts/.test(r.error.message || '')) showLogin('ព្យាយាមខុសច្រើនដងពេក សូមរង់ចាំ ១៥ នាទី ហើយព្យាយាមម្តងទៀត');
+    else showLogin('មានបញ្ហាក្នុងការចូលគណនី៖ ' + r.error.message);
+    return;
+  } else if (!r.data || !r.data.ok) {
+    showLogin('អត្តលេខ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return;
+  } else {
+    sessionStorage.setItem(EMP_TOKEN_KEY, r.data.token);
+    setSession({ id: r.data.id, name: r.data.name });
+  }
   document.getElementById('loginPassword').value = '';
   await showMain();
 }
@@ -705,12 +733,24 @@ async function doLogin() {
 function doLogout() {
   hideEmpLoadWarning();
   stopEmpScanner();
+  const tok = getEmpToken();
+  if (tok) { supabaseClient.rpc('end_session', { p_token: tok }).then(() => {}, () => {}); }   // បញ្ចប់ session នៅ server
+  try { sessionStorage.removeItem(EMP_TOKEN_KEY); } catch (e) { /* ignore */ }
   clearSession();
   showLogin();
 }
 
+// អានការកំណត់៖ មាន token → view app_settings_portal (គ្មាន hash ពាក្យសម្ងាត់ / កូដ QR) · បើមិនមាន → តារាងដូចមុន
+async function readSettingsRow(cols) {
+  if (getEmpToken()) {
+    const r = await supabaseClient.from('app_settings_portal').select(cols || '*').eq('id', 1).maybeSingle();
+    if (!r.error && r.data) return { data: r.data, error: null };
+  }
+  return await supabaseClient.from('app_settings').select(cols || '*').eq('id', 1).maybeSingle();
+}
+
 async function loadSettings() {
-  const { data, error } = await supabaseClient.from('app_settings').select('*').eq('id', 1).maybeSingle();
+  const { data, error } = await readSettingsRow('*');
   if (error || !data) { settings = { ...DEFAULT_SETTINGS }; return; }
   settings = {
     standardStart: data.standard_start ?? DEFAULT_SETTINGS.standardStart,
@@ -1240,7 +1280,7 @@ function applyScanLockUI() {
 
 async function refreshScanLock() {
   if (!getSession()) return;
-  const { data: fl, error: fe } = await supabaseClient.from('app_settings').select('scan_enabled, scan_off_ids').eq('id', 1).maybeSingle();
+  const { data: fl, error: fe } = await readSettingsRow('scan_enabled, scan_off_ids');
   if (!fe && fl) {
     settings.scanEnabled = fl.scan_enabled !== false;
     settings.scanOffIds = Array.isArray(fl.scan_off_ids) ? fl.scan_off_ids.map(String) : [];
@@ -1337,6 +1377,48 @@ async function handleEmpScan(decodedText) {
   const scannedCode = (decodedText || '').trim();
   const resultEl = document.getElementById('empScanResult');
   const fail = msg => { resultEl.style.color = 'var(--danger)'; resultEl.textContent = msg; setTimeout(() => { empScanBusy = false; }, 1500); };
+
+  // វិធីថ្មី៖ server ពិនិត្យកូដ QR + ក្បួនបិទ/បើកស្កេន + កត់ត្រា (emp_clock) — កូដ QR មិនត្រូវទាញមក browser ទៀតទេ
+  // បើមិនមាន token ឬ function មិនទាន់មាន → ធ្លាក់ទៅវិធីចាស់ខាងក្រោម
+  if (getEmpToken()) {
+    resultEl.style.color = 'var(--text-muted)';
+    resultEl.textContent = '⏳ កំពុងកត់ត្រា...';
+    const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode });
+    const unavailable = ce && (/PGRST202|could not find the function|not_authenticated/i.test((ce.code || '') + ' ' + (ce.message || '')) || ce.code === '28000');
+    if (ce && !unavailable) { stopEmpScanner(); fail('✕ កត់ត្រាមិនជោគជ័យ៖ ' + ce.message); return; }
+    if (!ce) {
+      if (!ck || !ck.ok) {
+        const at = ck && ck.open_at ? ck.open_at + ' ព្រឹក' : '';
+        const E = {
+          no_code: '✕ មិនទាន់មានកូដ QR កន្លែងធ្វើការទេ សូមទាក់ទងអ្នកគ្រប់គ្រង',
+          bad_code: '✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ',
+          too_far: '✕ អ្នកនៅឆ្ងាយពីកន្លែងធ្វើការ',
+          no_location: '✕ សូមអនុញ្ញាតទីតាំង (Location) ដើម្បីកត់វត្តមាន',
+          too_early: '✕ ការស្កេនបិទ — នឹងបើកវិញនៅម៉ោង ' + at,
+          closed_after_checkout: '✕ អ្នកបានចេញពីការងាររួចហើយ — ការស្កេនបើកវិញនៅម៉ោង ' + at + 'ស្អែក',
+          scan_disabled: '✕ អ្នកគ្រប់គ្រងបានបិទការស្កេនបណ្តោះអាសន្ន',
+          scan_disabled_for_you: '✕ ការស្កេនរបស់អ្នកត្រូវបានបិទដោយអ្នកគ្រប់គ្រង',
+        };
+        const code = ck && ck.error;
+        if (code && code !== 'bad_code' && code !== 'no_code') { stopEmpScanner(); refreshScanLock(); }
+        fail(E[code] || '✕ កត់ត្រាមិនជោគជ័យ');
+        return;
+      }
+      stopEmpScanner();
+      await renderClockBox();
+      await renderHistory();
+      resultEl.textContent = '';
+      showScanVerifyPopup(ck.step, ck.step === 'done' ? '' : (ck.time || ''));
+      if (ck.step === 'checkout') { scanCheckedOutDate = todayStr(); applyScanLockUI(); }
+      empScanBusy = false;
+      return;
+    }
+    // unavailable → វិធីចាស់
+  }
+  if (!settings.workplaceCode) {   // វិធីចាស់ត្រូវការកូដ — ទាញពីតារាង (មានតែពេល emp_clock មិនទាន់ដំណើរការ)
+    const wr = await supabaseClient.from('app_settings').select('workplace_code').eq('id', 1).maybeSingle();
+    if (wr && wr.data) settings.workplaceCode = wr.data.workplace_code || null;
+  }
   if (!settings.workplaceCode) { fail('✕ មិនទាន់មានកូដ QR កន្លែងធ្វើការទេ សូមទាក់ទងអ្នកគ្រប់គ្រង'); return; }
   if (scannedCode !== settings.workplaceCode) { fail('✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ'); return; }
   resultEl.style.color = 'var(--text-muted)';

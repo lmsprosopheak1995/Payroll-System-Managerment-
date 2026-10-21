@@ -2,7 +2,20 @@
 // ដាក់ URL និង anon key របស់ Supabase project របស់អ្នកនៅទីនេះ
 const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc3pmY3hsa2dmcmxqZnFzYWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTIyNzcsImV4cCI6MjEwNTI2ODI3N30.KEjw8VKbrFgSnNGkd0rqCneEvAaJ9ENuGFT5M4eu0jk';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ផ្ញើ token session ជា header (x-app-session) គ្រប់សំណើ ដើម្បីឱ្យ RLS ក្នុង Supabase ផ្ទៀងផ្ទាត់ role (មើល session-policies.sql)
+// គ្មាន token (មិនទាន់ចូលគណនី) → ផ្ញើសំណើធម្មតាដូចមុន
+const sessionFetch = (input, init) => {
+  try {
+    const tok = sessionStorage.getItem('app_session_token');
+    if (tok) {
+      const headers = new Headers((init && init.headers) || {});
+      headers.set('x-app-session', tok);
+      return fetch(input, Object.assign({}, init, { headers }));
+    }
+  } catch (e) { /* ignore */ }
+  return fetch(input, init);
+};
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: sessionFetch } });
 
 let employees = [];
 let editingId = null;
