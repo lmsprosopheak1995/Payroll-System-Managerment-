@@ -213,48 +213,76 @@
         <tbody>${body}</tbody></table>`) : empty('មិនមានប្រវត្តិច្បាប់ក្នុងឆ្នាំនេះ')}`;
   }
 
-  // ---------- Tab 3: សង្ខេបតាមខែ ----------
+  // ---------- Tab 3: សង្ខេបតាមខែ (ទទួលបាន / ប្រើ / សមតុល្យបន្តបន្ទាប់) ----------
+  // ទទួលបានក្នុងមួយខែ = កូតាប្រចាំឆ្នាំ ÷ ចំនួនខែដែលបានបម្រើការ (១៨ ÷ ១២ = ១.៥) ចាប់ពីខែចូលធ្វើការ
   function monthlyData() {
     const year = selYear(), q = selSearch();
-    const typeF = ($('lvxMonType') && $('lvxMonType').value) || 'annual';
     const emps = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
-    const ids = new Set(emps.map(e => e.id));
-    const map = {};
-    emps.forEach(e => { map[e.id] = new Array(12).fill(0); });
-    leaveRequests.forEach(r => {
-      if (r.status !== 'approved' || !ids.has(r.employee_id)) return;
-      if (typeF !== 'all' && r.leave_type !== typeF) return;
-      leaveDaysByMonth(r, year).forEach((d, i) => { map[r.employee_id][i] += d; });
+    const list = emps.map(emp => {
+      const months = annualLeaveMonthsInYear(emp, year);         // 0-12
+      const quota = annualBaseQuota(emp, year, lbRules);         // កូតាពេញឆ្នាំ (បន្ទាប់ពីកាត់សមាមាត្រ)
+      const carry = annualCarryIn(emp, year, lbRules);           // ផ្ទេរមកពីឆ្នាំមុន
+      const perMonth = months > 0 ? quota / months : 0;
+      const firstMonth = 12 - months;                            // index ខែដំបូងដែលចាប់ផ្តើមទទួលបាន
+      const earned = [], used = new Array(12).fill(0), balance = [];
+      for (let i = 0; i < 12; i++) earned.push(i >= firstMonth && months > 0 ? perMonth : 0);
+      leaveRequests.forEach(r => {
+        if (r.employee_id !== emp.id || r.status !== 'approved' || r.leave_type !== 'annual') return;
+        leaveDaysByMonth(r, year).forEach((d, i) => { used[i] += d; });
+      });
+      let run = carry;
+      for (let i = 0; i < 12; i++) { run += earned[i] - used[i]; balance.push(round2(run)); }
+      return { emp, carry, earned, used, balance,
+        earnedTotal: earned.reduce((a, b) => a + b, 0), usedTotal: used.reduce((a, b) => a + b, 0) };
     });
-    return { emps, map, typeF };
+    return { list };
   }
 
   function renderMonthly() {
-    const { emps, map, typeF } = monthlyData();
-    const typeOpts = [['annual', LEAVE_TYPE_LABELS.annual], ['paid', LEAVE_TYPE_LABELS.paid], ['all', 'ច្បាប់ទាំងអស់ (គ្រប់ប្រភេទ)']]
-      .concat(['sick', 'maternity', 'unpaid', 'other'].map(k => [k, LEAVE_TYPE_LABELS[k]]))
-      .map(([k, l]) => `<option value="${k}"${typeF === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
-    const colTotals = new Array(12).fill(0);
-    const cell = v => (v ? `<strong>${num(v)}</strong>` : '<span style="color:var(--text-muted,#9ca3af);">-</span>');
+    const { list } = monthlyData();
+    const dash = '<span style="color:var(--text-muted,#9ca3af);">-</span>';
+    const f = v => (v ? num(v, 2).replace(/\.?0+$/, m => (m === '.00' ? '.0' : m)) : dash);
+    const bal = v => v < 0 ? `<strong style="color:var(--danger,#e11d48);">${num(v)}</strong>` : `<strong>${num(v)}</strong>`;
 
-    const body = emps.map(e => {
-      const m = map[e.id];
-      m.forEach((v, i) => { colTotals[i] += v; });
-      const tot = m.reduce((a, b) => a + b, 0);
-      return `<tr><td>${escapeHtml(e.name)}</td>${m.map(v => `<td>${cell(v)}</td>`).join('')}<td><strong>${num(tot)}</strong></td></tr>`;
+    const body = list.map(x => {
+      const e = x.emp;
+      const endBal = x.balance[11];
+      return `
+      <tr>
+        <td rowspan="3"><strong>${escapeHtml(e.name)}</strong><div style="font-size:0.7rem;color:var(--text-muted,#6b7280);">${escapeHtml(e.username || '')}</div></td>
+        <td>ទទួលបាន</td><td>${x.carry ? num(x.carry) : dash}</td>
+        ${x.earned.map(v => `<td>${f(v)}</td>`).join('')}
+        <td><strong>${num(x.earnedTotal, 2)}</strong></td>
+      </tr>
+      <tr>
+        <td>ប្រើ</td><td>${dash}</td>
+        ${x.used.map(v => `<td>${f(v)}</td>`).join('')}
+        <td><strong>${num(x.usedTotal, 2)}</strong></td>
+      </tr>
+      <tr style="border-bottom:2px solid var(--border,#e5e7eb);">
+        <td>សមតុល្យ</td><td>${dash}</td>
+        ${x.balance.map(v => `<td>${bal(v)}</td>`).join('')}
+        <td>${bal(endBal)}</td>
+      </tr>`;
     }).join('');
-    const grand = colTotals.reduce((a, b) => a + b, 0);
+
+    const sumArr = key => { const t = new Array(12).fill(0); list.forEach(x => x[key].forEach((v, i) => { t[i] += v; })); return t; };
+    const tE = sumArr('earned'), tU = sumArr('used'), tB = sumArr('balance');
+    const carryTotal = list.reduce((a, x) => a + x.carry, 0);
+    const foot = `
+      <tr><td rowspan="3"><strong>សរុប</strong></td><td>ទទួលបាន</td><td>${carryTotal ? num(carryTotal) : dash}</td>${tE.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tE.reduce((a, b) => a + b, 0))}</strong></td></tr>
+      <tr><td>ប្រើ</td><td>${dash}</td>${tU.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tU.reduce((a, b) => a + b, 0))}</strong></td></tr>
+      <tr><td>សមតុល្យ</td><td>${dash}</td>${tB.map(v => `<td>${bal(v)}</td>`).join('')}<td>${bal(tB[11])}</td></tr>`;
 
     $('lvxPanel').innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <select id="lvxMonType" class="lvx-filter">${typeOpts}</select>
         ${csvBtn}
-        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ឯកតា៖ ថ្ងៃ (កន្លះថ្ងៃ = 0.5, តាមម៉ោង = ម៉ោង ÷ ម៉ោងស្តង់ដារ)</span>
+        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ច្បាប់ប្រចាំឆ្នាំ ឆ្នាំ ${selYear()} · ទទួលបាន = កូតា ÷ ខែបម្រើការ (ឧ. ១៨ ÷ ១២ = ១.៥ ថ្ងៃ/ខែ) · សមតុល្យ = ផ្ទេរមក + ទទួលបានសរុប − ប្រើសរុប ដល់ចុងខែនោះ</span>
       </div>
-      ${emps.length ? tableWrap(`<table>
-        <thead><tr><th>បុគ្គលិក</th>${MONTH_LABELS.map(m => `<th>${m}</th>`).join('')}<th>សរុប</th></tr></thead>
+      ${list.length ? tableWrap(`<table>
+        <thead><tr><th>បុគ្គលិក</th><th></th><th>ផ្ទេរមក</th>${MONTH_LABELS.map(m => `<th>${m}</th>`).join('')}<th>សរុប / ចុងឆ្នាំ</th></tr></thead>
         <tbody>${body}</tbody>
-        <tfoot><tr><td><strong>សរុប</strong></td>${colTotals.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(grand)}</strong></td></tr></tfoot>
+        <tfoot>${foot}</tfoot>
       </table>`) : empty('មិនមានបុគ្គលិក')}`;
   }
 
@@ -271,9 +299,13 @@
       historyRows().forEach(({ r, days }) => rows.push([r.start_date, r.end_date, empLabel(r.employee_id), LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type, leaveUnitLabel(r), round2(days), REQUEST_STATUS_LABELS[r.status] || r.status, stripUnitTag(r.reason)]));
       downloadCsv(`leave-history-${year}.csv`, rows);
     } else {
-      const { emps, map } = monthlyData();
-      const rows = [['បុគ្គលិក'].concat(MONTH_LABELS, ['សរុប'])];
-      emps.forEach(e => rows.push([e.name].concat(map[e.id].map(round2), [round2(map[e.id].reduce((a, b) => a + b, 0))])));
+      const { list } = monthlyData();
+      const rows = [['បុគ្គលិក', 'ប្រភេទ', 'ផ្ទេរមក'].concat(MONTH_LABELS, ['សរុប / ចុងឆ្នាំ'])];
+      list.forEach(x => {
+        rows.push([x.emp.name, 'ទទួលបាន', x.carry].concat(x.earned.map(round2), [round2(x.earnedTotal)]));
+        rows.push([x.emp.name, 'ប្រើ', ''].concat(x.used.map(round2), [round2(x.usedTotal)]));
+        rows.push([x.emp.name, 'សមតុល្យ', ''].concat(x.balance, [x.balance[11]]));
+      });
       downloadCsv(`leave-monthly-${year}.csv`, rows);
     }
   }
