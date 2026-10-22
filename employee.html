@@ -1452,7 +1452,7 @@ async function handleEmpScan(decodedText) {
     resultEl.textContent = '⏳ កំពុងកត់ត្រា...';
     const pos = await currentScanPosition();   // GPS (បើអនុញ្ញាត) — server កត់ត្រា និងបង្ខំតាមការកំណត់ Admin
     const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode, p_lat: pos ? pos.lat : null, p_lng: pos ? pos.lng : null });
-    const unavailable = ce && (/PGRST202|could not find the function|not_authenticated/i.test((ce.code || '') + ' ' + (ce.message || '')) || ce.code === '28000');
+    const unavailable = ce && (/PGRST202|could not find the function|not_authenticated|permission denied for function|42501/i.test((ce.code || '') + ' ' + (ce.message || '')) || ce.code === '28000');
     if (ce && !unavailable) { stopEmpScanner(); fail('✕ កត់ត្រាមិនជោគជ័យ៖ ' + ce.message); return; }
     if (!ce) {
       if (!ck || !ck.ok) {
