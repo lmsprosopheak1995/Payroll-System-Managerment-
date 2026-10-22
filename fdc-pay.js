@@ -66,16 +66,17 @@
         }
         note = 'គិតតាមថ្ងៃ';
       }
-      let daily = null, wd = null;
+      let daily = null, wd = null, parts = null;
       if (diag) {   // ពិនិត្យ៖ ផលបូក computeRow រាល់ថ្ងៃ ប្រៀបធៀបនឹងលេខដែលប្រើ
-        daily = 0;
+        daily = 0; parts = { n: 0, o: 0, f: 0 };
         days.filter(d => d >= from && d <= upto).forEach(d => {
           const rec = (attendance[d] && attendance[d][emp.id]) || {};
-          daily += computeRow(emp, rec, d).total || 0;
+          const r = computeRow(emp, rec, d);
+          daily += r.total || 0; parts.n += r.normalPay || 0; parts.o += r.otPay || 0; parts.f += (r.foodPay || 0) + (r.foodOtPay || 0);
         });
         try { wd = (snap || summarizeEmpMonth(emp, m)).workDays; } catch (e) { wd = null; }
       }
-      lines.push({ month: m, from, to: upto, usd, ben, note, daily, wd, locked, full });
+      lines.push({ month: m, from, to: upto, usd, ben, note, daily, wd, parts, locked, full });
       m = nextMonth(m);
     }
     const base = lines.reduce((s, l) => s + l.usd + (inclBenefits ? l.ben : 0), 0);
@@ -159,11 +160,14 @@
       const differs = l.daily != null && Math.abs(l.daily - l.usd) > 0.01;
       if (differs) diffs.push(l.month);
       return `<tr><td>${esc(l.month)}</td><td>${esc(l.from)} → ${esc(l.to)}</td><td style="text-align:right;"><b>${money(use)}</b></td>
-        <td style="text-align:right;${differs ? 'color:#f97316;font-weight:700;' : ''}">${money(l.daily)}</td><td>${l.wd == null ? '' : esc(l.wd)}</td><td>${l.locked ? '🔒 ' : ''}${esc(l.note)}</td></tr>`;
+        <td style="text-align:right;${differs ? 'color:#f97316;font-weight:700;' : ''}">${money(l.daily)}</td><td style="text-align:right;">${l.parts ? money(l.parts.n) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.o) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.f) : ''}</td><td>${l.wd == null ? '' : esc(l.wd)}</td><td>${l.locked ? '🔒 ' : ''}${esc(l.note)}</td></tr>`;
     }).join('');
+    const sal = Number(emp && emp.salary) || 0;
+    const warnSal = !sal ? '⚠ ប្រាក់ខែគោលរបស់បុគ្គលិកនេះជា $0/ទទេ — ប្រាក់ឈ្នួលនឹងមានតែប្រាក់បាយ (មើលក្នុងបញ្ជីបុគ្គលិក)។ '
+      : (!(settings && settings.workDaysPerMonth > 0) ? '⚠ ការកំណត់ "ថ្ងៃធ្វើការ/ខែ" ជា 0 — អត្រាប្រចាំថ្ងៃគិតបាន $0។ ' : '');
     return `<tr><td colspan="7" style="padding:10px 14px;background:rgba(14,165,233,0.06);">
-      <div style="font-size:0.78rem;margin-bottom:6px;">ប្រាក់ខែគោល៖ <b>${money(Number(emp && emp.salary) || 0)}</b> · ថ្ងៃគិតត្រឹម៖ ${esc(r.upto || '')}</div>
-      <div class="table-wrap"><table style="font-size:0.78rem;"><thead><tr><th>ខែ</th><th>ថ្ងៃគិត</th><th>ប្រាក់ដែលប្រើគណនា</th><th>ផលបូករាល់ថ្ងៃ (computeRow)</th><th>ថ្ងៃធ្វើការ</th><th>កំណត់ចំណាំ</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div style="font-size:0.78rem;margin-bottom:6px;">ប្រាក់ខែគោល៖ <b>${money(Number(emp && emp.salary) || 0)}</b> · ថ្ងៃគិតត្រឹម៖ ${esc(r.upto || '')}${warnSal ? `<div style="color:#dc2626;margin-top:4px;">${esc(warnSal)}</div>` : ''}</div>
+      <div class="table-wrap"><table style="font-size:0.78rem;"><thead><tr><th>ខែ</th><th>ថ្ងៃគិត</th><th>ប្រាក់ដែលប្រើគណនា</th><th>ផលបូករាល់ថ្ងៃ (computeRow)</th><th>ឈ្នួលធម្មតា</th><th>OT</th><th>បាយ</th><th>ថ្ងៃធ្វើការ</th><th>កំណត់ចំណាំ</th></tr></thead><tbody>${body}</tbody></table></div>
       ${diffs.length ? `<div class="scan-hint" style="color:#f97316;margin-top:6px;">⚠ ខែ ${esc(diffs.join(', '))}៖ លេខពី Payroll (summarizeEmpMonth/snapshot) មិនស្មើផលបូករាល់ថ្ងៃ — ផ្ទៀងផ្ទាត់ជាមួយ Payroll ប្រចាំខែ</div>` : ''}
     </td></tr>`;
   }
