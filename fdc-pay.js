@@ -16,7 +16,7 @@
   const rielText = usd => rielOf(usd) ? rielOf(usd).toLocaleString('en-US') + ' ៛' : '';
   const today = () => (typeof todayStr === 'function' ? todayStr() : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
 
-  let contracts = [], missing = false, inclBenefits = false;
+  let contracts = [], missing = false, inclBenefits = false, lockedActual = true;
 
   const nextMonth = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo, 1)); return d.toISOString().slice(0, 7); };
   const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -30,6 +30,26 @@
   const diffDays = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
   // ---------- គណនា ----------
+  // ផលបូកប្រាក់ពីវត្តមានរាល់ថ្ងៃ (computeRow) ក្នុងចន្លោះថ្ងៃ from..upto
+  function sumDays(emp, days, from, upto) {
+    const o = { total: 0, n: 0, o: 0, f: 0 };
+    days.filter(d => d >= from && d <= upto).forEach(d => {
+      const rec = (attendance[d] && attendance[d][emp.id]) || {};
+      const r = computeRow(emp, rec, d);
+      o.total += r.total || 0; o.n += r.normalPay || 0; o.o += r.otPay || 0; o.f += (r.foodPay || 0) + (r.foodOtPay || 0);
+    });
+    return o;
+  }
+  // ប្រាក់ឈ្នួលដែលបញ្ចូលដោយដៃសម្រាប់ខែ (ខែដែលគ្មានវត្តមានក្នុងប្រព័ន្ធ) — null បើគ្មាន
+  function manualOf(c, m) {
+    const mw = c && c.manual_wages;
+    if (!mw || typeof mw !== 'object') return null;
+    const v = mw[m];
+    if (v === undefined || v === null || v === '') return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  }
+
   function calcContract(c, diag) {
     const emp = employees.find(e => e.id === c.employee_id);
     if (!emp) return { error: 'រកមិនឃើញបុគ្គលិក', lines: [], base: 0, amount: 0 };
@@ -45,38 +65,34 @@
       const from = c.start_date > first ? c.start_date : first;
       const upto = to < last ? to : last;
       const full = from === first && upto === last;
+      const share = (diffDays(from, upto) + 1) / days.length;
       const snap = typeof getLockedSnapshot === 'function' ? getLockedSnapshot(emp.id, m) : null;   // ខែបិទរួច → លេខ snapshot ដែលបានកក
       const locked = !!snap;
-      let usd = 0, ben = 0, note = '';
-      if (full || locked) {
+      let live = null;
+      const need = () => live || (live = sumDays(emp, days, from, upto));
+      const man = manualOf(c, m);
+      let usd = 0, ben = 0, note = '', manual = false;
+      if (man !== null) {                       // ① បញ្ចូលដោយដៃ (ខែដែលគ្មានវត្តមានក្នុងប្រព័ន្ធ)
+        usd = man; manual = true; note = 'បញ្ចូលដោយដៃ';
+      } else if (full) {                        // ខែពេញក្នុងកិច្ចសន្យា
         const t = snap || summarizeEmpMonth(emp, m);
         usd = t.total || 0; ben = t.benefitsUSD || 0;
-        if (!full) {   // ខែបិទរួច តែកិច្ចសន្យាគ្របលើតែផ្នែកខែ → សមាមាត្រតាមថ្ងៃ
-          const share = (diffDays(from, upto) + 1) / days.length;
-          usd *= share; ben *= share; approx = true; note = 'ប្រហែល (ខែបិទរួច · សមាមាត្រតាមថ្ងៃ)';
-        } else if (locked) { note = 'ខែបិទរួច'; }
-      } else {
-        days.filter(d => d >= from && d <= upto).forEach(d => {
-          const rec = (attendance[d] && attendance[d][emp.id]) || {};
-          usd += computeRow(emp, rec, d).total || 0;
-        });
-        if (inclBenefits) {   // អត្ថប្រយោជន៍ខែ → សមាមាត្រតាមថ្ងៃក្នុងកិច្ចសន្យា
-          const t = summarizeEmpMonth(emp, m);
-          ben = (t.benefitsUSD || 0) * (diffDays(from, upto) + 1) / days.length;
-        }
+        if (locked) note = 'ខែបិទរួច';
+      } else if (locked) {                      // ② ខែបិទរួច តែកិច្ចសន្យាគ្របលើតែផ្នែកខែ
+        ben = (snap.benefitsUSD || 0) * share;  // អត្ថប្រយោជន៍ជារបស់ខែ → សមាមាត្រតាមថ្ងៃ
+        if (lockedActual) { usd = need().total; note = 'ខែបិទរួច · គិតតាមថ្ងៃពិត'; }
+        else { usd = (snap.total || 0) * share; approx = true; note = 'ប្រហែល (ខែបិទរួច · សមាមាត្រតាមថ្ងៃ)'; }
+      } else {                                  // ខែមិនទាន់បិទ និងមិនពេញ → គិតតាមថ្ងៃ
+        usd = need().total;
+        if (inclBenefits) { const t = summarizeEmpMonth(emp, m); ben = (t.benefitsUSD || 0) * share; }
         note = 'គិតតាមថ្ងៃ';
       }
       let daily = null, wd = null, parts = null;
       if (diag) {   // ពិនិត្យ៖ ផលបូក computeRow រាល់ថ្ងៃ ប្រៀបធៀបនឹងលេខដែលប្រើ
-        daily = 0; parts = { n: 0, o: 0, f: 0 };
-        days.filter(d => d >= from && d <= upto).forEach(d => {
-          const rec = (attendance[d] && attendance[d][emp.id]) || {};
-          const r = computeRow(emp, rec, d);
-          daily += r.total || 0; parts.n += r.normalPay || 0; parts.o += r.otPay || 0; parts.f += (r.foodPay || 0) + (r.foodOtPay || 0);
-        });
+        const d = need(); daily = d.total; parts = { n: d.n, o: d.o, f: d.f };
         try { wd = (snap || summarizeEmpMonth(emp, m)).workDays; } catch (e) { wd = null; }
       }
-      lines.push({ month: m, from, to: upto, usd, ben, note, daily, wd, parts, locked, full });
+      lines.push({ month: m, from, to: upto, usd, ben, note, daily, wd, parts, locked, full, manual, manualVal: man });
       m = nextMonth(m);
     }
     const base = lines.reduce((s, l) => s + l.usd + (inclBenefits ? l.ben : 0), 0);
@@ -126,6 +142,9 @@
         <label style="display:inline-flex;gap:6px;align-items:center;margin-top:10px;font-size:0.8rem;">
           <input type="checkbox" id="fdcInclBen" onchange="fdcPay.toggleBen(this.checked)"> រួមប្រាក់អត្ថប្រយោជន៍ (benefit) ក្នុងមូលដ្ឋានគណនា
         </label>
+        <label style="display:inline-flex;gap:6px;align-items:center;margin:10px 0 0 18px;font-size:0.8rem;">
+          <input type="checkbox" id="fdcLockedActual" checked onchange="fdcPay.toggleLocked(this.checked)"> ខែបិទរួចដែលកិច្ចសន្យាគ្របលើតែផ្នែកខែ៖ គិតតាមវត្តមានថ្ងៃពិត (មិនគិតសមាមាត្រ snapshot)
+        </label>
       </div>
       <div class="portal-card" style="padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ខែដែលកិច្ចសន្យាបញ្ចប់</label><input type="month" id="fdcRepMonth"></div>
@@ -157,17 +176,19 @@
     const diffs = [];
     const body = r.lines.map(l => {
       const use = l.usd + (inclBenefits ? l.ben : 0);
-      const differs = l.daily != null && Math.abs(l.daily - l.usd) > 0.01;
+      const differs = !l.manual && l.daily != null && Math.abs(l.daily - l.usd) > 0.01;
       if (differs) diffs.push(l.month);
       return `<tr><td>${esc(l.month)}</td><td>${esc(l.from)} → ${esc(l.to)}</td><td style="text-align:right;"><b>${money(use)}</b></td>
-        <td style="text-align:right;${differs ? 'color:#f97316;font-weight:700;' : ''}">${money(l.daily)}</td><td style="text-align:right;">${l.parts ? money(l.parts.n) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.o) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.f) : ''}</td><td>${l.wd == null ? '' : esc(l.wd)}</td><td>${l.locked ? '🔒 ' : ''}${esc(l.note)}</td></tr>`;
+        <td style="text-align:right;${differs ? 'color:#f97316;font-weight:700;' : ''}">${money(l.daily)}</td><td style="text-align:right;">${l.parts ? money(l.parts.n) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.o) : ''}</td><td style="text-align:right;">${l.parts ? money(l.parts.f) : ''}</td><td>${l.wd == null ? '' : esc(l.wd)}</td>
+        <td><input type="number" step="0.01" min="0" style="width:92px;" placeholder="—" title="ប្រាក់ឈ្នួលសរុបរបស់ខែនេះ (ក្នុងអំឡុងកិច្ចសន្យា) — មិនគុណសមាមាត្របន្ថែមទេ។ ទុកទទេ = ប្រើវត្តមានក្នុងប្រព័ន្ធ" value="${l.manual ? esc(l.manualVal) : ''}" ${c.paid_at ? 'disabled' : ''} data-id="${esc(c.id)}" data-m="${esc(l.month)}" onchange="fdcPay.setManual(this.dataset.id, this.dataset.m, this.value)"></td>
+        <td>${l.locked ? '🔒 ' : ''}${esc(l.note)}${(l.wd === 0 && !l.manual) ? '<div style="color:#f97316;font-size:0.72rem;">គ្មានវត្តមានក្នុងប្រព័ន្ធ — អាចបញ្ចូលដោយដៃ</div>' : ''}</td></tr>`;
     }).join('');
     const sal = Number(emp && emp.salary) || 0;
     const warnSal = !sal ? '⚠ ប្រាក់ខែគោលរបស់បុគ្គលិកនេះជា $0/ទទេ — ប្រាក់ឈ្នួលនឹងមានតែប្រាក់បាយ (មើលក្នុងបញ្ជីបុគ្គលិក)។ '
       : (!(settings && settings.workDaysPerMonth > 0) ? '⚠ ការកំណត់ "ថ្ងៃធ្វើការ/ខែ" ជា 0 — អត្រាប្រចាំថ្ងៃគិតបាន $0។ ' : '');
     return `<tr><td colspan="7" style="padding:10px 14px;background:rgba(14,165,233,0.06);">
       <div style="font-size:0.78rem;margin-bottom:6px;">ប្រាក់ខែគោល៖ <b>${money(Number(emp && emp.salary) || 0)}</b> · ថ្ងៃគិតត្រឹម៖ ${esc(r.upto || '')}${warnSal ? `<div style="color:#dc2626;margin-top:4px;">${esc(warnSal)}</div>` : ''}</div>
-      <div class="table-wrap"><table style="font-size:0.78rem;"><thead><tr><th>ខែ</th><th>ថ្ងៃគិត</th><th>ប្រាក់ដែលប្រើគណនា</th><th>ផលបូករាល់ថ្ងៃ (computeRow)</th><th>ឈ្នួលធម្មតា</th><th>OT</th><th>បាយ</th><th>ថ្ងៃធ្វើការ</th><th>កំណត់ចំណាំ</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="table-wrap"><table style="font-size:0.78rem;"><thead><tr><th>ខែ</th><th>ថ្ងៃគិត</th><th>ប្រាក់ដែលប្រើគណនា</th><th>ផលបូករាល់ថ្ងៃ (computeRow)</th><th>ឈ្នួលធម្មតា</th><th>OT</th><th>បាយ</th><th>ថ្ងៃធ្វើការ</th><th>បញ្ចូលដោយដៃ ($)</th><th>កំណត់ចំណាំ</th></tr></thead><tbody>${body}</tbody></table></div>
       ${diffs.length ? `<div class="scan-hint" style="color:#f97316;margin-top:6px;">⚠ ខែ ${esc(diffs.join(', '))}៖ លេខពី Payroll (summarizeEmpMonth/snapshot) មិនស្មើផលបូករាល់ថ្ងៃ — ផ្ទៀងផ្ទាត់ជាមួយ Payroll ប្រចាំខែ</div>` : ''}
     </td></tr>`;
   }
@@ -284,6 +305,27 @@
     else printHtml('ប័ណ្ណទូទាត់ FDC — ' + emp.name, html, false);
   }
 
+  async function setManual(id, month, val) {
+    const c = contracts.find(x => String(x.id) === String(id));
+    if (!c || c.paid_at) return;
+    const mw = Object.assign({}, (c.manual_wages && typeof c.manual_wages === 'object') ? c.manual_wages : {});
+    const v = String(val == null ? '' : val).trim();
+    if (v === '') delete mw[month];
+    else {
+      const n = parseFloat(v);
+      if (isNaN(n) || n < 0) { customAlert('សូមបញ្ចូលចំនួនប្រាក់ជាលេខ (≥ 0)'); render(); return; }
+      mw[month] = Math.round(n * 100) / 100;
+    }
+    const { data, error } = await supabaseClient.from('employee_contracts').update({ manual_wages: mw }).eq('id', c.id).select('id');
+    if (error || !data || !data.length) {
+      customAlert('រក្សាទុកមិនបានទេ៖ ' + (error ? error.message : 'គ្មានសិទ្ធិ (RLS) ឬរកមិនឃើញ') + ((error && /manual_wages/.test(error.message)) ? '\nសូមរត់ fdc-contracts.sql ថ្មីក្នុង Supabase ជាមុន' : ''));
+      render();
+      return;
+    }
+    c.manual_wages = mw;
+    render();
+  }
+
   function renewSelect(c) {
     const v = c.renew_status || '';
     return `<select data-id="${esc(c.id)}" onchange="fdcPay.setRenew(this.dataset.id, this.value)" title="បន្ត / មិនបន្ត កិច្ចសន្យា"><option value="">បន្ត?</option><option value="renew"${v === 'renew' ? ' selected' : ''}>✔ បន្ត</option><option value="end"${v === 'end' ? ' selected' : ''}>✘ មិនបន្ត</option></select>`;
@@ -373,5 +415,5 @@ td.l { text-align:left; } th small { display:block; font-weight:400; }
     console.warn('fdc-pay.js: window.showTab មិនមាន — tab FDC នឹងមិនបើកដោយស្វ័យប្រវត្តិ');
   }
 
-  window.fdcPay = { toggle, applyDur, setRenew, printMonthly, add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
+  window.fdcPay = { setManual, toggleLocked: on => { lockedActual = !!on; render(); }, toggle, applyDur, setRenew, printMonthly, add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
 })();
