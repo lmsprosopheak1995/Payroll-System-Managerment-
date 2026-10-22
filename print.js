@@ -147,7 +147,7 @@ function summarizeEmpMonth(emp, month) {
   const snap = (typeof getLockedSnapshot === 'function') ? getLockedSnapshot(emp.id, month) : null;
   if (snap) return snap;
   const t = { workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, doubleDays: 0,
-    normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodRiel: 0, foodOtRiel: 0, total: 0, riel: 0 };
+    normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, workPay: 0, leavePay: 0, leaveHours: 0, foodRiel: 0, foodOtRiel: 0, total: 0, riel: 0 };
   daysInMonth(month).forEach(date => {
     const rec = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, rec, date);
@@ -158,6 +158,7 @@ function summarizeEmpMonth(emp, month) {
     if (r.late) t.lateDays++;
     t.normalHours += r.normalHours; t.otHours += r.otHours;
     t.normalPay += r.normalPay; t.otPay += r.otPay;
+    t.workPay += r.workPay || 0; t.leavePay += r.leavePay || 0; t.leaveHours += r.leaveHours || 0;   // ប្រាក់ច្បាប់ (LeavePay) បង្ហាញដាច់ដោយឡែក
     t.foodRiel += r.foodPayRiel; t.foodOtRiel += r.foodOtPayRiel;
     t.total += r.total; t.riel += r.riel;
   });
@@ -361,7 +362,8 @@ function payslipPageHtml(emp, month) {
       <tr><td>ថ្ងៃច្បាប់</td><td ${R}>${t.leaveDays} ថ្ងៃ</td></tr>
       <tr><td>ថ្ងៃអវត្តមាន</td><td ${R}>${t.absentDays} ថ្ងៃ</td></tr>
       <tr><td>ថ្ងៃមកយឺត</td><td ${R}>${t.lateDays} ថ្ងៃ</td></tr>
-      <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td ${R}>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</td></tr>
+      <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td ${R}>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.workPay != null ? t.workPay : t.normalPay)}</td></tr>
+      ${t.leavePay ? `<tr><td>សម្រាកមានប្រាក់ឈ្នួល (LeavePay)</td><td ${R}>$${fmtUSD(t.leavePay)}</td></tr>` : ''}
       <tr><td>ម៉ោងថែម / ប្រាក់</td><td ${R}>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</td></tr>
       <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td ${R}>${fmtRiel(t.foodRiel)} ៛</td></tr>
       <tr><td>ប្រាក់បាយថែមម៉ោង</td><td ${R}>${fmtRiel(t.foodOtRiel)} ៛</td></tr>

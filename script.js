@@ -748,7 +748,7 @@ function renderAttendanceTab() {
   const dates = daysInMonth(month);
 
   const daily = [];
-  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodRiel: 0, normalHours: 0 };
+  let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodRiel: 0, normalHours: 0, workPay: 0, leavePay: 0, leaveHours: 0, leaveDays: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
@@ -756,6 +756,8 @@ function renderAttendanceTab() {
     totals.total += r.total;
     totals.riel += r.riel;
     totals.normalPay += r.normalPay; totals.otPay += r.otPay; totals.foodPay += r.foodPay + r.foodOtPay;
+    totals.workPay += r.workPay || 0; totals.leavePay += r.leavePay || 0; totals.leaveHours += r.leaveHours || 0;
+    if (r.status === 'leave') totals.leaveDays++;
     totals.foodRiel += r.foodPayRiel + r.foodOtPayRiel; totals.normalHours += r.normalHours;
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
@@ -812,7 +814,8 @@ function renderAttendanceTab() {
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.normalPay)}</div><div class="label">ប្រាក់ឈ្នួលថ្ងៃធម្មតា ($)<br>(${fmtHours(totals.normalHours)} ម៉ោង)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.workPay)}</div><div class="label">ប្រាក់ឈ្នួលថ្ងៃធម្មតា ($)<br>(${fmtHours(totals.normalHours)} ម៉ោង)</div></div>
+    <div class="stat-card"><div class="num" style="color:#8b5cf6;">$${fmtUSD(totals.leavePay)}</div><div class="label">សម្រាកមានប្រាក់ឈ្នួល (LeavePay)<br>(${totals.leaveDays} ថ្ងៃ${totals.leaveHours ? ' + ' + fmtHours(totals.leaveHours) + ' ម៉ោង' : ''})</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.otPay)}</div><div class="label">ប្រាក់ថែមម៉ោង ($)<br>(${fmtHours(totals.otHours)} ម៉ោង)</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.foodPay)}</div><div class="label">ប្រាក់បាយ ($)<br>(${fmtRiel(totals.foodRiel)} ៛)</div></div>
     <div class="stat-card"><div class="num" style="color:#16a34a;">+$${fmtUSD(adj.benefits)}</div><div class="label">អត្ថប្រយោជន៍</div></div>
@@ -829,7 +832,8 @@ function renderAttendanceTab() {
   // (0) ប្រអប់បំបែកលម្អិត (ដើម)
   const boxHtml = `<div style="${cardCss}">
       ${lockHtml}
-      ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.normalPay))}
+      ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.workPay))}
+      ${row('សម្រាកមានប្រាក់ឈ្នួល (LeavePay)', '$' + fmtUSD(totals.leavePay), '#8b5cf6')}
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
@@ -2596,12 +2600,20 @@ function stopScanner() {
 
 // ==== យឺត / ច្បាប់ → កាត់លុយ ====
 const DEDUCT_RULES_KEY = 'deduct_rules_v1';
-const DEDUCT_DEFAULTS = { graceMinutes: 16, latePerDay: 0, latePerMin: 0, leaveTypes: ['annual', 'sick', 'unpaid', 'other'], leaveFood: false, maternityPayPct: 50 };
+// ក្បួនថ្មី (v2)៖ ថ្ងៃច្បាប់ទាំងអស់ (បំណាច់ឆ្នាំ ឈឺ ផ្សេងៗ ...) បើកប្រាក់ពេញ មិនកាត់ — ដូចក្រដាស (LeavePay)។ កាត់តែ "សម្រាកគ្មានប្រាក់ឈ្នួល" (unpaid) — ប្តូរបានក្នុងទំព័រកាត់លុយ
+const DEDUCT_DEFAULTS = { graceMinutes: 16, latePerDay: 0, latePerMin: 0, leaveTypes: ['unpaid'], leaveFood: false, maternityPayPct: 50, leaveRuleVer: 2 };
 
 function loadDeductRules() {
   try {
     const raw = localStorage.getItem(DEDUCT_RULES_KEY);
-    if (raw) return { ...DEDUCT_DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const r = { ...DEDUCT_DEFAULTS, ...JSON.parse(raw) };
+      if (!(r.leaveRuleVer >= 2)) {   // ផ្លាស់ប្តូរម្តងគត់៖ ក្បួនចាស់កាត់ "បំណាច់ឆ្នាំ/ឈឺ/ផ្សេងៗ" → ក្បួនថ្មីមិនកាត់
+        r.leaveTypes = ['unpaid']; r.leaveRuleVer = 2;
+        try { localStorage.setItem(DEDUCT_RULES_KEY, JSON.stringify(r)); } catch (e) { /* ignore */ }
+      }
+      return r;
+    }
   } catch (e) { /* ignore */ }
   return { ...DEDUCT_DEFAULTS, leaveTypes: [...DEDUCT_DEFAULTS.leaveTypes] };
 }
@@ -3174,7 +3186,7 @@ function renderMonthlyTab() {
     return `<tr>
       <td>${i + 1}</td><td>${escapeHtml(e.username || '-')}</td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept || '-')}</td>
       <td>${t.workDays}</td><td>${t.leaveDays}</td><td>${t.otHours ? fmtHours(t.otHours) : '-'}</td>
-      <td>$${fmtUSD2(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD2(t.normalPay)}<br>OT $${fmtUSD2(t.otPay)}<br>បាយ $${fmtUSD2(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD2(t.benefitsUSD)}</td><td>−$${fmtUSD2(t.deductionsUSD)}</td>
+      <td>$${fmtUSD2(t.total)}<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;white-space:nowrap;">ឈ្នួល $${fmtUSD2(t.workPay != null ? t.workPay : t.normalPay)}${t.leavePay ? `<br>ច្បាប់ $${fmtUSD2(t.leavePay)}` : ''}<br>OT $${fmtUSD2(t.otPay)}<br>បាយ $${fmtUSD2(((t.foodRiel || 0) + (t.foodOtRiel || 0)) / (t.exchangeRate || settings.exchangeRate || 1))}</div></td><td>+$${fmtUSD2(t.benefitsUSD)}</td><td>−$${fmtUSD2(t.deductionsUSD)}</td>
       <td><strong>$${fmtUSD2(t.net)}</strong></td><td>${fmtNetByMode(t.net) || '-'}</td>
       <td title="ថ្ងៃទី១–${advRules.endDay}: ធ្វើការ ${adv.workedDays} / ត្រូវការ ${adv.requiredDays} · ទូទាត់ ${adv.dueDate}"><strong style="color:${adv.eligible ? '#16a34a' : '#9ca3af'};">$${fmtUSD2(adv.amount)}</strong><div style="font-size:0.68rem;color:var(--text-muted);">${adv.workedDays}/${adv.requiredDays} ថ្ងៃ${adv.eligible ? (adv.due ? ' · ដកហើយ' : ' · ដល់ ' + adv.dueDate.slice(8) ) : ''}</div></td>
       <td style="font-size:0.74rem;">${pcPayslipCell(e.id, month)}</td>

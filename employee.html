@@ -1184,7 +1184,8 @@ async function renderHomePayCards() {
     box.innerHTML = `
       <div class="portal-card hp-card">
         <div class="hp-title">💰 ប្រាក់ខែខែនេះ <small>${month}</small></div>
-        ${line('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(t.normalPay))}
+        ${line('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(t.workPay != null ? t.workPay : t.normalPay))}
+        ${t.leavePay ? line('សម្រាកមានប្រាក់ឈ្នួល (LeavePay)', '$' + fmtUSD(t.leavePay)) : ''}
         ${line('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(t.otPay))}
         ${line('ប្រាក់បាយ', fmtRiel((t.foodPay + t.foodOtPay) * rate) + ' ៛')}
         ${items(t.benefitItems, '+', 'var(--success)')}
@@ -1888,7 +1889,7 @@ async function summarizeMonth(month) {
   const dayMap = await loadMonthAttendance(month);
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
-  let t = { doubleDays: 0, workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
+  let t = { doubleDays: 0, workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, workPay: 0, leavePay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
   dates.forEach(date => {
     const r = computeRow(salary, dayMap[date], date);
     if (r.status === 'present') t.workDays++;
@@ -1898,6 +1899,7 @@ async function summarizeMonth(month) {
     if (r.late) t.lateDays++;
     t.normalHours += r.normalHours; t.otHours += r.otHours;
     t.normalPay += r.normalPay; t.otPay += r.otPay;
+    t.workPay += r.workPay || 0; t.leavePay += r.leavePay || 0;
     t.foodPay += r.foodPay; t.foodOtPay += r.foodOtPay;
     t.total += r.total; t.riel += r.riel;
   });
@@ -2109,7 +2111,8 @@ async function renderPayrollSummary() {
   box.innerHTML = `
     <div class="payroll-line"><span>ថ្ងៃធ្វើការ</span><span>${t.workDays} ថ្ងៃ</span></div>
     <div class="payroll-line"><span>ថ្ងៃច្បាប់</span><span>${t.leaveDays} ថ្ងៃ</span></div>
-    <div class="payroll-line"><span>ម៉ោងធម្មតា</span><span>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</span></div>
+    <div class="payroll-line"><span>ម៉ោងធម្មតា</span><span>${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.workPay != null ? t.workPay : t.normalPay)}</span></div>
+    ${t.leavePay ? `<div class="payroll-line"><span>សម្រាកមានប្រាក់ឈ្នួល (LeavePay)</span><span>$${fmtUSD(t.leavePay)}</span></div>` : ''}
     <div class="payroll-line"><span>ម៉ោងថែម</span><span>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</span></div>
     <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * (t.exchangeRate || settings.exchangeRate))} ៛</span></div>
     ${t.doubleDays ? `<div class="payroll-line"><span>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</span><span>${t.doubleDays} ថ្ងៃ</span></div>` : ''}
@@ -2203,7 +2206,8 @@ function buildPayslipHtml(t, month) {
       <tr><td>ថ្ងៃច្បាប់</td><td style="text-align:right;">${t.leaveDays} ថ្ងៃ</td></tr>
       <tr><td>ថ្ងៃអវត្តមាន</td><td style="text-align:right;">${t.absentDays} ថ្ងៃ</td></tr>
       <tr><td>ថ្ងៃមកយឺត</td><td style="text-align:right;">${t.lateDays} ថ្ងៃ</td></tr>
-      <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.normalPay)}</td></tr>
+      <tr><td>ម៉ោងធម្មតា / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.normalHours)} ម៉ោង — $${fmtUSD(t.workPay != null ? t.workPay : t.normalPay)}</td></tr>
+      ${t.leavePay ? `<tr><td>សម្រាកមានប្រាក់ឈ្នួល (LeavePay)</td><td style="text-align:right;">$${fmtUSD(t.leavePay)}</td></tr>` : ''}
       <tr><td>ម៉ោងថែម / ប្រាក់</td><td style="text-align:right;">${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</td></tr>
       <tr><td>ប្រាក់បាយថ្ងៃធម្មតា</td><td style="text-align:right;">${fmtRiel(t.foodPay * (t.exchangeRate || settings.exchangeRate))} ៛</td></tr>
       <tr><td>ប្រាក់បាយថែមម៉ោង</td><td style="text-align:right;">${fmtRiel(t.foodOtPay * (t.exchangeRate || settings.exchangeRate))} ៛</td></tr>
@@ -2335,7 +2339,6 @@ if (LOGO_URL) {
   if (session) showMain(); else showLogin();
 })();
 </script>
-<script src="employee-leave.js"></script>
 <script src="employee-modern.js"></script>
 <script src="about-contact.js"></script>
 </body>
