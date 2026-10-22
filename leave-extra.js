@@ -286,6 +286,7 @@
         run += earned[i] - used[i]; balance.push(round2(run));
       }
       return { emp, carry, earned, used, balance, lastMonth,
+        hasWorked: worked.some(Boolean),                         // មានវត្តមានស្កេនយ៉ាងហោចណាស់ ១ ថ្ងៃក្នុងឆ្នាំនេះ
         earnedTotal: earned.reduce((a, b) => a + b, 0), usedTotal: used.reduce((a, b) => a + b, 0) };
   }
 
@@ -494,7 +495,10 @@ ${t.outerHTML}
         const cashDays = round2(Math.max(0, remaining) - carryOut);
         const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
         const cashAmount = round2(cashDays * dailyRate);
-        return Object.assign({}, r, { quota, remaining, carryOut, cashDays, cashAmount });
+        // ច្បាប់មានប្រាក់ឈ្នួល (ពិសេស)៖ មិនទាន់ធ្វើការ (គ្មានវត្តមានស្កេនក្នុងឆ្នាំនេះ) → កូតា ០
+        const paidQuota = row.hasWorked ? r.paidQuota : 0;
+        const paidRemaining = round2(paidQuota - r.paidUsed);
+        return Object.assign({}, r, { quota, remaining, carryOut, cashDays, cashAmount, paidQuota, paidRemaining });
       } catch (err) {
         console.error('leave-extra: calcLeaveBalanceRow patch failed, using original', err);
         return r;

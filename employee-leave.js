@@ -5,6 +5,7 @@
  *   ② មានវត្តមាន "មកធ្វើការ" ដែលមានម៉ោងចូល (ស្កេន) យ៉ាងហោចណាស់ ១ ថ្ងៃ
  *   ③ គ្មានអវត្តមានដែលមិនបានលើកលែង (លើកលែង៖ ថ្ងៃអាទិត្យ · ថ្ងៃបុណ្យ · ច្បាប់ពេញថ្ងៃដែលបានអនុម័ត)
  *   ④ មិនលើសខែបច្ចុប្បន្ន
+ * ច្បាប់មានប្រាក់ឈ្នួល (ពិសេស)៖ កូតា ០ បើមិនទាន់មានវត្តមានស្កេនក្នុងឆ្នាំនោះ
  * ដាក់ក្នុង employee.html ក្រោម <script> ធំ ហើយមុន employee-modern.js៖
  *   <script src="employee-leave.js"></script>
  * មិនកែ employee.html ផ្សេងទៀតទេ — លុបបន្ទាត់នេះ ទើបត្រឡប់ទៅក្បួនចាស់។
@@ -60,9 +61,11 @@
       }
       quota = r2(quota);
       const carry = bal.annual.carry || 0, used = bal.annual.used || 0;
+      // ច្បាប់មានប្រាក់ឈ្នួល (ពិសេស)៖ មិនទាន់ធ្វើការ (គ្មានវត្តមានស្កេនក្នុងឆ្នាំនេះ) → កូតា ០
+      const pQuota = worked.some(Boolean) ? bal.paid.quota : 0;
       return {
         annual: { quota, carry, total: r2(quota + carry), used, remaining: r2(quota + carry - used) },
-        paid: bal.paid,
+        paid: { quota: pQuota, used: bal.paid.used, remaining: r2(pQuota - bal.paid.used) },
       };
     } catch (err) {
       console.warn('employee-leave: fallback to original', err);
