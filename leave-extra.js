@@ -62,12 +62,23 @@
       </div>
       <div id="lvxPanel"></div>`;
     host.appendChild(root);
+    // ប៊ូតុងព្រីនតារាងបំណាច់ឆ្នាំ (តារាងចម្បង) នៅជួរលើ ក្បែរប្រអប់ឆ្នាំ/ស្វែងរក
+    const bar = host.querySelector('.attendance-controls > div') || host.querySelector('.attendance-controls');
+    if (bar && !$('lvxPrintMain')) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.id = 'lvxPrintMain'; b.className = 'secondary';
+      b.textContent = '🖨 ព្រីនតារាងបំណាច់ឆ្នាំ';
+      b.addEventListener('click', printMainTable);
+      bar.appendChild(b);
+    }
     root.querySelectorAll('#lvxSubTabs button').forEach(b => b.addEventListener('click', () => { activeSub = b.dataset.sub; renderExtra(); }));
     // ប្តូរ filter ក្នុង panel (event delegation)
     root.addEventListener('change', e => { if (e.target.matches('.lvx-filter')) renderExtra(); });
     root.addEventListener('click', e => {
       const csv = e.target.closest('[data-lvx-csv]');
       if (csv) { exportCurrent(); return; }
+      const pr = e.target.closest('[data-lvx-print]');
+      if (pr) { printCurrentSub(); return; }
       const del = e.target.closest('[data-lvx-del]');
       if (del) deleteLeaveRequest(del.getAttribute('data-lvx-del'));
     });
@@ -83,7 +94,7 @@
   }
 
   const tableWrap = html => `<div class="table-wrap">${html}</div>`;
-  const csvBtn = `<button type="button" class="secondary" data-lvx-csv="1">⬇ CSV</button>`;
+  const csvBtn = `<button type="button" class="secondary" data-lvx-csv="1">⬇ CSV</button> <button type="button" class="secondary" data-lvx-print="sub">🖨 ព្រីន</button>`;
   const empty = msg => `<div class="empty-state">${msg}</div>`;
 
   // ---------- Tab 1: បើកជំនួសចុងឆ្នាំ ----------
@@ -349,6 +360,62 @@
     if (typeof renderAttendanceTab === 'function') renderAttendanceTab();
     if (typeof renderRequestsTab === 'function') renderRequestsTab();
     if (typeof renderPayrollTab === 'function') renderPayrollTab();
+  }
+
+  // ---------- ព្រីន ----------
+  // ព្រីនតាម iframe លាក់ (មិនជាប់ popup blocker) · A4 ផ្ដេក · លុបជួរសកម្មភាព/ប៊ូតុងចេញ
+  function printTable(title, subtitle, tableEl, opts) {
+    opts = opts || {};
+    if (!tableEl) { customAlert('មិនមានតារាងសម្រាប់ព្រីនទេ'); return; }
+    const t = tableEl.cloneNode(true);
+    if (opts.dropLastCol) {
+      t.querySelectorAll('tr').forEach(tr => { const c = tr.lastElementChild; if (c) c.remove(); });
+    }
+    t.querySelectorAll('button, input, select').forEach(el => el.remove());
+    t.querySelectorAll('[style]').forEach(el => { el.style.removeProperty('position'); });
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Khmer OS Battambang','Noto Sans Khmer','Khmer UI',Arial,sans-serif; color:#111; margin:0; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub { font-size: 11px; color:#444; margin-bottom: 8px; }
+  table { width:100%; border-collapse: collapse; font-size: 10px; }
+  th, td { border: 1px solid #555; padding: 3px 4px; text-align: center; vertical-align: middle; }
+  th { background: #e5e7eb; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  .badge { font-weight: 600; }
+  .foot { margin-top: 8px; font-size: 9px; color:#555; text-align:right; }
+</style></head><body>
+<h1>${escapeHtml(title)}</h1>
+<div class="sub">${escapeHtml(subtitle)}</div>
+${t.outerHTML}
+<div class="foot">បោះពុម្ពថ្ងៃ ${stamp}</div>
+</body></html>`;
+    const old = document.getElementById('lvxPrintFrame');
+    if (old) old.remove();
+    const f = document.createElement('iframe');
+    f.id = 'lvxPrintFrame';
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    document.body.appendChild(f);
+    const doc = f.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.error('print failed', e); } }, 300);
+  }
+
+  function printMainTable() {
+    const body = $('lbBody');
+    const table = body && body.closest('table');
+    printTable('តារាងច្បាប់ប្រចាំឆ្នាំ / មានប្រាក់ឈ្នួល', `ឆ្នាំ ${selYear()}`, table, { dropLastCol: true });
+  }
+
+  function printCurrentSub() {
+    const table = document.querySelector('#lvxPanel table');
+    const names = { payout: 'បើកជំនួសថ្ងៃច្បាប់ចុងឆ្នាំ', history: 'ប្រវត្តិប្រើច្បាប់', monthly: 'សង្ខេបច្បាប់ប្រចាំឆ្នាំតាមខែ' };
+    printTable(names[activeSub] || 'ច្បាប់', `ឆ្នាំ ${selYear()}`, table, { dropLastCol: activeSub !== 'monthly' });
   }
 
   // ---------- CSV ----------
