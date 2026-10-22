@@ -116,11 +116,17 @@
           <input type="checkbox" id="fdcInclBen" onchange="fdcPay.toggleBen(this.checked)"> រួមប្រាក់អត្ថប្រយោជន៍ (benefit) ក្នុងមូលដ្ឋានគណនា
         </label>
       </div>
+      <div class="portal-card" style="padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ខែដែលកិច្ចសន្យាបញ្ចប់</label><input type="month" id="fdcRepMonth"></div>
+        <button type="button" onclick="fdcPay.printMonthly()">🖨 តារាងប្រចាំខែ (ទទួលប្រាក់បំណាច់)</button>
+        <span class="scan-hint" style="margin:0;">បញ្ជីបុគ្គលិកដែលកិច្ចសន្យាបញ្ចប់ក្នុងខែនោះ តាមផ្នែក · កត់ត្រា បន្ត/មិនបន្ត ក្នុងជួរសកម្មភាពខាងក្រោម</span>
+      </div>
       <p class="scan-hint" id="fdcWarn" style="display:none;color:var(--danger,#dc2626);"></p>
       <div class="table-wrap"><table>
         <thead><tr><th>បុគ្គលិក</th><th>កិច្ចសន្យា</th><th>រយៈពេល</th><th>ស្ថានភាព</th><th>ប្រាក់ឈ្នួលសរុប</th><th>ប្រាក់ទូទាត់ (%)</th><th>សកម្មភាព</th></tr></thead>
         <tbody id="fdcList"></tbody></table></div>
       <div class="empty-state" id="fdcEmpty" style="display:none;">មិនទាន់មានកិច្ចសន្យា FDC</div>`);
+    if ($('fdcRepMonth') && !$('fdcRepMonth').value) $('fdcRepMonth').value = today().slice(0, 7);
   }
 
   async function load() {
@@ -152,7 +158,7 @@
         <td style="color:${st.tone};font-weight:700;">● ${esc(st.label)}</td>
         <td>${money(base)}${extra}${ongoing ? '<div style="font-size:0.7rem;color:var(--text-muted);">គិតត្រឹមថ្ងៃនេះ</div>' : ''}</td>
         <td><b>${money(amount)}</b> <span style="color:var(--text-muted);">(${esc(c.rate)}%)</span>${rielText(amount) ? `<div style="font-size:0.72rem;color:var(--text-muted);">${rielText(amount)}</div>` : ''}</td>
-        <td>${c.paid_at ? '' : `<button type="button" data-id="${esc(c.id)}" onclick="fdcPay.pay(this.dataset.id)">✓ ទូទាត់</button> `}
+        <td>${renewSelect(c)} ${c.paid_at ? '' : `<button type="button" data-id="${esc(c.id)}" onclick="fdcPay.pay(this.dataset.id)">✓ ទូទាត់</button> `}
             <button type="button" class="secondary" data-id="${esc(c.id)}" onclick="fdcPay.print(this.dataset.id)">🖨 ប័ណ្ណ</button>
             <button type="button" class="danger" data-id="${esc(c.id)}" onclick="fdcPay.remove(this.dataset.id)">🗑</button></td>
       </tr>`;
@@ -237,6 +243,83 @@
         <div style="text-align:center;">អ្នកទទួល<br><br><br>................</div><div style="text-align:center;">អ្នកទូទាត់<br><br><br>................</div><div style="text-align:center;">អ្នកអនុម័ត<br><br><br>................</div>
       </div></div>`;
     if (typeof openPrintWindow === 'function') openPrintWindow('ប័ណ្ណទូទាត់ FDC — ' + emp.name, html, false);
+    else printHtml('ប័ណ្ណទូទាត់ FDC — ' + emp.name, html, false);
+  }
+
+  function renewSelect(c) {
+    const v = c.renew_status || '';
+    return `<select data-id="${esc(c.id)}" onchange="fdcPay.setRenew(this.dataset.id, this.value)" title="បន្ត / មិនបន្ត កិច្ចសន្យា"><option value="">បន្ត?</option><option value="renew"${v === 'renew' ? ' selected' : ''}>✔ បន្ត</option><option value="end"${v === 'end' ? ' selected' : ''}>✘ មិនបន្ត</option></select>`;
+  }
+
+  async function setRenew(id, val) {
+    const c = contracts.find(x => String(x.id) === String(id));
+    if (!c) return;
+    const { data, error } = await supabaseClient.from('employee_contracts').update({ renew_status: val || null }).eq('id', c.id).select('id');
+    if (error || !data || !data.length) {
+      customAlert('រក្សាទុកមិនបានទេ៖ ' + (error ? error.message : 'គ្មានសិទ្ធិ (RLS) ឬរកមិនឃើញ') + ((error && /renew_status/.test(error.message)) ? '\nសូមរត់ fdc-contracts.sql ថ្មីក្នុង Supabase ជាមុន' : ''));
+      render();
+      return;
+    }
+    c.renew_status = val || null;
+  }
+
+  // បើកផ្ទាំងព្រីនផ្ទាល់ខ្លួន (មិនពឹង openPrintWindow) — ពុម្ពអក្សរខ្មែរ + A4
+  function printHtml(title, body, landscape) {
+    const w = window.open('', '_blank');
+    if (!w) { customAlert('Browser រារាំង popup — សូមអនុញ្ញាត popup សម្រាប់គេហទំព័រនេះ'); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&display=swap">
+<style>
+@page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 12mm; }
+body { font-family: 'Khmer OS Battambang','Noto Sans Khmer','Khmer OS',sans-serif; color:#000; font-size:12px; margin:0; }
+.sec { page-break-after: always; } .sec:last-child { page-break-after: auto; }
+table { width:100%; border-collapse:collapse; }
+th, td { border:1px solid #000; padding:5px 6px; text-align:center; vertical-align:middle; }
+td.l { text-align:left; } th small { display:block; font-weight:400; }
+.hd { text-align:center; } .hd h2 { margin:0 0 2px; font-size:17px; } .hd div { font-size:12px; }
+.meta { display:flex; justify-content:space-between; margin:10px 0 4px; font-weight:700; }
+.sign { display:flex; justify-content:space-between; margin-top:36px; }
+.sign div { text-align:center; min-width:160px; }
+</style></head><body>${body}</body></html>`);
+    w.document.close();
+    let done = false;
+    const go = () => { if (done) return; done = true; try { w.focus(); w.print(); } catch (e) { /* ignore */ } };
+    w.onload = () => setTimeout(go, 600);
+    setTimeout(go, 2500);
+  }
+
+  // តារាងប្រចាំខែ៖ បុគ្គលិកដែលកិច្ចសន្យាបញ្ចប់ក្នុងខែដែលបានជ្រើស តាមផ្នែក
+  function printMonthly() {
+    const month = (($('fdcRepMonth') || {}).value || today().slice(0, 7));
+    const list = contracts.filter(c => String(c.end_date || '').slice(0, 7) === month);
+    if (!list.length) { customAlert('គ្មានកិច្ចសន្យា FDC ដែលបញ្ចប់ក្នុងខែ ' + month); return; }
+    const fmt = iso => (iso ? String(iso).split('-').reverse().join('-') : '');
+    const EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthLabel = month.slice(0, 4) + '-' + (EN[parseInt(month.slice(5, 7), 10) - 1] || month.slice(5, 7));
+    const rates = [...new Set(list.map(c => Number(c.rate) || 5))].sort((a, b) => a - b);
+    const rateTxt = rates.join('/');
+    const groups = {};
+    list.forEach(c => {
+      const emp = employees.find(e => e.id === c.employee_id) || { name: c.employee_id, id: c.employee_id };
+      (groups[emp.dept || '-'] = groups[emp.dept || '-'] || []).push({ c, emp });
+    });
+    const head = `<tr>
+      <th>ល.រ<small>序号</small></th><th>ផ្នែក<small>部門</small></th><th>ឈ្មោះ<small>姓名</small></th><th>អត្តលេខ<small>工号</small></th><th>ភេទ<small>性別</small></th><th>មុខងារ<small>工種</small></th>
+      <th>ថ្ងៃ ខែ ចូល<small>入厂日期</small></th><th>ថ្ងៃ ខែ ចុះកិច្ចសន្យា<small>合同日期</small></th><th>ថ្ងៃ ខែ បញ្ចប់កិច្ចសន្យា<small>合同结束</small></th>
+      <th>បន្ត<small>延续</small></th><th>មិនបន្ត<small>终止</small></th><th>កំណត់សម្គាល់<small>备注</small></th></tr>`;
+    const sections = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(dept => {
+      const rows = groups[dept].sort((a, b) => (a.emp.name || '').localeCompare(b.emp.name || '')).map(({ c, emp }, i) => `<tr>
+        <td>${i + 1}</td><td>${esc(dept)}</td><td class="l">${esc(emp.name)}</td><td>${esc(emp.username || emp.id)}</td><td></td><td>${esc(emp.position || '')}</td>
+        <td>${esc(fmt(emp.startDate))}</td><td>${esc(fmt(c.start_date))}</td><td>${esc(fmt(c.end_date))}</td>
+        <td>${c.renew_status === 'renew' ? '✔' : ''}</td><td>${c.renew_status === 'end' ? '✔' : ''}</td><td class="l">${esc(c.note || '')}</td></tr>`).join('');
+      return `<div class="sec">
+        <div class="hd"><h2>តារាងឈ្មោះនិយោជិត កម្មករ ទទួលប្រាក់បំណាច់ ${esc(rateTxt)} ភាគរយ (ពេញសិទ្ធិ)</h2></div>
+        <div class="meta"><span>ផ្នែក៖ ${esc(dept)}</span><span>${esc(monthLabel)}</span></div>
+        <table><thead>${head}</thead><tbody>${rows}</tbody></table>
+        <div class="sign"><div>ហត្ថលេខា<br>ប្រធានក្រុម<br><br><br>................</div><div>ហត្ថលេខា<br>ប្រធានផ្នែក<br><br><br>................</div></div>
+      </div>`;
+    }).join('');
+    printHtml('តារាងទទួលប្រាក់បំណាច់ FDC — ' + month, sections, true);
   }
 
   async function openTab() { ensureRoot(); fillEmpOptions(); await load(); render(); }
@@ -252,5 +335,5 @@
     console.warn('fdc-pay.js: window.showTab មិនមាន — tab FDC នឹងមិនបើកដោយស្វ័យប្រវត្តិ');
   }
 
-  window.fdcPay = { applyDur, add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
+  window.fdcPay = { applyDur, setRenew, printMonthly, add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
 })();
