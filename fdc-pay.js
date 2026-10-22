@@ -20,6 +20,13 @@
 
   const nextMonth = m => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo, 1)); return d.toISOString().slice(0, 7); };
   const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const addMonths = (iso, n) => {   // បូកខែ (កាត់ថ្ងៃឱ្យស្ថិតក្នុងខែគោលដៅ ឧ. 31 មករា + 1 ខែ = 28/29 កុម្ភៈ)
+    const [y, m, d] = iso.split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1 + n, 1));
+    const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+    t.setUTCDate(Math.min(d, last));
+    return t.toISOString().slice(0, 10);
+  };
   const diffDays = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
   // ---------- គណនា ----------
@@ -98,8 +105,9 @@
         <p class="scan-hint" style="margin:0 0 10px;">ច្បាប់ការងារកម្ពុជា៖ បុគ្គលិកកិច្ចសន្យាកំណត់រយៈពេល (FDC) ទទួលប្រាក់ទូទាត់ចុងកិច្ចសន្យា <b>យ៉ាងតិច ៥%</b> នៃប្រាក់ឈ្នួលសរុបដែលបានបើកក្នុងអំឡុងកិច្ចសន្យា។ មូលដ្ឋានគណនា៖ ប្រាក់សរុប (រួម OT និងបាយ)។ ការគណនានេះជាជំនួយ — សូមផ្ទៀងផ្ទាត់ជាមួយមន្ត្រីការងារមុនទូទាត់។</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
           <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">បុគ្គលិក</label><select id="fdcEmp" style="min-width:200px;">${opts}</select></div>
-          <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ចាប់ផ្តើម</label><input type="date" id="fdcStart"></div>
-          <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ផុតកំណត់</label><input type="date" id="fdcEnd"></div>
+          <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">រយៈពេលកិច្ចសន្យា</label><select id="fdcDur" onchange="fdcPay.applyDur()"><option value="">កំណត់ថ្ងៃខ្លួនឯង</option><option value="2">២ ខែ</option><option value="3">៣ ខែ</option><option value="6">៦ ខែ</option></select></div>
+          <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ចាប់ផ្តើម</label><input type="date" id="fdcStart" onchange="fdcPay.applyDur()"></div>
+          <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">ផុតកំណត់</label><input type="date" id="fdcEnd" oninput="document.getElementById('fdcDur').value=''"></div>
           <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">អត្រា (%) ≥ ៥</label><input type="number" id="fdcRate" value="5" min="5" step="0.5" style="width:80px;"></div>
           <div><label style="display:block;font-size:0.72rem;color:var(--text-muted);">កំណត់ចំណាំ</label><input type="text" id="fdcNote" placeholder="ឧ. កិច្ចសន្យាលើកទី ២" style="min-width:160px;"></div>
           <button type="button" onclick="fdcPay.add()">➕ បន្ថែមកិច្ចសន្យា</button>
@@ -151,6 +159,12 @@
     }).join('');
   }
 
+  function applyDur() {
+    const n = parseInt(($('fdcDur') || {}).value, 10), st = ($('fdcStart') || {}).value;
+    if (!n || !st) return;
+    $('fdcEnd').value = addDays(addMonths(st, n), -1);   // ឧ. 2026-01-01 + 3 ខែ → 2026-03-31
+  }
+
   async function reload() { await load(); render(); }
 
   // ---------- សកម្មភាព ----------
@@ -171,7 +185,7 @@
       ({ error } = await supabaseClient.from('employee_contracts').insert({ employee_id: emp, contract_type: 'FDC', start_date: start, end_date: end, rate, note: v('fdcNote') || null }));
     } finally { adding = false; }
     if (error) return customAlert('រក្សាទុកមិនបានទេ៖ ' + error.message);
-    ['fdcStart', 'fdcEnd', 'fdcNote'].forEach(id => { $(id).value = ''; });
+    ['fdcStart', 'fdcEnd', 'fdcNote', 'fdcDur'].forEach(id => { $(id).value = ''; });
     await reload();
   }
 
@@ -238,5 +252,5 @@
     console.warn('fdc-pay.js: window.showTab មិនមាន — tab FDC នឹងមិនបើកដោយស្វ័យប្រវត្តិ');
   }
 
-  window.fdcPay = { add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
+  window.fdcPay = { applyDur, add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
 })();
