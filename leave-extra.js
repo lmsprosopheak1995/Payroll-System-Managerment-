@@ -228,21 +228,56 @@
   }
 
   // ---------- Tab 3: សង្ខេបតាមខែ (ទទួលបាន / ប្រើ / សមតុល្យបន្តបន្ទាប់) ----------
-  // ទទួលបានក្នុងមួយខែ = កូតាប្រចាំឆ្នាំ ÷ ចំនួនខែដែលបានបម្រើការ (១៨ ÷ ១២ = ១.៥) ចាប់ពីខែចូលធ្វើការ
+  // ទទួលបាន ១.៥ ថ្ងៃ (កូតា ÷ ១២) តែក្នុងខែដែលធ្វើការពេញខែ៖ ចូលថ្ងៃទី ១ ឬមុន · មានវត្តមាន "មកធ្វើការ" · គ្មានអវត្តមានដែលមិនបានលើកលែង (លើកលែង ថ្ងៃអាទិត្យ ថ្ងៃបុណ្យ ច្បាប់ដែលបានអនុម័ត)
+  // ថ្ងៃអវត្តមាន ដែលត្រូវលើកលែង៖ ថ្ងៃអាទិត្យ · ថ្ងៃបុណ្យ (holidays) · ថ្ងៃដែលមានសំណើច្បាប់ពេញថ្ងៃបានអនុម័តគ្របដណ្តប់
+  function isExcusedDay(empId, date) {
+    if (new Date(date + 'T00:00:00').getDay() === 0) return true;
+    if (typeof holidays !== 'undefined' && holidays[date] !== undefined) return true;
+    return leaveRequests.some(r => r.employee_id === empId && r.status === 'approved'
+      && leaveUnitOf(r).unit === 'day' && r.start_date <= date && date <= r.end_date);
+  }
+
+  // ក្នុងមួយឆ្នាំ ត្រឡប់ខែ (0-11) ដែល៖ worked = មានកត់ "មកធ្វើការ" ≥ ១ ថ្ងៃ · broken = មានអវត្តមានដែលមិនត្រូវបានលើកលែង
+  function monthFlags(empId, year) {
+    const worked = new Array(12).fill(false), broken = new Array(12).fill(false);
+    const prefix = String(year) + '-';
+    Object.keys(attendance).forEach(d => {
+      if (!d.startsWith(prefix)) return;
+      const rec = attendance[d] && attendance[d][empId];
+      if (!rec) return;
+      const mi = parseInt(d.slice(5, 7), 10) - 1;
+      if (rec.status === 'present') worked[mi] = true;
+      else if (rec.status === 'absent' && !isExcusedDay(empId, d)) broken[mi] = true;
+    });
+    return { worked, broken };
+  }
+
+  // ខែដំបូងដែលបុគ្គលិកធ្វើការពេញខែ៖ ចូលថ្ងៃទី ១ → ខែនោះ · ចូលថ្ងៃផ្សេង → ខែបន្ទាប់ ("YYYY-MM"; ទទេ = មិនមានថ្ងៃចូល)
+  function firstFullMonthKey(startDate) {
+    if (!startDate || startDate.length < 10) return '';
+    let y = parseInt(startDate.slice(0, 4), 10), m = parseInt(startDate.slice(5, 7), 10);
+    const day = parseInt(startDate.slice(8, 10), 10);
+    if (isNaN(y) || isNaN(m)) return '';
+    if (day > 1) { m += 1; if (m > 12) { m = 1; y += 1; } }
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+
   function monthlyData() {
     const year = selYear(), q = selSearch();
     const emps = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
     const list = emps.map(emp => {
-      const months = annualLeaveMonthsInYear(emp, year);         // 0-12
-      const quota = annualBaseQuota(emp, year, lbRules);         // កូតាពេញឆ្នាំ (បន្ទាប់ពីកាត់សមាមាត្រ)
       const carry = annualCarryIn(emp, year, lbRules);           // ផ្ទេរមកពីឆ្នាំមុន
-      const perMonth = months > 0 ? quota / months : 0;
-      const firstMonth = 12 - months;                            // index ខែដំបូងដែលចាប់ផ្តើមទទួលបាន
+      const perMonth = (lbRules.annualQuotaDays || 0) / 12;      // ១៨ ÷ ១២ = ១.៥ ថ្ងៃ/ខែ
+      const { worked, broken } = monthFlags(emp.id, year);       // worked = មានមកធ្វើការ · broken = មានអវត្តមានមិនបានលើកលែង
+      const startKey = firstFullMonthKey(emp.startDate);         // ខែពេញដំបូង (ចូលក្រោយថ្ងៃទី ១ → ខែនោះមិនរាប់)
       const earned = [], used = new Array(12).fill(0), balance = [];
       // ទទួលបានតែដល់ខែបច្ចុប្បន្ន — ខែអនាគតមិនទាន់បំពេញ ហើយនឹងលោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី
       const curYear = parseInt(todayStr().slice(0, 4), 10), curMonth = parseInt(todayStr().slice(5, 7), 10);
       const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : curMonth - 1);
-      for (let i = 0; i < 12; i++) earned.push(i >= firstMonth && i <= lastMonth && months > 0 ? perMonth : 0);
+      for (let i = 0; i < 12; i++) {
+        const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+        earned.push(i <= lastMonth && worked[i] && !broken[i] && (!startKey || key >= startKey) ? perMonth : 0);
+      }
       leaveRequests.forEach(r => {
         if (r.employee_id !== emp.id || r.status !== 'approved' || r.leave_type !== 'annual') return;
         leaveDaysByMonth(r, year).forEach((d, i) => { used[i] += d; });
@@ -300,7 +335,7 @@
     $('lvxPanel').innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         ${csvBtn}
-        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ច្បាប់ប្រចាំឆ្នាំ ឆ្នាំ ${selYear()} · ទទួលបាន = កូតា ÷ ខែបម្រើការ (ឧ. ១៨ ÷ ១២ = ១.៥ ថ្ងៃ/ខែ) · សមតុល្យ = ផ្ទេរមក + ទទួលបានសរុប − ប្រើសរុប ដល់ចុងខែនោះ · ខែអនាគតមិនទាន់បំពេញ (លោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី)</span>
+        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ច្បាប់ប្រចាំឆ្នាំ ឆ្នាំ ${selYear()} · ទទួលបាន ១.៥ ថ្ងៃ (១៨ ÷ ១២) តែខែដែលធ្វើការពេញខែ (ចូលថ្ងៃទី ១ ឬមុន, មានមកធ្វើការ, គ្មានអវត្តមានដែលមិនបានលើកលែង — ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ/ច្បាប់អនុម័ត មិនរាប់) · សមតុល្យ = ផ្ទេរមក + ទទួលបានសរុប − ប្រើសរុប ដល់ចុងខែនោះ · ខែអនាគតមិនទាន់បំពេញ (លោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី)</span>
       </div>
       ${list.length ? tableWrap(`<table>
         <thead><tr><th>បុគ្គលិក</th><th></th><th>ផ្ទេរមក</th>${MONTH_LABELS.map(m => `<th>${m}</th>`).join('')}<th>សរុប / បច្ចុប្បន្ន</th></tr></thead>
