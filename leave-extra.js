@@ -237,7 +237,7 @@
       && leaveUnitOf(r).unit === 'day' && r.start_date <= date && date <= r.end_date);
   }
 
-  // ក្នុងមួយឆ្នាំ ត្រឡប់ខែ (0-11) ដែល៖ worked = មានកត់ "មកធ្វើការ" ≥ ១ ថ្ងៃ · broken = មានអវត្តមានដែលមិនត្រូវបានលើកលែង
+  // ក្នុងមួយឆ្នាំ ត្រឡប់ខែ (0-11) ដែល៖ worked = មាន "មកធ្វើការ" ដែលមានម៉ោងចូល ≥ ១ ថ្ងៃ · broken = មានអវត្តមានដែលមិនត្រូវបានលើកលែង
   function monthFlags(empId, year) {
     const worked = new Array(12).fill(false), broken = new Array(12).fill(false);
     const prefix = String(year) + '-';
@@ -246,7 +246,7 @@
       const rec = attendance[d] && attendance[d][empId];
       if (!rec) return;
       const mi = parseInt(d.slice(5, 7), 10) - 1;
-      if (rec.status === 'present') worked[mi] = true;
+      if (rec.status === 'present' && rec.checkin) worked[mi] = true;   // រាប់តែវត្តមានដែលមានម៉ោងចូល (ស្កេន) — "មកធ្វើការ" ដោយដៃដែលគ្មានម៉ោងមិនរាប់
       else if (rec.status === 'absent' && !isExcusedDay(empId, d)) broken[mi] = true;
     });
     return { worked, broken };
@@ -335,7 +335,7 @@
     $('lvxPanel').innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         ${csvBtn}
-        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ច្បាប់ប្រចាំឆ្នាំ ឆ្នាំ ${selYear()} · ទទួលបាន ១.៥ ថ្ងៃ (១៨ ÷ ១២) តែខែដែលធ្វើការពេញខែ (ចូលថ្ងៃទី ១ ឬមុន, មានមកធ្វើការ, គ្មានអវត្តមានដែលមិនបានលើកលែង — ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ/ច្បាប់អនុម័ត មិនរាប់) · សមតុល្យ = ផ្ទេរមក + ទទួលបានសរុប − ប្រើសរុប ដល់ចុងខែនោះ · ខែអនាគតមិនទាន់បំពេញ (លោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី)</span>
+        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ច្បាប់ប្រចាំឆ្នាំ ឆ្នាំ ${selYear()} · ទទួលបាន ១.៥ ថ្ងៃ (១៨ ÷ ១២) តែខែដែលធ្វើការពេញខែ (ចូលថ្ងៃទី ១ ឬមុន, មានមកធ្វើការដែលមានម៉ោងចូល/ស្កេន, គ្មានអវត្តមានដែលមិនបានលើកលែង — ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ/ច្បាប់អនុម័ត មិនរាប់) · សមតុល្យ = ផ្ទេរមក + ទទួលបានសរុប − ប្រើសរុប ដល់ចុងខែនោះ · ខែអនាគតមិនទាន់បំពេញ (លោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី)</span>
       </div>
       ${list.length ? tableWrap(`<table>
         <thead><tr><th>បុគ្គលិក</th><th></th><th>ផ្ទេរមក</th>${MONTH_LABELS.map(m => `<th>${m}</th>`).join('')}<th>សរុប / បច្ចុប្បន្ន</th></tr></thead>
