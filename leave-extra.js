@@ -262,10 +262,8 @@
     return `${y}-${String(m).padStart(2, '0')}`;
   }
 
-  function monthlyData() {
-    const year = selYear(), q = selSearch();
-    const emps = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
-    const list = emps.map(emp => {
+  // ការគណនាសម្រាប់បុគ្គលិកម្នាក់ (ប្រើទាំងក្នុងតារាងសង្ខេបតាមខែ និងក្នុងការគណនាតារាងចម្បង/បើកជំនួស)
+  function monthlyRow(emp, year) {
       const carry = annualCarryIn(emp, year, lbRules);           // ផ្ទេរមកពីឆ្នាំមុន
       const perMonth = (lbRules.annualQuotaDays || 0) / 12;      // ១៨ ÷ ១២ = ១.៥ ថ្ងៃ/ខែ
       const { worked, broken } = monthFlags(emp.id, year);       // worked = មានមកធ្វើការ · broken = មានអវត្តមានមិនបានលើកលែង
@@ -289,8 +287,12 @@
       }
       return { emp, carry, earned, used, balance, lastMonth,
         earnedTotal: earned.reduce((a, b) => a + b, 0), usedTotal: used.reduce((a, b) => a + b, 0) };
-    });
-    return { list };
+  }
+
+  function monthlyData() {
+    const year = selYear(), q = selSearch();
+    const emps = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
+    return { list: emps.map(emp => monthlyRow(emp, year)) };
   }
 
   function renderMonthly() {
@@ -475,6 +477,30 @@ ${t.outerHTML}
       });
       downloadCsv(`leave-monthly-${year}.csv`, rows);
     }
+  }
+
+  // ---------- ក្បួនតែមួយសម្រាប់គ្រប់តារាង ----------
+  // ជំនួស calcLeaveBalanceRow ក្នុង script.js ដើម្បីឱ្យ "កូតា / នៅសល់ / បើកជំនួស" ក្នុងតារាងចម្បង និង Tab បើកជំនួស
+  // ប្រើក្បួនដូច Tab សង្ខេបតាមខែ៖ កូតា = ១.៥ × ចំនួនខែដែលធ្វើការពេញខែ និងមានស្កេនពិត។ មិនធ្វើការ/មិនស្កេន → ០ → គ្មានអ្វីត្រូវបើក។
+  if (typeof calcLeaveBalanceRow === 'function' && !window.__lvxCalcPatched) {
+    const origCalc = calcLeaveBalanceRow;
+    window.calcLeaveBalanceRow = function (emp, year, rules) {
+      const r = origCalc.apply(this, arguments);
+      try {
+        const row = monthlyRow(emp, year);
+        const quota = round2(row.earnedTotal);
+        const remaining = round2(quota + r.carry - r.used);
+        const carryOut = rules.carryOver ? Math.min(rules.carryMaxDays, Math.max(0, remaining)) : 0;
+        const cashDays = round2(Math.max(0, remaining) - carryOut);
+        const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
+        const cashAmount = round2(cashDays * dailyRate);
+        return Object.assign({}, r, { quota, remaining, carryOut, cashDays, cashAmount });
+      } catch (err) {
+        console.error('leave-extra: calcLeaveBalanceRow patch failed, using original', err);
+        return r;
+      }
+    };
+    window.__lvxCalcPatched = true;
   }
 
   // ---------- render ----------
