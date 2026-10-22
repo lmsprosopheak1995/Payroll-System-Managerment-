@@ -1,0 +1,305 @@
+/* leave-extra.js
+ * បន្ថែម ៣ តារាងក្នុងទំព័រ "សម្រាកបំណាច់ឆ្នាំ / មានប្រាក់ឈ្នួល" (leavebalanceTab):
+ *   1) បើកជំនួសចុងឆ្នាំ  2) ប្រវត្តិប្រើច្បាប់  3) សង្ខេបតាមខែ
+ * ត្រូវផ្ទុកក្រោយ script.js  →  <script src="leave-extra.js"></script>
+ * ប្រើ ឆ្នាំ (#lbYear) និងប្រអប់ស្វែងរក (#lbSearch) ដែលមានស្រាប់ ហើយប្រើ
+ * applyLeaveCashItem / removeLeaveCashItem ដែលមានស្រាប់សម្រាប់ប៊ូតុង "បើកជំនួស".
+ */
+(function () {
+  'use strict';
+
+  const MONTH_LABELS = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+  const STATUS_FILTER_LABELS = { approved: 'អនុម័ត', pending: 'កំពុងរង់ចាំ', rejected: 'បដិសេធ', '': 'ទាំងអស់' };
+
+  let activeSub = 'payout'; // payout | history | monthly
+
+  // ---------- helpers ----------
+  const $ = id => document.getElementById(id);
+  const num = (v, d) => (Number.isFinite(v) ? v : 0).toFixed(d == null ? 1 : d);
+  const selYear = () => parseInt($('lbYear') && $('lbYear').value, 10) || parseInt(todayStr().slice(0, 4), 10);
+  const selSearch = () => (($('lbSearch') && $('lbSearch').value) || '').toLowerCase().trim();
+  const empById = id => employees.find(e => e.id === id);
+  const empLabel = id => { const e = empById(id); return e ? e.name : '(បុគ្គលិកត្រូវបានលុប)'; };
+
+  // ថ្ងៃច្បាប់ដែលស្ថិតក្នុងខែនីមួយៗ (0-11) នៃឆ្នាំ — ច្បាប់មិនពេញថ្ងៃ រាប់ទៅខែនៃ start_date (ដូច usedLeaveDays)
+  function leaveDaysByMonth(req, year) {
+    const out = new Array(12).fill(0);
+    const ys = `${year}-01-01`, ye = `${year}-12-31`;
+    if (leaveUnitOf(req).unit !== 'day') {
+      if (req.start_date >= ys && req.start_date <= ye) out[parseInt(req.start_date.slice(5, 7), 10) - 1] += leaveWeightDays(req);
+      return out;
+    }
+    const s = req.start_date < ys ? ys : req.start_date;
+    const e = req.end_date > ye ? ye : req.end_date;
+    if (s > e) return out;
+    datesInRange(s, e).forEach(d => { out[parseInt(d.slice(5, 7), 10) - 1] += 1; });
+    return out;
+  }
+
+  function downloadCsv(filename, rows) {
+    const esc = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const csv = '\uFEFF' + rows.map(r => r.map(esc).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---------- UI shell (បញ្ចូលចុងទំព័រ leavebalanceTab) ----------
+  function ensureShell() {
+    if ($('lvxRoot')) return true;
+    const host = $('leavebalanceTab');
+    if (!host) return false;
+    const root = document.createElement('div');
+    root.id = 'lvxRoot';
+    root.style.cssText = 'margin-top:20px;';
+    root.innerHTML = `
+      <div id="lvxSubTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" data-sub="payout">💵 បើកជំនួសចុងឆ្នាំ</button>
+        <button type="button" data-sub="history">📜 ប្រវត្តិប្រើច្បាប់</button>
+        <button type="button" data-sub="monthly">📅 សង្ខេបតាមខែ</button>
+      </div>
+      <div id="lvxPanel"></div>`;
+    host.appendChild(root);
+    root.querySelectorAll('#lvxSubTabs button').forEach(b => b.addEventListener('click', () => { activeSub = b.dataset.sub; renderExtra(); }));
+    // ប្តូរ filter ក្នុង panel (event delegation)
+    root.addEventListener('change', e => { if (e.target.matches('.lvx-filter')) renderExtra(); });
+    root.addEventListener('click', e => {
+      const csv = e.target.closest('[data-lvx-csv]');
+      if (csv) exportCurrent();
+    });
+    return true;
+  }
+
+  function paintSubTabs() {
+    document.querySelectorAll('#lvxSubTabs button').forEach(b => {
+      const on = b.dataset.sub === activeSub;
+      b.classList.toggle('secondary', !on);
+      b.style.fontWeight = on ? '700' : '400';
+    });
+  }
+
+  const tableWrap = html => `<div style="overflow-x:auto;">${html}</div>`;
+  const csvBtn = `<button type="button" class="secondary" data-lvx-csv="1">⬇ CSV</button>`;
+  const empty = msg => `<div style="padding:24px;text-align:center;color:var(--text-muted,#6b7280);">${msg}</div>`;
+
+  // ---------- Tab 1: បើកជំនួសចុងឆ្នាំ ----------
+  function payoutRows() {
+    const year = selYear(), q = selSearch();
+    return employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q)).map(emp => {
+      const r = calcLeaveBalanceRow(emp, year, lbRules);
+      const dailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
+      const item = payrollItems.find(p => p.id === leaveCashItemId(emp.id, year));
+      let state; // paid | outdated | unpaid | none
+      if (item && Math.abs(item.amount - r.cashAmount) < 0.005) state = 'paid';
+      else if (item) state = 'outdated';
+      else if (r.cashAmount > 0) state = 'unpaid';
+      else state = 'none';
+      return { emp, r, dailyRate, item, state };
+    });
+  }
+
+  function renderPayout() {
+    const year = selYear();
+    const rows = payoutRows();
+    const filter = ($('lvxPayFilter') && $('lvxPayFilter').value) || '';
+    const shown = rows.filter(x => !filter || x.state === filter);
+    const payable = rows.filter(x => x.r.cashAmount > 0);
+    const totalAmt = payable.reduce((a, x) => a + x.r.cashAmount, 0);
+    const paidAmt = payable.filter(x => x.state === 'paid').reduce((a, x) => a + x.r.cashAmount, 0);
+    const unpaidCnt = rows.filter(x => x.state === 'unpaid' || x.state === 'outdated').length;
+
+    const badge = s => ({
+      paid: '<span class="badge active">✓ បានបើក</span>',
+      outdated: '<span class="badge pending">⚠ ត្រូវអាប់ដេត</span>',
+      unpaid: '<span class="badge inactive">មិនទាន់បើក</span>',
+      none: '-',
+    })[s];
+
+    const body = shown.map(({ emp, r, dailyRate, item, state }) => {
+      let action = '-';
+      if (state === 'paid') action = `<button class="danger" onclick="removeLeaveCashItem('${emp.id}')">🗑 ដកចេញ</button>`;
+      else if (state === 'outdated') action = `<button onclick="applyLeaveCashItem('${emp.id}')">🔄 អាប់ដេត</button> <button class="danger" onclick="removeLeaveCashItem('${emp.id}')">🗑</button>`;
+      else if (state === 'unpaid') action = `<button onclick="applyLeaveCashItem('${emp.id}')">💵 បើកជំនួស</button>`;
+      return `<tr>
+        <td>${escapeHtml(emp.username || '-')}</td>
+        <td>${escapeHtml(emp.name)}</td>
+        <td>${num(r.remaining)}</td>
+        <td>${r.carryOut ? num(r.carryOut) : '-'}</td>
+        <td><strong>${r.cashDays ? num(r.cashDays) : '-'}</strong></td>
+        <td>$${fmtUSD(dailyRate)}</td>
+        <td><strong>${r.cashAmount ? '$' + fmtUSD(r.cashAmount) : '-'}</strong></td>
+        <td>${badge(state)}</td>
+        <td>${item ? `${year}-12` : '-'}</td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+
+    $('lvxPanel').innerHTML = `
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+        <div class="stat-card"><div class="num">${payable.length}</div><div class="label">បុគ្គលិកត្រូវបើកជំនួស</div></div>
+        <div class="stat-card"><div class="num">$${fmtUSD(totalAmt)}</div><div class="label">ប្រាក់ត្រូវបើកសរុប</div></div>
+        <div class="stat-card"><div class="num">$${fmtUSD(paidAmt)}</div><div class="label">បានបើករួច</div></div>
+        <div class="stat-card"><div class="num">${unpaidCnt}</div><div class="label">មិនទាន់បើក</div></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="lvxPayFilter" class="lvx-filter">
+          <option value="">ស្ថានភាព៖ ទាំងអស់</option>
+          <option value="unpaid"${filter === 'unpaid' ? ' selected' : ''}>មិនទាន់បើក</option>
+          <option value="outdated"${filter === 'outdated' ? ' selected' : ''}>ត្រូវអាប់ដេត</option>
+          <option value="paid"${filter === 'paid' ? ' selected' : ''}>បានបើក</option>
+        </select>
+        ${csvBtn}
+        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ប្រាក់ត្រូវបញ្ចូលក្នុង "អត្ថប្រយោជន៍" ខែ ${year}-12</span>
+      </div>
+      ${shown.length ? tableWrap(`<table>
+        <thead><tr><th>លេខគ្រប់គ្រង</th><th>ឈ្មោះ</th><th>នៅសល់ (ថ្ងៃ)</th><th>ផ្ទេរឆ្នាំក្រោយ</th><th>ថ្ងៃត្រូវបើក</th><th>ប្រាក់ឈ្នួល/ថ្ងៃ</th><th>ប្រាក់ត្រូវបើក ($)</th><th>ស្ថានភាព</th><th>ខែបើក</th><th></th></tr></thead>
+        <tbody>${body}</tbody></table>`) : empty('មិនមានទិន្នន័យ')}`;
+  }
+
+  // ---------- Tab 2: ប្រវត្តិប្រើច្បាប់ ----------
+  function historyRows() {
+    const year = selYear(), q = selSearch();
+    const empF = ($('lvxHisEmp') && $('lvxHisEmp').value) || '';
+    const typeF = ($('lvxHisType') && $('lvxHisType').value) || '';
+    const stF = $('lvxHisStatus') ? $('lvxHisStatus').value : 'approved';
+    const ys = `${year}-01-01`, ye = `${year}-12-31`;
+    return leaveRequests
+      .filter(r => r.start_date <= ye && r.end_date >= ys)
+      .filter(r => !empF || r.employee_id === empF)
+      .filter(r => !typeF || r.leave_type === typeF)
+      .filter(r => !stF || r.status === stF)
+      .filter(r => { if (!q) return true; const e = empById(r.employee_id); return e && employeeMatchesSearch(e, q); })
+      .map(r => ({ r, days: leaveDaysByMonth(r, year).reduce((a, b) => a + b, 0) }))
+      .sort((a, b) => (b.r.start_date || '').localeCompare(a.r.start_date || ''));
+  }
+
+  function renderHistory() {
+    const empF = ($('lvxHisEmp') && $('lvxHisEmp').value) || '';
+    const typeF = ($('lvxHisType') && $('lvxHisType').value) || '';
+    const stF = $('lvxHisStatus') ? $('lvxHisStatus').value : 'approved';
+    const rows = historyRows();
+    const total = rows.reduce((a, x) => a + x.days, 0);
+
+    const empOpts = employees.filter(e => e.status === 'active').map(e => `<option value="${e.id}"${empF === e.id ? ' selected' : ''}>${escapeHtml(e.name)}</option>`).join('');
+    const typeOpts = Object.keys(LEAVE_TYPE_LABELS).map(k => `<option value="${k}"${typeF === k ? ' selected' : ''}>${escapeHtml(LEAVE_TYPE_LABELS[k])}</option>`).join('');
+    const stOpts = Object.keys(STATUS_FILTER_LABELS).map(k => `<option value="${k}"${stF === k ? ' selected' : ''}>${STATUS_FILTER_LABELS[k]}</option>`).join('');
+
+    const body = rows.map(({ r, days }) => {
+      const range = r.start_date === r.end_date ? r.start_date : `${r.start_date} → ${r.end_date}`;
+      const cls = r.status === 'approved' ? 'active' : r.status === 'rejected' ? 'inactive' : 'pending';
+      return `<tr>
+        <td>${range}</td>
+        <td>${escapeHtml(empLabel(r.employee_id))}</td>
+        <td>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</td>
+        <td>${escapeHtml(leaveUnitLabel(r))}</td>
+        <td><strong>${num(days)}</strong></td>
+        <td><span class="badge ${cls}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
+        <td style="text-align:left;">${escapeHtml(stripUnitTag(r.reason) || '-')}</td>
+      </tr>`;
+    }).join('');
+
+    $('lvxPanel').innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="lvxHisEmp" class="lvx-filter"><option value="">បុគ្គលិក៖ ទាំងអស់</option>${empOpts}</select>
+        <select id="lvxHisType" class="lvx-filter"><option value="">ប្រភេទ៖ ទាំងអស់</option>${typeOpts}</select>
+        <select id="lvxHisStatus" class="lvx-filter">${stOpts}</select>
+        ${csvBtn}
+        <strong style="margin-left:auto;">${rows.length} ការសុំ · សរុប ${num(total)} ថ្ងៃ (ក្នុងឆ្នាំ ${selYear()})</strong>
+      </div>
+      ${rows.length ? tableWrap(`<table>
+        <thead><tr><th>កាលបរិច្ឆេទ</th><th>បុគ្គលិក</th><th>ប្រភេទច្បាប់</th><th>ឯកតា</th><th>ចំនួនថ្ងៃ</th><th>ស្ថានភាព</th><th>មូលហេតុ</th></tr></thead>
+        <tbody>${body}</tbody></table>`) : empty('មិនមានប្រវត្តិច្បាប់ក្នុងឆ្នាំនេះ')}`;
+  }
+
+  // ---------- Tab 3: សង្ខេបតាមខែ ----------
+  function monthlyData() {
+    const year = selYear(), q = selSearch();
+    const typeF = ($('lvxMonType') && $('lvxMonType').value) || 'annual';
+    const emps = employees.filter(e => e.status === 'active' && employeeMatchesSearch(e, q));
+    const ids = new Set(emps.map(e => e.id));
+    const map = {};
+    emps.forEach(e => { map[e.id] = new Array(12).fill(0); });
+    leaveRequests.forEach(r => {
+      if (r.status !== 'approved' || !ids.has(r.employee_id)) return;
+      if (typeF !== 'all' && r.leave_type !== typeF) return;
+      leaveDaysByMonth(r, year).forEach((d, i) => { map[r.employee_id][i] += d; });
+    });
+    return { emps, map, typeF };
+  }
+
+  function renderMonthly() {
+    const { emps, map, typeF } = monthlyData();
+    const typeOpts = [['annual', LEAVE_TYPE_LABELS.annual], ['paid', LEAVE_TYPE_LABELS.paid], ['all', 'ច្បាប់ទាំងអស់ (គ្រប់ប្រភេទ)']]
+      .concat(['sick', 'maternity', 'unpaid', 'other'].map(k => [k, LEAVE_TYPE_LABELS[k]]))
+      .map(([k, l]) => `<option value="${k}"${typeF === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+    const colTotals = new Array(12).fill(0);
+    const cell = v => (v ? `<strong>${num(v)}</strong>` : '<span style="color:var(--text-muted,#9ca3af);">-</span>');
+
+    const body = emps.map(e => {
+      const m = map[e.id];
+      m.forEach((v, i) => { colTotals[i] += v; });
+      const tot = m.reduce((a, b) => a + b, 0);
+      return `<tr><td>${escapeHtml(e.name)}</td>${m.map(v => `<td>${cell(v)}</td>`).join('')}<td><strong>${num(tot)}</strong></td></tr>`;
+    }).join('');
+    const grand = colTotals.reduce((a, b) => a + b, 0);
+
+    $('lvxPanel').innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="lvxMonType" class="lvx-filter">${typeOpts}</select>
+        ${csvBtn}
+        <span style="font-size:0.78rem;color:var(--text-muted,#6b7280);">ឯកតា៖ ថ្ងៃ (កន្លះថ្ងៃ = 0.5, តាមម៉ោង = ម៉ោង ÷ ម៉ោងស្តង់ដារ)</span>
+      </div>
+      ${emps.length ? tableWrap(`<table>
+        <thead><tr><th>បុគ្គលិក</th>${MONTH_LABELS.map(m => `<th>${m}</th>`).join('')}<th>សរុប</th></tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr><td><strong>សរុប</strong></td>${colTotals.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(grand)}</strong></td></tr></tfoot>
+      </table>`) : empty('មិនមានបុគ្គលិក')}`;
+  }
+
+  // ---------- CSV ----------
+  function exportCurrent() {
+    const year = selYear();
+    if (activeSub === 'payout') {
+      const rows = [['លេខគ្រប់គ្រង', 'ឈ្មោះ', 'នៅសល់ (ថ្ងៃ)', 'ផ្ទេរឆ្នាំក្រោយ', 'ថ្ងៃត្រូវបើក', 'ប្រាក់ឈ្នួល/ថ្ងៃ', 'ប្រាក់ត្រូវបើក ($)', 'ស្ថានភាព']];
+      const st = { paid: 'បានបើក', outdated: 'ត្រូវអាប់ដេត', unpaid: 'មិនទាន់បើក', none: '' };
+      payoutRows().forEach(x => rows.push([x.emp.username || '', x.emp.name, x.r.remaining, x.r.carryOut, x.r.cashDays, round2(x.dailyRate), x.r.cashAmount, st[x.state]]));
+      downloadCsv(`leave-payout-${year}.csv`, rows);
+    } else if (activeSub === 'history') {
+      const rows = [['ចាប់ពី', 'ដល់', 'បុគ្គលិក', 'ប្រភេទ', 'ឯកតា', 'ចំនួនថ្ងៃ', 'ស្ថានភាព', 'មូលហេតុ']];
+      historyRows().forEach(({ r, days }) => rows.push([r.start_date, r.end_date, empLabel(r.employee_id), LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type, leaveUnitLabel(r), round2(days), REQUEST_STATUS_LABELS[r.status] || r.status, stripUnitTag(r.reason)]));
+      downloadCsv(`leave-history-${year}.csv`, rows);
+    } else {
+      const { emps, map } = monthlyData();
+      const rows = [['បុគ្គលិក'].concat(MONTH_LABELS, ['សរុប'])];
+      emps.forEach(e => rows.push([e.name].concat(map[e.id].map(round2), [round2(map[e.id].reduce((a, b) => a + b, 0))])));
+      downloadCsv(`leave-monthly-${year}.csv`, rows);
+    }
+  }
+
+  // ---------- render ----------
+  function renderExtra() {
+    if (!ensureShell()) return;
+    paintSubTabs();
+    try {
+      if (activeSub === 'payout') renderPayout();
+      else if (activeSub === 'history') renderHistory();
+      else renderMonthly();
+    } catch (err) {
+      console.error('leave-extra render failed', err);
+      $('lvxPanel').innerHTML = empty('បង្ហាញតារាងមិនបានជោគជ័យ — មើល Console');
+    }
+  }
+
+  // ភ្ជាប់ជាមួយ renderLeaveBalanceTab ដើម ដើម្បីឱ្យ refresh ស្វ័យប្រវត្តិ (ប្តូរឆ្នាំ, ស្វែងរក, បើកជំនួស, អនុម័តច្បាប់...)
+  if (typeof renderLeaveBalanceTab === 'function') {
+    const original = renderLeaveBalanceTab;
+    window.renderLeaveBalanceTab = function () {
+      const res = original.apply(this, arguments);
+      renderExtra();
+      return res;
+    };
+  }
+  renderExtra();
+})();
