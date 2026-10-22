@@ -14,7 +14,7 @@
   const money = n => '$' + (Math.round((n || 0) * 100) / 100).toFixed(2);
   const rielOf = usd => ((settings && settings.exchangeRate) ? Math.round((usd || 0) * settings.exchangeRate / 100) * 100 : 0);
   const rielText = usd => rielOf(usd) ? rielOf(usd).toLocaleString('en-US') + ' ៛' : '';
-  const today = () => (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0, 10));
+  const today = () => (typeof todayStr === 'function' ? todayStr() : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
 
   let contracts = [], missing = false, inclBenefits = false;
 
@@ -52,6 +52,10 @@
           const rec = (attendance[d] && attendance[d][emp.id]) || {};
           usd += computeRow(emp, rec, d).total || 0;
         });
+        if (inclBenefits) {   // អត្ថប្រយោជន៍ខែ → សមាមាត្រតាមថ្ងៃក្នុងកិច្ចសន្យា
+          const t = summarizeEmpMonth(emp, m);
+          ben = (t.benefitsUSD || 0) * (diffDays(from, upto) + 1) / days.length;
+        }
         note = 'គិតតាមថ្ងៃ';
       }
       lines.push({ month: m, from, to: upto, usd, ben, note });
@@ -72,11 +76,22 @@
   }
 
   // ---------- UI ----------
+  function empOptions() {
+    const emps = (typeof activeEmployeesList === 'function' ? activeEmployeesList() : employees) || [];
+    return emps.map(e => `<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.username || e.id)})</option>`).join('');
+  }
+  function fillEmpOptions() {
+    const sel = $('fdcEmp');
+    if (!sel) return;
+    const keep = sel.value;
+    sel.innerHTML = empOptions();
+    if (keep) sel.value = keep;
+  }
+
   function ensureRoot() {
     const tab = $('fdcTab');
     if (!tab || $('fdcList')) return;
-    const emps = (typeof activeEmployeesList === 'function' ? activeEmployeesList() : employees);
-    const opts = emps.map(e => `<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.username || e.id)})</option>`).join('');
+    const opts = empOptions();
     tab.insertAdjacentHTML('beforeend', `
       <div class="portal-card" style="padding:14px;margin-bottom:14px;">
         <h3 style="margin:0 0 6px;font-size:0.95rem;">💼 ប្រាក់ទូទាត់ចុងកិច្ចសន្យា FDC</h3>
@@ -129,9 +144,9 @@
         <td style="color:${st.tone};font-weight:700;">● ${esc(st.label)}</td>
         <td>${money(base)}${extra}${ongoing ? '<div style="font-size:0.7rem;color:var(--text-muted);">គិតត្រឹមថ្ងៃនេះ</div>' : ''}</td>
         <td><b>${money(amount)}</b> <span style="color:var(--text-muted);">(${esc(c.rate)}%)</span>${rielText(amount) ? `<div style="font-size:0.72rem;color:var(--text-muted);">${rielText(amount)}</div>` : ''}</td>
-        <td>${c.paid_at ? '' : `<button type="button" onclick="fdcPay.pay('${esc(c.id)}')">✓ ទូទាត់</button> `}
-            <button type="button" class="secondary" onclick="fdcPay.print('${esc(c.id)}')">🖨 ប័ណ្ណ</button>
-            <button type="button" class="danger" onclick="fdcPay.remove('${esc(c.id)}')">🗑</button></td>
+        <td>${c.paid_at ? '' : `<button type="button" data-id="${esc(c.id)}" onclick="fdcPay.pay(this.dataset.id)">✓ ទូទាត់</button> `}
+            <button type="button" class="secondary" data-id="${esc(c.id)}" onclick="fdcPay.print(this.dataset.id)">🖨 ប័ណ្ណ</button>
+            <button type="button" class="danger" data-id="${esc(c.id)}" onclick="fdcPay.remove(this.dataset.id)">🗑</button></td>
       </tr>`;
     }).join('');
   }
@@ -139,7 +154,9 @@
   async function reload() { await load(); render(); }
 
   // ---------- សកម្មភាព ----------
+  let adding = false;
   async function add() {
+    if (adding) return;
     const v = id => ($(id).value || '').trim();
     const emp = v('fdcEmp'), start = v('fdcStart'), end = v('fdcEnd'), rate = parseFloat(v('fdcRate'));
     if (!emp) return customAlert('សូមជ្រើសបុគ្គលិក');
@@ -148,7 +165,11 @@
     if (!(rate >= 5)) return customAlert('អត្រាទូទាត់ចុងកិច្ចសន្យាត្រូវយ៉ាងតិច ៥%');
     if (diffDays(start, end) + 1 > 731 && !confirm('កិច្ចសន្យា FDC យូរជាង ២ ឆ្នាំ (ច្បាប់កំណត់អតិបរមា ២ ឆ្នាំ) — បន្តទេ?')) return;
     if (contracts.some(c => c.employee_id === emp && !(end < c.start_date || start > c.end_date)) && !confirm('បុគ្គលិកនេះមានកិច្ចសន្យាត្រួតគ្នា — បន្តទេ?')) return;
-    const { error } = await supabaseClient.from('employee_contracts').insert({ employee_id: emp, contract_type: 'FDC', start_date: start, end_date: end, rate, note: v('fdcNote') || null });
+    adding = true;
+    let error;
+    try {
+      ({ error } = await supabaseClient.from('employee_contracts').insert({ employee_id: emp, contract_type: 'FDC', start_date: start, end_date: end, rate, note: v('fdcNote') || null }));
+    } finally { adding = false; }
     if (error) return customAlert('រក្សាទុកមិនបានទេ៖ ' + error.message);
     ['fdcStart', 'fdcEnd', 'fdcNote'].forEach(id => { $(id).value = ''; });
     await reload();
@@ -158,6 +179,7 @@
     const c = contracts.find(x => String(x.id) === String(id));
     if (!c) return;
     const r = calcContract(c);
+    if (r.error) return customAlert(r.error);
     if (today() <= c.end_date && !confirm('កិច្ចសន្យានេះមិនទាន់ផុតកំណត់ទេ — ទូទាត់មុនកំណត់ឬ?')) return;
     if (!confirm(`ទូទាត់ប្រាក់ចុងកិច្ចសន្យា\nបុគ្គលិក៖ ${(employees.find(e => e.id === c.employee_id) || {}).name || c.employee_id}\nប្រាក់ឈ្នួលសរុប៖ ${money(r.base)}\nអត្រា ${c.rate}%\nប្រាក់ទូទាត់៖ ${money(r.amount)}\n\nបញ្ជាក់ការទូទាត់?`)) return;
     const note = window.prompt('កំណត់ចំណាំការទូទាត់ (មិនចាំបាច់)', '');
@@ -203,13 +225,18 @@
     if (typeof openPrintWindow === 'function') openPrintWindow('ប័ណ្ណទូទាត់ FDC — ' + emp.name, html, false);
   }
 
-  async function openTab() { ensureRoot(); await load(); render(); }
+  async function openTab() { ensureRoot(); fillEmpOptions(); await load(); render(); }
 
-  const _showTab = window.showTab;
-  window.showTab = function (tab) {
-    _showTab.apply(this, arguments);
-    if (tab === 'fdc') openTab();
-  };
+  if (typeof window.showTab === 'function') {
+    const _showTab = window.showTab;
+    window.showTab = function (tab) {
+      const r = _showTab.apply(this, arguments);
+      if (tab === 'fdc') openTab();
+      return r;
+    };
+  } else {
+    console.warn('fdc-pay.js: window.showTab មិនមាន — tab FDC នឹងមិនបើកដោយស្វ័យប្រវត្តិ');
+  }
 
   window.fdcPay = { add, pay, remove, print: printVoucher, toggleBen: on => { inclBenefits = !!on; render(); } };
 })();
