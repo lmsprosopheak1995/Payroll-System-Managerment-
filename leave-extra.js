@@ -67,7 +67,9 @@
     root.addEventListener('change', e => { if (e.target.matches('.lvx-filter')) renderExtra(); });
     root.addEventListener('click', e => {
       const csv = e.target.closest('[data-lvx-csv]');
-      if (csv) exportCurrent();
+      if (csv) { exportCurrent(); return; }
+      const del = e.target.closest('[data-lvx-del]');
+      if (del) deleteLeaveRequest(del.getAttribute('data-lvx-del'));
     });
     return true;
   }
@@ -197,6 +199,7 @@
         <td><strong>${num(days)}</strong></td>
         <td><span class="badge ${cls}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
         <td style="text-align:left;">${escapeHtml(stripUnitTag(r.reason) || '-')}</td>
+        <td><button type="button" class="danger" data-lvx-del="${escapeHtml(String(r.id))}" title="លុបសំណើច្បាប់នេះ">🗑</button></td>
       </tr>`;
     }).join('');
 
@@ -209,7 +212,7 @@
         <strong style="margin-left:auto;">${rows.length} ការសុំ · សរុប ${num(total)} ថ្ងៃ (ក្នុងឆ្នាំ ${selYear()})</strong>
       </div>
       ${rows.length ? tableWrap(`<table>
-        <thead><tr><th>កាលបរិច្ឆេទ</th><th>បុគ្គលិក</th><th>ប្រភេទច្បាប់</th><th>ឯកតា</th><th>ចំនួនថ្ងៃ</th><th>ស្ថានភាព</th><th>មូលហេតុ</th></tr></thead>
+        <thead><tr><th>កាលបរិច្ឆេទ</th><th>បុគ្គលិក</th><th>ប្រភេទច្បាប់</th><th>ឯកតា</th><th>ចំនួនថ្ងៃ</th><th>ស្ថានភាព</th><th>មូលហេតុ</th><th></th></tr></thead>
         <tbody>${body}</tbody></table>`) : empty('មិនមានប្រវត្តិច្បាប់ក្នុងឆ្នាំនេះ')}`;
   }
 
@@ -293,6 +296,59 @@
         <tbody>${body}</tbody>
         <tfoot>${foot}</tfoot>
       </table>`) : empty('មិនមានបុគ្គលិក')}`;
+  }
+
+  // ---------- លុបសំណើច្បាប់ (ទិន្នន័យសាកល្បង) ----------
+  // លុបពី Supabase (leave_requests) + ដកស្ថានភាព "ច្បាប់" ចេញពីតារាងវត្តមាន (លើកលែងថ្ងៃដែលមានសំណើច្បាប់ផ្សេងគ្របដណ្តប់)
+  let lvxDeleting = false;
+  async function deleteLeaveRequest(id) {
+    if (lvxDeleting) return;
+    const req = leaveRequests.find(r => String(r.id) === String(id));
+    if (!req) { customAlert('រកមិនឃើញសំណើនេះទេ'); return; }
+    const dates = datesInRange(req.start_date, req.end_date);
+    const months = [...new Set(dates.map(d => d.slice(0, 7)))];
+    for (const m of months) { if (typeof guardLocked === 'function' && guardLocked(m, 'លុបសំណើច្បាប់')) return; }
+
+    // ថ្ងៃវត្តមានដែលត្រូវដកស្ថានភាព "ច្បាប់" (តែច្បាប់ពេញថ្ងៃ ដែលបានអនុម័ត)
+    const isFullDay = leaveUnitOf(req).unit === 'day';
+    const toClear = [];
+    if (isFullDay && req.status === 'approved') {
+      dates.forEach(d => {
+        const rec = attendance[d] && attendance[d][req.employee_id];
+        if (!rec || rec.status !== 'leave') return;
+        const coveredByOther = leaveRequests.some(o => o !== req && o.employee_id === req.employee_id && o.status === 'approved'
+          && leaveUnitOf(o).unit === 'day' && o.start_date <= d && d <= o.end_date);
+        if (!coveredByOther) toClear.push(d);
+      });
+    }
+    const range = req.start_date === req.end_date ? req.start_date : `${req.start_date} → ${req.end_date}`;
+    const msg = `លុបសំណើច្បាប់ "${LEAVE_TYPE_LABELS[req.leave_type] || req.leave_type}" របស់ ${empLabel(req.employee_id)} (${range})?`
+      + (toClear.length ? `\nនិងដកស្ថានភាព "ច្បាប់" ចេញពីតារាងវត្តមាន ${toClear.length} ថ្ងៃ (ត្រឡប់ទៅ "មិនទាន់កត់")។` : '')
+      + '\nសកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។';
+    if (!(await customConfirm(msg))) return;
+
+    lvxDeleting = true;
+    try {
+      if (req.id != null && !String(req.id).startsWith('local_')) {
+        const { error } = await supabaseClient.from('leave_requests').delete().eq('id', req.id);
+        if (error) { customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
+      }
+      leaveRequests = leaveRequests.filter(r => r !== req);
+      for (const d of toClear) {
+        const rec = { status: '', checkin: '', checkout: '', breakOut: '', breakIn: '' };
+        attendance[d][req.employee_id] = rec;
+        await upsertAttendanceRecord(d, req.employee_id, rec);
+      }
+      if (typeof logAudit === 'function') {
+        logAudit('leave_delete', { entity: 'leave_request', ref: String(req.id), month: req.start_date.slice(0, 7), employeeId: req.employee_id,
+          old: { type: req.leave_type, from: req.start_date, to: req.end_date, status: req.status, attendanceCleared: toClear.length } });
+      }
+    } finally { lvxDeleting = false; }
+
+    renderLeaveBalanceTab();
+    if (typeof renderAttendanceTab === 'function') renderAttendanceTab();
+    if (typeof renderRequestsTab === 'function') renderRequestsTab();
+    if (typeof renderPayrollTab === 'function') renderPayrollTab();
   }
 
   // ---------- CSV ----------
