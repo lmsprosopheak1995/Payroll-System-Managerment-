@@ -53,7 +53,7 @@
     if (!host) return false;
     const root = document.createElement('div');
     root.id = 'lvxRoot';
-    root.style.cssText = 'margin-top:20px;';
+    root.style.cssText = 'margin-top:24px;';
     root.innerHTML = `
       <div id="lvxSubTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button type="button" data-sub="payout">💵 បើកជំនួសចុងឆ្នាំ</button>
@@ -80,9 +80,9 @@
     });
   }
 
-  const tableWrap = html => `<div style="overflow-x:auto;">${html}</div>`;
+  const tableWrap = html => `<div class="table-wrap">${html}</div>`;
   const csvBtn = `<button type="button" class="secondary" data-lvx-csv="1">⬇ CSV</button>`;
-  const empty = msg => `<div style="padding:24px;text-align:center;color:var(--text-muted,#6b7280);">${msg}</div>`;
+  const empty = msg => `<div class="empty-state">${msg}</div>`;
 
   // ---------- Tab 1: បើកជំនួសចុងឆ្នាំ ----------
   function payoutRows() {
@@ -137,7 +137,7 @@
     }).join('');
 
     $('lvxPanel').innerHTML = `
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="attendance-stats" style="margin-bottom:12px;">
         <div class="stat-card"><div class="num">${payable.length}</div><div class="label">បុគ្គលិកត្រូវបើកជំនួស</div></div>
         <div class="stat-card"><div class="num">$${fmtUSD(totalAmt)}</div><div class="label">ប្រាក់ត្រូវបើកសរុប</div></div>
         <div class="stat-card"><div class="num">$${fmtUSD(paidAmt)}</div><div class="label">បានបើករួច</div></div>
