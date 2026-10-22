@@ -330,10 +330,13 @@
     list.forEach(x => x.balance.forEach((v, i) => { if (v != null) tB[i] = (tB[i] || 0) + v; }));
     const tBend = list.reduce((a, x) => a + (x.lastMonth >= 0 ? x.balance[x.lastMonth] : 0), 0);
     const carryTotal = list.reduce((a, x) => a + x.carry, 0);
+    // ជួរសរុបរួម — ដាក់ពណ៌ផ្ទៃ + បន្ទាត់ក្រាស់ ដើម្បីកុំច្រឡំជាបុគ្គលិកម្នាក់
+    const tint = 'background:color-mix(in srgb, var(--indigo,#4f46e5) 9%, transparent);';
+    const topLine = 'border-top:3px solid var(--indigo,#4f46e5);';
     const foot = `
-      <tr><td rowspan="3"><strong>សរុប</strong></td><td>ទទួលបាន</td><td>${carryTotal ? num(carryTotal) : dash}</td>${tE.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tE.reduce((a, b) => a + b, 0))}</strong></td></tr>
-      <tr><td>ប្រើ</td><td>${dash}</td>${tU.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tU.reduce((a, b) => a + b, 0))}</strong></td></tr>
-      <tr><td>សមតុល្យ</td><td>${dash}</td>${tB.map(v => `<td>${bal(v)}</td>`).join('')}<td>${bal(list.some(x => x.lastMonth >= 0) ? round2(tBend) : null)}</td></tr>`;
+      <tr style="${tint}${topLine}"><td rowspan="3" style="${tint}${topLine}"><strong>📊 សរុបរួម</strong><div style="font-size:0.7rem;color:var(--text-muted,#6b7280);">បូកបុគ្គលិកទាំងអស់ខាងលើ</div></td><td>ទទួលបាន</td><td>${carryTotal ? num(carryTotal) : dash}</td>${tE.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tE.reduce((a, b) => a + b, 0))}</strong></td></tr>
+      <tr style="${tint}"><td>ប្រើ</td><td>${dash}</td>${tU.map(v => `<td><strong>${v ? num(v) : '-'}</strong></td>`).join('')}<td><strong>${num(tU.reduce((a, b) => a + b, 0))}</strong></td></tr>
+      <tr style="${tint}"><td>សមតុល្យ</td><td>${dash}</td>${tB.map(v => `<td>${bal(v)}</td>`).join('')}<td>${bal(list.some(x => x.lastMonth >= 0) ? round2(tBend) : null)}</td></tr>`;
 
     $('lvxPanel').innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
