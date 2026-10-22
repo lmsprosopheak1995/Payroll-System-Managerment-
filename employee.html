@@ -181,7 +181,7 @@
       </div>
       <div class="menu-card">
         <button class="menu-row" data-go="clock" style="--c:#f59e0b"><span class="menu-ico">🕐</span><span class="lbl">កត់ត្រាវត្តមាន</span><span class="go">›</span></button>
-        <button class="menu-row" data-go="activities" style="--c:#ef4444"><span class="menu-ico">📍</span><span class="lbl">សកម្មភាព</span><span class="go">›</span></button>
+        <button class="menu-row" data-go="correction" style="--c:#ef4444"><span class="menu-ico">🧾</span><span class="lbl">ស្នើកែវត្តមាន (ភ្លេចស្កេន)</span><span class="go">›</span></button>
         <button class="menu-row" data-go="leave" style="--c:#3b82f6"><span class="menu-ico">📝</span><span class="lbl">សុំច្បាប់</span><span class="go">›</span></button>
         <button class="menu-row" data-go="ot" style="--c:#10b981"><span class="menu-ico">⏱</span><span class="lbl">ធ្វើការថែមម៉ោង</span><span class="go">›</span></button>
         <button class="menu-row" data-go="attendance" style="--c:#8b5cf6"><span class="menu-ico">📅</span><span class="lbl">ប្រតិទិនវត្តមាន</span><span class="go">›</span></button>
@@ -274,31 +274,6 @@
           </table>
         </div>
       </div>
-
-      <div class="portal-card" id="corrCard" style="margin-top:14px;">
-        <h2 style="margin:0 0 4px;font-size:0.9rem;">ស្នើកែវត្តមាន (ភ្លេចស្កេន)</h2>
-        <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">ភ្លេចស្កេនចូល/ចេញ? ដាក់ស្នើម៉ោងត្រឹមត្រូវ ហើយរង់ចាំអ្នកគ្រប់គ្រងអនុម័ត។ បំពេញតែម៉ោងដែលត្រូវកែ។</p>
-        <p class="error-msg" id="corrError"></p>
-        <div class="form-group">
-          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ថ្ងៃដែលត្រូវកែ</label>
-          <input type="date" id="corrDate">
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូល</label><input type="time" id="corrCheckin"></div>
-          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញបាយ</label><input type="time" id="corrBreakOut"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូលវិញ</label><input type="time" id="corrBreakIn"></div>
-          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញ</label><input type="time" id="corrCheckout"></div>
-        </div>
-        <div class="form-group">
-          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ *</label>
-          <textarea id="corrReason" rows="2" placeholder="ឧ. ភ្លេចស្កេនចេញ ព្រោះប្រញាប់ទៅផ្ទះ"></textarea>
-        </div>
-        <button class="primary-btn" id="corrSubmitBtn">ដាក់ស្នើ</button>
-        <h3 style="font-size:0.8rem;margin:14px 0 6px;">សំណើរបស់ខ្ញុំ</h3>
-        <div id="corrList"></div>
-      </div>
     </div>
 
     <div id="leaveTabContent" class="tab-content">
@@ -387,16 +362,31 @@
       </div>
     </div>
 
-    <div id="activitiesTabContent" class="tab-content">
-      <div class="portal-card">
-        <h2 style="margin:0 0 10px;font-size:0.9rem;">📍 កត់ត្រាសកម្មភាព</h2>
-        <div class="form-group"><label>ថ្ងៃ</label><input type="date" id="actEDate" style="width:100%;"></div>
-        <div class="form-group"><label>ចំណងជើង</label><input type="text" id="actETitle" placeholder="ឧ. ជួបអតិថិជន / ដឹកទំនិញ" style="width:100%;"></div>
-        <div class="form-group"><label>កំណត់ចំណាំ</label><textarea id="actENote" rows="2"></textarea></div>
-        <button class="primary-btn" id="actEAddBtn">➕ បន្ថែមសកម្មភាព</button>
-        <p class="scan-hint danger-text" id="actEWarn" style="display:none;"></p>
-        <div id="actEList" style="margin-top:14px;"></div>
-      </div>
+    <div id="correctionTabContent" class="tab-content">
+        <div class="portal-card" id="corrCard">
+          <h2 style="margin:0 0 4px;font-size:0.9rem;">ស្នើកែវត្តមាន (ភ្លេចស្កេន)</h2>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">ភ្លេចស្កេនចូល/ចេញ? ដាក់ស្នើម៉ោងត្រឹមត្រូវ ហើយរង់ចាំអ្នកគ្រប់គ្រងអនុម័ត។ បំពេញតែម៉ោងដែលត្រូវកែ។</p>
+          <p class="error-msg" id="corrError"></p>
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ថ្ងៃដែលត្រូវកែ</label>
+            <input type="date" id="corrDate">
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូល</label><input type="time" id="corrCheckin"></div>
+            <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញបាយ</label><input type="time" id="corrBreakOut"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូលវិញ</label><input type="time" id="corrBreakIn"></div>
+            <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញ</label><input type="time" id="corrCheckout"></div>
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ *</label>
+            <textarea id="corrReason" rows="2" placeholder="ឧ. ភ្លេចស្កេនចេញ ព្រោះប្រញាប់ទៅផ្ទះ"></textarea>
+          </div>
+          <button class="primary-btn" id="corrSubmitBtn">ដាក់ស្នើ</button>
+          <h3 style="font-size:0.8rem;margin:14px 0 6px;">សំណើរបស់ខ្ញុំ</h3>
+          <div id="corrList"></div>
+        </div>
     </div>
 
     <div id="feedbackTabContent" class="tab-content">
@@ -1019,7 +1009,7 @@ async function showMain() {
   await Promise.all([loadSettings(), loadEmployeeRecord(), loadHolidays(), loadMyShift()]);
   await loadMyPartialLeaves();
   renderEmpInfo();
-  document.getElementById('actEDate').value = todayStr();
+  { const cd = document.getElementById('corrDate'); if (cd && !cd.value) cd.value = todayStr(); }
   startAnnouncementPolling();
   const thisMonth = todayStr().slice(0, 7);
   document.getElementById('attMonthInput').value = thisMonth;
@@ -1053,33 +1043,6 @@ function tableWarnEmp(elId, error) {
 }
 function sortDescBy(list, key) { return list.sort((a, b) => String(b[key] || '').localeCompare(String(a[key] || ''))); }
 
-// ==== សកម្មភាព (Activities) ====
-async function renderActivitiesEmp() {
-  const box = document.getElementById('actEList');
-  const { data, error } = await supabaseClient.from('activities').select('*').eq('employee_id', currentEmployee.id);
-  tableWarnEmp('actEWarn', error);
-  const rows = sortDescBy(data || [], 'date').slice(0, 60);
-  box.innerHTML = rows.length ? rows.map(r => `<div class="hist-item" style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
-    <div><div style="font-weight:600;font-size:0.8rem;">${escapeHtml(r.title)}</div><div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(r.date)}${r.note ? ' · ' + escapeHtml(r.note) : ''}</div></div>
-    <button class="secondary" style="font-size:0.7rem;" onclick="deleteActivityEmp('${escapeHtml(r.id)}')">🗑</button></div>`).join('')
-    : '<div style="color:var(--text-muted);font-size:0.78rem;text-align:center;padding:10px;">មិនទាន់មានសកម្មភាពទេ</div>';
-}
-async function addActivityEmp() {
-  const date = document.getElementById('actEDate').value;
-  const title = document.getElementById('actETitle').value.trim();
-  const note = document.getElementById('actENote').value.trim();
-  if (!date || !title) { customAlert('សូមបំពេញថ្ងៃ និងចំណងជើង'); return; }
-  const { error } = await supabaseClient.from('activities').insert({ id: empUid('act'), employee_id: currentEmployee.id, date, title, note, created_at: new Date().toISOString() });
-  if (error) { customAlert('រក្សាទុកមិនជោគជ័យ៖ ' + error.message); return; }
-  document.getElementById('actETitle').value = ''; document.getElementById('actENote').value = '';
-  renderActivitiesEmp();
-}
-async function deleteActivityEmp(id) {
-  if (!(await customConfirm('លុបសកម្មភាពនេះ?'))) return;
-  const { error } = await supabaseClient.from('activities').delete().eq('id', id).eq('employee_id', currentEmployee.id);
-  if (error) { customAlert('លុបមិនជោគជ័យ៖ ' + error.message); return; }
-  renderActivitiesEmp();
-}
 
 // ==== មតិកែលម្អ (Feedback) ====
 async function renderFeedbackEmp() {
@@ -1161,7 +1124,7 @@ async function enableBrowserNotifications() {
   customAlert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
 }
 
-const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', activities:'សកម្មភាព', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
+const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', correction:'ស្នើកែវត្តមាន', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
 
 // ==== ទំព័រដើម (Home): banner + ឈ្មោះ ====
 function renderHomeBanner() {
@@ -1276,7 +1239,7 @@ function switchEmpTab(tab) {
   document.getElementById('leaveTabContent').classList.toggle('active', tab === 'leave');
   document.getElementById('otTabContent').classList.toggle('active', tab === 'ot');
   document.getElementById('payrollTabContent').classList.toggle('active', tab === 'payroll');
-  document.getElementById('activitiesTabContent').classList.toggle('active', tab === 'activities');
+  document.getElementById('correctionTabContent').classList.toggle('active', tab === 'correction');
   document.getElementById('feedbackTabContent').classList.toggle('active', tab === 'feedback');
   document.getElementById('notifyTabContent').classList.toggle('active', tab === 'notify');
   if (tab !== 'home') stopEmpScanner();
@@ -1285,7 +1248,7 @@ function switchEmpTab(tab) {
   if (tab === 'leave') renderLeaveHist();
   if (tab === 'ot') renderOTHist();
   if (tab === 'payroll') { renderPayrollSummary(); renderPayrollHistoryEmp(); }
-  if (tab === 'activities') renderActivitiesEmp();
+  if (tab === 'correction') loadMyCorrections();
   if (tab === 'feedback') renderFeedbackEmp();
   if (tab === 'notify') renderNotifyEmp();
   if (tab === 'profile') renderProfileExtras();
@@ -1595,7 +1558,6 @@ function showScanVerifyPopup(step, time) {
   scanVerifyTimer = setTimeout(closeScanVerifyPopup, SCAN_VERIFY_AUTOCLOSE_MS);
 }
 
-document.getElementById('actEAddBtn').addEventListener('click', addActivityEmp);
 document.getElementById('fbESendBtn').addEventListener('click', sendFeedbackEmp);
 document.getElementById('nfEnableBtn').addEventListener('click', enableBrowserNotifications);
 document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('click', () => switchEmpTab(btn.dataset.go)));
@@ -1788,7 +1750,6 @@ async function renderAttendanceTabEmp() {
     <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន (៛)</div></div>
     <div class="stat-card"><div class="num">${totals.otHours ? fmtHours(totals.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
   `;
-  loadMyCorrections();
 }
 
 // ---- ស្នើកែវត្តមាន (ភ្លេចស្កេន) → Admin អនុម័ត ----
