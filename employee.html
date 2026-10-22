@@ -1372,7 +1372,6 @@ function toggleEmpScanner() {
 function startEmpScanner() {
   if (scanLockInfo().locked) { applyScanLockUI(); return; }
   primeScanBeep();
-  warmScanPosition();
   if (typeof Html5Qrcode === 'undefined') {
     customAlert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
     return;
@@ -1450,8 +1449,7 @@ async function handleEmpScan(decodedText) {
   if (getEmpToken()) {
     resultEl.style.color = 'var(--text-muted)';
     resultEl.textContent = '⏳ កំពុងកត់ត្រា...';
-    const pos = await currentScanPosition();   // GPS (បើអនុញ្ញាត) — server កត់ត្រា និងបង្ខំតាមការកំណត់ Admin
-    const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode, p_lat: pos ? pos.lat : null, p_lng: pos ? pos.lng : null });
+    const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode });
     const unavailable = ce && (/PGRST202|could not find the function|not_authenticated|permission denied for function|42501/i.test((ce.code || '') + ' ' + (ce.message || '')) || ce.code === '28000');
     if (ce && !unavailable) { stopEmpScanner(); fail('✕ កត់ត្រាមិនជោគជ័យ៖ ' + ce.message); return; }
     if (!ce) {
@@ -1460,8 +1458,6 @@ async function handleEmpScan(decodedText) {
         const E = {
           no_code: '✕ មិនទាន់មានកូដ QR កន្លែងធ្វើការទេ សូមទាក់ទងអ្នកគ្រប់គ្រង',
           bad_code: '✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ',
-          too_far: '✕ អ្នកនៅឆ្ងាយពីកន្លែងធ្វើការ' + (ck && ck.distance_m ? ` (${ck.distance_m} ម៉ែត្រ)` : ''),
-          no_location: '✕ សូមអនុញ្ញាតទីតាំង (Location) ដើម្បីកត់វត្តមាន',
           too_early: '✕ ការស្កេនបិទ — នឹងបើកវិញនៅម៉ោង ' + at,
           closed_after_checkout: '✕ អ្នកបានចេញពីការងាររួចហើយ — ការស្កេនបើកវិញនៅម៉ោង ' + at + 'ស្អែក',
           scan_disabled: '✕ អ្នកគ្រប់គ្រងបានបិទការស្កេនបណ្តោះអាសន្ន',
@@ -1858,22 +1854,7 @@ async function submitCorrection() {
   await loadMyCorrections();
 }
 
-// ---- GPS + រូបថតពេលស្កេន ----
-let scanPosCache = null;   // { lat, lng, at }
-function getScanPosition(timeoutMs) {
-  return new Promise(resolve => {
-    if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      p => { scanPosCache = { lat: p.coords.latitude, lng: p.coords.longitude, at: Date.now() }; resolve(scanPosCache); },
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: timeoutMs || 7000, maximumAge: 15000 });
-  });
-}
-function warmScanPosition() { getScanPosition(10000); }   // ស្នើសិទ្ធិ + ទាញទីតាំងជាមុន ពេលចាប់ផ្តើមស្កេន
-async function currentScanPosition() {
-  if (scanPosCache && Date.now() - scanPosCache.at < 60000) return scanPosCache;
-  return await getScanPosition(7000);
-}
+// ---- រូបថតពេលស្កេន ----
 async function captureAndUploadSelfie(path) {
   let stream = null;
   try {
@@ -1899,8 +1880,8 @@ async function captureAndUploadSelfie(path) {
 function renderScanPrivacyNote() {
   const el = document.getElementById('empScanPrivacy');
   if (!el) return;
-  if (!getEmpToken()) { el.style.display = 'none'; return; }
-  el.textContent = '📍 ទីតាំងរបស់អ្នកត្រូវបានកត់ត្រាពេលស្កេន' + (settings.scanPhoto ? ' · 📸 ប្រព័ន្ធនឹងថតរូបអ្នកបញ្ជាក់វត្តមាន (មានតែអ្នកគ្រប់គ្រងមើលបាន)' : '');
+  if (!getEmpToken() || !settings.scanPhoto) { el.style.display = 'none'; return; }
+  el.textContent = '📸 ប្រព័ន្ធនឹងថតរូបអ្នកបញ្ជាក់វត្តមានពេលស្កេន (មានតែអ្នកគ្រប់គ្រងមើលបាន)';
   el.style.display = '';
 }
 

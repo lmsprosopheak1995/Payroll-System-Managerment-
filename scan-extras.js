@@ -1,6 +1,6 @@
 /* ==========================================================================
    scan-extras.js — ម៉ូឌុល Admin (ដាក់ក្រោម script.js ក្នុង index.html)
-     (១) ក្តារ "ស្កេនថ្ងៃនេះ"   — ស្ថានភាពបុគ្គលិកម្នាក់ៗថ្ងៃនេះ + ទីតាំង GPS + រូបថត + ការកំណត់ (GPS/រូបថត)
+     (១) ក្តារ "ស្កេនថ្ងៃនេះ"   — ស្ថានភាពបុគ្គលិកម្នាក់ៗថ្ងៃនេះ + រូបថត + ការកំណត់ (រូបថតពេលស្កេន)
      (២) សំណើកែវត្តមាន        — បុគ្គលិកភ្លេចស្កេន → Admin អនុម័ត/បដិសេធ (បន្ថែមក្នុងផ្ទាំង Leave / Overtime)
    ត្រូវការ SQL៖ scan-extras.sql (+ scan-photos-storage.sql សម្រាប់រូបថត) · ទំព័រទាំងនេះប្រើ token session ដែលមានស្រាប់
    មិនកែ logic ដើម — លុប <script src="scan-extras.js"> ទើបត្រឡប់ទៅដូចមុន
@@ -159,17 +159,6 @@
     }
   }
 
-  function geoCell(emp) {
-    const logs = board.logs[emp.id];
-    if (!logs) return '<span style="color:var(--text-muted);">-</span>';
-    const last = ['checkout', 'break_in', 'break_out', 'checkin'].map(s => logs[s]).find(Boolean);
-    if (!last || last.lat == null) return '<span style="color:var(--text-muted);">គ្មាន GPS</span>';
-    const radius = board.cfg && board.cfg.radius || 100;
-    const ok = last.distance_m == null ? null : last.distance_m <= radius;
-    const color = ok === null ? 'var(--text-muted)' : (ok ? '#16a34a' : '#dc2626');
-    const dist = last.distance_m == null ? 'មិនស្គាល់ចម្ងាយ' : `${last.distance_m} ម`;
-    return `<a href="https://www.google.com/maps?q=${last.lat},${last.lng}" target="_blank" rel="noopener" style="color:${color};font-weight:600;text-decoration:none;">📍 ${esc(dist)}</a>`;
-  }
   function photoCell(emp) {
     const logs = board.logs[emp.id];
     const n = logs ? Object.values(logs).filter(l => l.photo).length : 0;
@@ -195,7 +184,7 @@
       <td><span style="color:${c.tone};font-weight:700;">● ${esc(c.label)}</span>${c.lateIn ? ' <span class="badge inactive">យឺត</span>' : ''}</td>
       <td>${esc((rec && rec.checkin) || '-')}</td><td>${esc((rec && rec.break_out) || '-')}</td>
       <td>${esc((rec && rec.break_in) || '-')}</td><td>${esc((rec && rec.checkout) || '-')}</td>
-      <td>${geoCell(e)}</td><td>${photoCell(e)}</td></tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>';
+      <td>${photoCell(e)}</td></tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>';
     $('todayMeta').innerHTML = `ថ្ងៃ ${esc(date)} · <button type="button" class="secondary" style="padding:2px 10px;" onclick="scanExtras.refresh()">🔄 ផ្ទុកឡើងវិញ</button>`;
   }
 
@@ -203,58 +192,28 @@
   function renderBoardTableSafe() { try { renderBoardTable(); } catch (e) { console.error('scan board:', e); } }
 
   async function fetchCfg() {
-    const q = await supabaseClient.from('app_settings').select('geo_enforce, scan_photo, workplace_lat, workplace_lng, workplace_radius').limit(1);
+    const q = await supabaseClient.from('app_settings').select('scan_photo').limit(1);
     if (q.error) { board.cfgMissing = true; return; }
     board.cfgMissing = false;
-    board.cfg = { geo: !!(q.data[0] || {}).geo_enforce, photo: !!(q.data[0] || {}).scan_photo,
-      lat: (q.data[0] || {}).workplace_lat, lng: (q.data[0] || {}).workplace_lng, radius: (q.data[0] || {}).workplace_radius || 100 };
+    board.cfg = { photo: !!(q.data[0] || {}).scan_photo };
   }
   function renderCfg() {
     const box = $('todayCfg'); if (!box) return;
     const c = board.cfg;
     if (board.cfgMissing || !c) { box.innerHTML = '<span style="color:var(--danger,#dc2626);">⚠ មិនទាន់ត្រៀម — សូមរត់ scan-extras.sql ក្នុង Supabase ជាមុន</span>'; return; }
-    const hasLoc = c.lat != null && c.lng != null;
     const sw = (on, fn, label) => `<button type="button" onclick="${fn}" style="border:0;border-radius:999px;padding:4px 14px;color:#fff;cursor:pointer;background:${on ? '#16a34a' : '#64748b'};">${on ? '✓ បើក' : '○ បិទ'}</button> ${label}`;
     box.innerHTML = `
       <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
-        <div>📍 ទីតាំងកន្លែងធ្វើការ៖ <b>${hasLoc ? esc(Number(c.lat).toFixed(5) + ', ' + Number(c.lng).toFixed(5)) : 'មិនទាន់កំណត់'}</b>
-          <button type="button" class="secondary" onclick="scanExtras.setLocation()">កំណត់ជាទីតាំងរបស់ខ្ញុំឥឡូវនេះ</button></div>
-        <div>រង្វង់ (ម៉ែត្រ) <input type="number" id="todayRadius" min="20" max="5000" value="${esc(c.radius)}" style="width:90px;">
-          <button type="button" class="secondary" onclick="scanExtras.saveRadius()">រក្សាទុក</button></div>
-      </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-        <div>${sw(c.geo, 'scanExtras.toggleGeo()', 'បង្ខំស្កេនបានតែក្នុងរង្វង់កន្លែងធ្វើការ' + (hasLoc ? '' : ' <i>(ត្រូវកំណត់ទីតាំងជាមុន)</i>'))}</div>
         <div>${sw(c.photo, 'scanExtras.togglePhoto()', 'ថតរូបខ្លួនពេលស្កេន')}</div>
         <div><button type="button" class="secondary" onclick="scanExtras.purgePhotos(60)">🗑 លុបរូបថតចាស់ជាង ៦០ ថ្ងៃ</button></div>
       </div>
-      <p class="scan-hint" style="margin:8px 0 0;">*GPS ត្រូវបានកត់ត្រារាល់ការស្កេន (ចម្ងាយបង្ហាញលើក្តារ)។ "បង្ខំ" បដិសេធការស្កេននៅឆ្ងាយ ឬគ្មានទីតាំង។ រូបថតមានតែ Admin មើលបាន — សូមប្រាប់បុគ្គលិកជាមុន។</p>`;
+      <p class="scan-hint" style="margin:8px 0 0;">*រូបថតមានតែ Admin មើលបាន — សូមប្រាប់បុគ្គលិកជាមុន ហើយត្រូវរត់ scan-photos-storage.sql ក្នុង Supabase។</p>`;
   }
   async function setCfg(patch) {
     const r = await supabaseClient.from('app_settings').update(patch).eq('id', 1);
     if (r.error) { customAlert('រក្សាទុកមិនបានទេ៖ ' + r.error.message); return false; }
     await fetchCfg(); renderCfg(); renderBoardTableSafe();
     return true;
-  }
-  function setLocation() {
-    if (!navigator.geolocation) { customAlert('ឧបករណ៍នេះមិនគាំទ្រ GPS'); return; }
-    if (!confirm('កំណត់ទីតាំងបច្ចុប្បន្នរបស់ឧបករណ៍នេះជាទីតាំងកន្លែងធ្វើការ?\n(ត្រូវនៅកន្លែងធ្វើការពិត ហើយបើក Location)')) return;
-    navigator.geolocation.getCurrentPosition(async pos => {
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      if (await setCfg({ workplace_lat: lat, workplace_lng: lng })) {
-        if (typeof settings === 'object' && settings) { settings.workplaceLat = lat; settings.workplaceLng = lng; }   // កុំឱ្យការរក្សាទុកការកំណត់ផ្សេងសរសេរជាន់លើ
-      }
-    }, err => customAlert('មិនអាចយកទីតាំងបានទេ៖ ' + err.message), { enableHighAccuracy: true, timeout: 15000 });
-  }
-  async function saveRadius() {
-    const v = parseInt(($('todayRadius') || {}).value, 10);
-    if (!(v >= 20)) { customAlert('រង្វង់ត្រូវយ៉ាងតិច ២០ ម៉ែត្រ'); return; }
-    if (await setCfg({ workplace_radius: v }) && typeof settings === 'object' && settings) settings.workplaceRadius = v;
-  }
-  async function toggleGeo() {
-    const c = board.cfg; if (!c) return;
-    if (!c.geo && (c.lat == null || c.lng == null)) { customAlert('សូមកំណត់ទីតាំងកន្លែងធ្វើការជាមុនសិន'); return; }
-    if (!c.geo && !confirm('បើកការបង្ខំទីតាំង? បុគ្គលិកដែលបិទ Location ឬនៅឆ្ងាយ នឹងស្កេនមិនបាន។')) return;
-    await setCfg({ geo_enforce: !c.geo });
   }
   async function togglePhoto() {
     const c = board.cfg; if (!c) return;
@@ -283,8 +242,7 @@
     const cards = items.map((l, i) => {
       const u = !error && data && data[i] && data[i].signedUrl;
       return `<div style="text-align:center;"><div style="font-weight:700;margin-bottom:4px;">${esc(STEP_LABEL[l.step] || l.step)} ${esc(l.time || '')}</div>
-        ${u ? `<img src="${u}" style="width:100%;max-width:220px;border-radius:12px;">` : '<div style="color:var(--text-muted);padding:20px;">មិនមានរូប (ឬមិនទាន់ upload)</div>'}
-        <div style="font-size:0.75rem;color:var(--text-muted);">${l.distance_m != null ? '📍 ' + l.distance_m + ' ម' : ''}</div></div>`;
+        ${u ? `<img src="${u}" style="width:100%;max-width:220px;border-radius:12px;">` : '<div style="color:var(--text-muted);padding:20px;">មិនមានរូប (ឬមិនទាន់ upload)</div>'}</div>`;
     }).join('');
     overlay(`<h3 style="margin:0 0 10px;">${esc(emp ? emp.name : empId)}</h3><div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">${cards}</div>
       <div style="text-align:center;margin-top:14px;"><button type="button" onclick="scanExtras.closeOverlay()">បិទ</button></div>`);
@@ -335,6 +293,6 @@
   window.scanExtras = {
     approveCorr, rejectCorr, setFilter: k => { boardFilter = k; renderBoardTableSafe(); },
     refresh: async () => { await loadBoard(); renderBoardTableSafe(); },
-    setLocation, saveRadius, toggleGeo, togglePhoto, purgePhotos, showPhotos, closeOverlay,
+    togglePhoto, purgePhotos, showPhotos, closeOverlay,
   };
 })();
