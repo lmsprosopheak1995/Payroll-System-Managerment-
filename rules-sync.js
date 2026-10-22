@@ -153,7 +153,9 @@
   let started = false;
   const poll = setInterval(() => {
     if (started) { clearInterval(poll); return; }
-    if (typeof getAdminSession === 'function' && getAdminSession() && typeof supabaseClient !== 'undefined') {
+    // Admin ចូលរួច៖ របៀបថ្មី (app_sessions → window.appSession.role) ឬ flag ចាស់ (getAdminSession)
+    const isAdmin = (window.appSession && window.appSession.role === 'admin') || (typeof getAdminSession === 'function' && getAdminSession());
+    if (isAdmin && typeof supabaseClient !== 'undefined') {
       started = true; clearInterval(poll); loadAll();
     }
   }, 800);
