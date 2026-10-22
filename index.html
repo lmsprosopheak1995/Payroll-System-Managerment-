@@ -58,6 +58,7 @@
       <div class="nav-sub">
         <button class="nav-item" data-tab="attendance"><span class="dot"></span><span class="lbl">តារាងវត្តមានការងារ</span></button>
         <button class="nav-item" data-tab="scan"><span class="dot"></span><span class="lbl">ស្កេនចូល-ចេញ</span></button>
+          <button class="nav-item" data-tab="today"><span class="dot"></span><span class="lbl">ស្កេនថ្ងៃនេះ</span></button>
       </div>
     </div>
     <button class="nav-item" data-tab="requests"><span class="ico">📝</span><span class="lbl">Leave / Overtime <span id="pendingReqBadge"></span></span></button>
@@ -235,6 +236,20 @@
         <button id="workplaceQrDownloadBtn">⬇ ទាញយករូបភាព</button>
       </div>
     </div>
+  </div>
+
+  <div id="todayTab" class="tab-content">
+    <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0;font-size:0.95rem;">📋 ស្ថានភាពបុគ្គលិកថ្ងៃនេះ</h3>
+      <span id="todayMeta" style="font-size:0.8rem;color:var(--text-muted);"></span>
+    </div>
+    <div id="todayChips" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;"></div>
+    <div class="table-wrap" style="margin-bottom:16px;">
+      <table id="todayTable"><thead><tr>
+        <th>បុគ្គលិក</th><th>ផ្នែក</th><th>វេន</th><th>ស្ថានភាព</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th><th>ទីតាំង</th><th>រូបថត</th>
+      </tr></thead><tbody id="todayBody"></tbody></table>
+    </div>
+    <div id="todayCfg" class="portal-card" style="padding:14px;"></div>
   </div>
 
   <div id="requestsTab" class="tab-content">
@@ -1069,6 +1084,7 @@
 <script src="salary-tax.js"></script>
 <script src="nssf.js"></script>
 <script src="dash-insights.js"></script>
+<script src="scan-extras.js"></script>
 <script src="ui-modern.js"></script>
 <script src="about-contact.js"></script>
 </body>

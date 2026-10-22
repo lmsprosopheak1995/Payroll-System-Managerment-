@@ -174,6 +174,7 @@
       <div class="home-scan" style="margin:14px 16px 0;">
         <button class="big-btn" id="empScanToggleBtn" style="width:100%;">📷 ស្កេនកូដ QR កន្លែងធ្វើការ</button>
         <p id="empScanLockNote" style="display:none;font-size:0.78rem;text-align:center;margin:8px 0 0;color:var(--text-muted);font-weight:600;"></p>
+        <p id="empScanPrivacy" style="display:none;font-size:0.7rem;text-align:center;margin:6px 0 0;color:var(--text-muted);"></p>
         <div id="empQrReader" style="display:none; margin-top:10px;"></div>
         <p class="scan-hint" id="empScanHint" style="display:none;">*ស្កេនកូដ QR ដែលបិទនៅច្រកចូលកន្លែងធ្វើការ។ ត្រូវការសិទ្ធិប្រើកាមេរ៉ា និងតម្រូវឱ្យបើកតាមរយៈ https:// ឬ localhost</p>
         <p id="empScanResult" style="font-size:0.75rem;text-align:center;margin:8px 0 0;font-weight:600;"></p>
@@ -272,6 +273,31 @@
             <tbody id="empAttBody"></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="portal-card" id="corrCard" style="margin-top:14px;">
+        <h2 style="margin:0 0 4px;font-size:0.9rem;">ស្នើកែវត្តមាន (ភ្លេចស្កេន)</h2>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">ភ្លេចស្កេនចូល/ចេញ? ដាក់ស្នើម៉ោងត្រឹមត្រូវ ហើយរង់ចាំអ្នកគ្រប់គ្រងអនុម័ត។ បំពេញតែម៉ោងដែលត្រូវកែ។</p>
+        <p class="error-msg" id="corrError"></p>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ថ្ងៃដែលត្រូវកែ</label>
+          <input type="date" id="corrDate">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូល</label><input type="time" id="corrCheckin"></div>
+          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញបាយ</label><input type="time" id="corrBreakOut"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចូលវិញ</label><input type="time" id="corrBreakIn"></div>
+          <div class="form-group"><label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញ</label><input type="time" id="corrCheckout"></div>
+        </div>
+        <div class="form-group">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">មូលហេតុ *</label>
+          <textarea id="corrReason" rows="2" placeholder="ឧ. ភ្លេចស្កេនចេញ ព្រោះប្រញាប់ទៅផ្ទះ"></textarea>
+        </div>
+        <button class="primary-btn" id="corrSubmitBtn">ដាក់ស្នើ</button>
+        <h3 style="font-size:0.8rem;margin:14px 0 6px;">សំណើរបស់ខ្ញុំ</h3>
+        <div id="corrList"></div>
       </div>
     </div>
 
@@ -519,7 +545,7 @@ const DEFAULT_SETTINGS = {
   standardStart: '07:00', standardHours: 8, otMultiplier: 1.5,
   foodDaily: 2000, foodOT: 2000, workDaysPerMonth: 26, exchangeRate: 4100,
   workplaceCode: null,
-  scanEnabled: true, scanOffIds: [],
+  scanEnabled: true, scanOffIds: [], scanPhoto: false,
 };
 
 let currentEmployee = null; // { id, name, salary }
@@ -809,6 +835,7 @@ async function loadSettings() {
     carryFromYear: parseInt(data.annual_carry_from, 10) || new Date().getFullYear(),
     scanEnabled: data.scan_enabled !== false,                                   // Admin បិទការស្កេនទាំងអស់
     scanOffIds: Array.isArray(data.scan_off_ids) ? data.scan_off_ids.map(String) : [],   // Admin បិទការស្កេនដាច់ដោយឡែក
+    scanPhoto: data.scan_photo === true,                                          // Admin បើកការថតរូបពេលស្កេន
   };
 }
 
@@ -1313,12 +1340,14 @@ function applyScanLockUI() {
   btn.style.cursor = info.locked ? 'not-allowed' : '';
   if (go) { go.disabled = info.locked; go.textContent = label; go.style.opacity = info.locked ? '0.55' : ''; go.style.cursor = info.locked ? 'not-allowed' : ''; }
   if (note) { note.textContent = info.msg; note.style.display = info.locked ? '' : 'none'; }
+  renderScanPrivacyNote();
 }
 
 async function refreshScanLock() {
   if (!getSession()) return;
-  const { data: fl, error: fe } = await readSettingsRow('scan_enabled, scan_off_ids');
+  const { data: fl, error: fe } = await readSettingsRow('*');
   if (!fe && fl) {
+    settings.scanPhoto = fl.scan_photo === true;
     settings.scanEnabled = fl.scan_enabled !== false;
     settings.scanOffIds = Array.isArray(fl.scan_off_ids) ? fl.scan_off_ids.map(String) : [];
   }
@@ -1343,6 +1372,7 @@ function toggleEmpScanner() {
 function startEmpScanner() {
   if (scanLockInfo().locked) { applyScanLockUI(); return; }
   primeScanBeep();
+  warmScanPosition();
   if (typeof Html5Qrcode === 'undefined') {
     customAlert('មិនអាចផ្ទុកម៉ូឌុលស្កេនបានទេ សូមពិនិត្យការតភ្ជាប់អ៊ីនធឺណិត');
     return;
@@ -1420,7 +1450,8 @@ async function handleEmpScan(decodedText) {
   if (getEmpToken()) {
     resultEl.style.color = 'var(--text-muted)';
     resultEl.textContent = '⏳ កំពុងកត់ត្រា...';
-    const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode });
+    const pos = await currentScanPosition();   // GPS (បើអនុញ្ញាត) — server កត់ត្រា និងបង្ខំតាមការកំណត់ Admin
+    const { data: ck, error: ce } = await supabaseClient.rpc('emp_clock', { p_code: scannedCode, p_lat: pos ? pos.lat : null, p_lng: pos ? pos.lng : null });
     const unavailable = ce && (/PGRST202|could not find the function|not_authenticated/i.test((ce.code || '') + ' ' + (ce.message || '')) || ce.code === '28000');
     if (ce && !unavailable) { stopEmpScanner(); fail('✕ កត់ត្រាមិនជោគជ័យ៖ ' + ce.message); return; }
     if (!ce) {
@@ -1429,7 +1460,7 @@ async function handleEmpScan(decodedText) {
         const E = {
           no_code: '✕ មិនទាន់មានកូដ QR កន្លែងធ្វើការទេ សូមទាក់ទងអ្នកគ្រប់គ្រង',
           bad_code: '✕ នេះមិនមែនជាកូដ QR កន្លែងធ្វើការទេ សូមស្កេននៅកន្លែងធ្វើការ',
-          too_far: '✕ អ្នកនៅឆ្ងាយពីកន្លែងធ្វើការ',
+          too_far: '✕ អ្នកនៅឆ្ងាយពីកន្លែងធ្វើការ' + (ck && ck.distance_m ? ` (${ck.distance_m} ម៉ែត្រ)` : ''),
           no_location: '✕ សូមអនុញ្ញាតទីតាំង (Location) ដើម្បីកត់វត្តមាន',
           too_early: '✕ ការស្កេនបិទ — នឹងបើកវិញនៅម៉ោង ' + at,
           closed_after_checkout: '✕ អ្នកបានចេញពីការងាររួចហើយ — ការស្កេនបើកវិញនៅម៉ោង ' + at + 'ស្អែក',
@@ -1444,6 +1475,11 @@ async function handleEmpScan(decodedText) {
       stopEmpScanner();
       await renderClockBox();
       await renderHistory();
+      if (ck.photo_path) {   // Admin បើក "ថតរូបពេលស្កេន"
+        resultEl.style.color = 'var(--text-muted)';
+        resultEl.textContent = '📸 កំពុងថតរូបបញ្ជាក់...';
+        await captureAndUploadSelfie(ck.photo_path);
+      }
       resultEl.textContent = '';
       showScanVerifyPopup(ck.step, ck.step === 'done' ? '' : (ck.time || ''));
       if (ck.step === 'checkout') { scanCheckedOutDate = todayStr(); applyScanLockUI(); }
@@ -1570,6 +1606,8 @@ document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('clic
 document.getElementById('subBack').addEventListener('click', () => switchEmpTab('home'));
 document.getElementById('homeBanner').addEventListener('scroll', updateBannerDots, { passive: true });
 document.getElementById('empScanToggleBtn').addEventListener('click', toggleEmpScanner);
+document.getElementById('corrSubmitBtn').addEventListener('click', submitCorrection);
+{ const cd = document.getElementById('corrDate'); if (cd) { cd.max = todayStr(); } }
 document.getElementById('goScanBtn').addEventListener('click', () => { switchEmpTab('home'); if (!empScannerRunning) startEmpScanner(); });
 document.getElementById('attMonthInput').addEventListener('change', renderAttendanceTabEmp);
 document.getElementById('payrollMonthInput').addEventListener('change', () => { renderPayrollSummary(); renderPayrollHistoryEmp(); });
@@ -1754,6 +1792,116 @@ async function renderAttendanceTabEmp() {
     <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន (៛)</div></div>
     <div class="stat-card"><div class="num">${totals.otHours ? fmtHours(totals.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
   `;
+  loadMyCorrections();
+}
+
+// ---- ស្នើកែវត្តមាន (ភ្លេចស្កេន) → Admin អនុម័ត ----
+const CORR_MAX_DAYS = 31;
+let corrRowsEmp = [];
+const CORR_STATUS = { pending: '<span class="badge pending">កំពុងរង់ចាំ</span>', approved: '<span class="badge active">អនុម័ត</span>', rejected: '<span class="badge inactive">បដិសេធ</span>' };
+
+function corrReqText(c) {
+  const it = [['ចូល', c.req_checkin], ['ចេញបាយ', c.req_break_out], ['ចូលវិញ', c.req_break_in], ['ចេញ', c.req_checkout]].filter(x => x[1]);
+  return it.map(x => `${x[0]} <b>${escapeHtml(x[1])}</b>`).join(' · ') || '-';
+}
+function renderMyCorrections() {
+  const box = document.getElementById('corrList');
+  if (!box) return;
+  if (!corrRowsEmp.length) { box.innerHTML = '<p style="font-size:0.75rem;color:var(--text-muted);margin:0;">មិនទាន់មានសំណើ</p>'; return; }
+  box.innerHTML = corrRowsEmp.map(c => `
+    <div style="border-top:1px solid var(--border,#e5e7eb);padding:8px 0;font-size:0.78rem;">
+      <div style="display:flex;justify-content:space-between;gap:8px;"><b>${escapeHtml(c.date)}</b>${CORR_STATUS[c.status] || escapeHtml(c.status)}</div>
+      <div>${corrReqText(c)}</div>
+      <div style="color:var(--text-muted);">${escapeHtml(c.reason || '')}</div>
+      ${c.admin_note ? `<div style="color:var(--text-muted);">Admin៖ ${escapeHtml(c.admin_note)}</div>` : ''}
+    </div>`).join('');
+}
+async function loadMyCorrections() {
+  const s = getSession();
+  const box = document.getElementById('corrList');
+  if (!s || !box) return;
+  const { data, error } = await supabaseClient.from('attendance_corrections').select('*').eq('employee_id', s.id).order('created_at', { ascending: false }).limit(20);
+  if (error) { corrRowsEmp = []; box.innerHTML = '<p style="font-size:0.75rem;color:var(--text-muted);margin:0;">មុខងារនេះមិនទាន់បើក ឬសូមចូលគណនីឡើងវិញ</p>'; return; }
+  corrRowsEmp = data || [];
+  renderMyCorrections();
+}
+async function submitCorrection() {
+  const err = document.getElementById('corrError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  err.textContent = ''; err.style.display = 'none';
+  const s = getSession();
+  if (!s) return;
+  const date = document.getElementById('corrDate').value;
+  const val = id => (document.getElementById(id).value || '').trim() || null;
+  const row = { employee_id: s.id, date, req_checkin: val('corrCheckin'), req_break_out: val('corrBreakOut'), req_break_in: val('corrBreakIn'), req_checkout: val('corrCheckout'),
+    reason: (document.getElementById('corrReason').value || '').trim(), status: 'pending' };
+  const today = todayStr();
+  const minDate = new Date(Date.now() - CORR_MAX_DAYS * 86400000).toISOString().slice(0, 10);
+  if (!date) return fail('សូមជ្រើសថ្ងៃដែលត្រូវកែ');
+  if (date > today) return fail('មិនអាចស្នើកែថ្ងៃអនាគតបានទេ');
+  if (date < minDate) return fail(`អាចស្នើកែបានតែក្នុងរយៈពេល ${CORR_MAX_DAYS} ថ្ងៃចុងក្រោយ`);
+  if (!row.req_checkin && !row.req_break_out && !row.req_break_in && !row.req_checkout) return fail('សូមបំពេញម៉ោងយ៉ាងតិចមួយ');
+  if (row.req_checkin && row.req_checkout && row.req_checkout <= row.req_checkin) return fail('ម៉ោងចេញត្រូវក្រោយម៉ោងចូល');
+  if (row.reason.length < 3) return fail('សូមសរសេរមូលហេតុ');
+  if (corrRowsEmp.some(c => c.date === date && c.status === 'pending')) return fail('អ្នកមានសំណើកំពុងរង់ចាំសម្រាប់ថ្ងៃនេះរួចហើយ');
+  const btn = document.getElementById('corrSubmitBtn');
+  btn.disabled = true;
+  const { error } = await supabaseClient.from('attendance_corrections').insert(row);
+  btn.disabled = false;
+  if (error) {
+    if (/42P01|PGRST205|does not exist/i.test((error.code || '') + ' ' + error.message)) return fail('មុខងារនេះមិនទាន់បើក — សូមទាក់ទងអ្នកគ្រប់គ្រង');
+    if (/42501|row-level security/i.test((error.code || '') + ' ' + error.message)) return fail('សូមចូលគណនីឡើងវិញ ហើយព្យាយាមម្តងទៀត');
+    return fail('ដាក់ស្នើមិនបានទេ៖ ' + error.message);
+  }
+  ['corrCheckin', 'corrBreakOut', 'corrBreakIn', 'corrCheckout', 'corrReason'].forEach(id => { document.getElementById(id).value = ''; });
+  customAlert('បានដាក់ស្នើរួចរាល់ — រង់ចាំអ្នកគ្រប់គ្រងអនុម័ត');
+  await loadMyCorrections();
+}
+
+// ---- GPS + រូបថតពេលស្កេន ----
+let scanPosCache = null;   // { lat, lng, at }
+function getScanPosition(timeoutMs) {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => { scanPosCache = { lat: p.coords.latitude, lng: p.coords.longitude, at: Date.now() }; resolve(scanPosCache); },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: timeoutMs || 7000, maximumAge: 15000 });
+  });
+}
+function warmScanPosition() { getScanPosition(10000); }   // ស្នើសិទ្ធិ + ទាញទីតាំងជាមុន ពេលចាប់ផ្តើមស្កេន
+async function currentScanPosition() {
+  if (scanPosCache && Date.now() - scanPosCache.at < 60000) return scanPosCache;
+  return await getScanPosition(7000);
+}
+async function captureAndUploadSelfie(path) {
+  let stream = null;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+    await new Promise(r => setTimeout(r, 400));            // ឱ្យកាមេរ៉ាក្រោយ (ស្កេន QR) បិទសិន
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }, audio: false });
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', ''); video.muted = true; video.srcObject = stream;
+    await video.play();
+    await new Promise(r => setTimeout(r, 500));            // រង់ចាំ exposure
+    const w = video.videoWidth || 320, h = video.videoHeight || 320, k = Math.min(1, 320 / Math.max(w, h));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+    cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.7));
+    if (!blob) return false;
+    const up = await supabaseClient.storage.from('scan-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (up.error) { console.warn('selfie upload failed:', up.error.message); return false; }
+    return true;
+  } catch (e) { console.warn('selfie failed:', e && e.message); return false; }
+  finally { if (stream) stream.getTracks().forEach(tr => tr.stop()); }
+}
+function renderScanPrivacyNote() {
+  const el = document.getElementById('empScanPrivacy');
+  if (!el) return;
+  if (!getEmpToken()) { el.style.display = 'none'; return; }
+  el.textContent = '📍 ទីតាំងរបស់អ្នកត្រូវបានកត់ត្រាពេលស្កេន' + (settings.scanPhoto ? ' · 📸 ប្រព័ន្ធនឹងថតរូបអ្នកបញ្ជាក់វត្តមាន (មានតែអ្នកគ្រប់គ្រងមើលបាន)' : '');
+  el.style.display = '';
 }
 
 async function loadMyPayrollItems() {
