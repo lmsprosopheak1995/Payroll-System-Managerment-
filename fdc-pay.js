@@ -45,10 +45,11 @@
       const from = c.start_date > first ? c.start_date : first;
       const upto = to < last ? to : last;
       const full = from === first && upto === last;
-      const locked = typeof getLockedSnapshot === 'function' && !!getLockedSnapshot(emp.id, m);
+      const snap = typeof getLockedSnapshot === 'function' ? getLockedSnapshot(emp.id, m) : null;   // ខែបិទរួច → លេខ snapshot ដែលបានកក
+      const locked = !!snap;
       let usd = 0, ben = 0, note = '';
       if (full || locked) {
-        const t = summarizeEmpMonth(emp, m);
+        const t = snap || summarizeEmpMonth(emp, m);
         usd = t.total || 0; ben = t.benefitsUSD || 0;
         if (!full) {   // ខែបិទរួច តែកិច្ចសន្យាគ្របលើតែផ្នែកខែ → សមាមាត្រតាមថ្ងៃ
           const share = (diffDays(from, upto) + 1) / days.length;
@@ -72,7 +73,7 @@
           const rec = (attendance[d] && attendance[d][emp.id]) || {};
           daily += computeRow(emp, rec, d).total || 0;
         });
-        try { wd = summarizeEmpMonth(emp, m).workDays; } catch (e) { wd = null; }
+        try { wd = (snap || summarizeEmpMonth(emp, m)).workDays; } catch (e) { wd = null; }
       }
       lines.push({ month: m, from, to: upto, usd, ben, note, daily, wd, locked, full });
       m = nextMonth(m);
