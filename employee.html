@@ -1699,7 +1699,7 @@ async function renderHistory() {
       right = empStatusLabel(r.date, r.status); // សម្រាកបំណាច់ឆ្នាំ / សម្រាកមានប្រាក់ឈ្នួល ... តាមប្រភេទច្បាប់ ដូច Admin
       if (r.status === 'leave' && holidays[r.date] !== undefined) {
         if (right === STATUS_LABELS.leave) right = 'សម្រាកបុណ្យជាតិ';
-        if (holidays[r.date]) right += ' · ' + escapeHtml(holidays[r.date]);
+        if (holidays[r.date] && holidays[r.date].trim() !== right) right += ' · ' + escapeHtml(holidays[r.date]); // មិនបង្ហាញឈ្មោះជាន់គ្នា
       }
     }
     return `<div class="hist-row"><span class="d">${r.date} (${dayLabelHl(r.date)})</span><span>${right}</span></div>`;
