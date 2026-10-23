@@ -223,7 +223,7 @@
     });
     $('stSum').textContent = `ត្រូវបំពេញ(+) ${nPlus} នាក់ · ត្រូវកាត់(−) ${nMinus} នាក់ · គ្រប់ប្រាក់ខែរួច ${nOk} នាក់ · មិនតម្រឹម ${nNo} នាក់ · បានតម្រឹមរួច +$${money(sumPlus)} / −$${money(sumMinus)}`;
     $('stBody').innerHTML = rows.length ? rows.map(({ e, c, cur }, i) => {
-      const dis = locked && !testMode ? 'disabled' : '';
+      const dis = (locked || !ended) && !testMode ? 'disabled' : ''; // ខែមិនទាន់ចប់ → បិទប៊ូតុងរក្សាទុក (ការពារតម្រឹមមុនពេល)
       const status = !c.eligible ? `<span class="st-no">✕ មិនតម្រឹម</span><div class="st-why">${esc(c.why.join(' · '))}</div>`
         : (c.adj > 0 ? '<span class="st-no">⚠ ខ្វះ → បំពេញ</span>' : c.adj < 0 ? '<span class="st-no" style="color:#b45309">🔻 លើស → កាត់</span>' : '<span class="st-ok">✓ គ្រប់ប្រាក់ខែ</span>');
       const shown = cur ? `<span class="${cur.sign > 0 ? 'st-ok' : 'st-no'}">${cur.sign > 0 ? '➕ +' : '➖ −'}$${money(cur.item.amount)}</span>` : '<span style="color:var(--text-muted)">—</span>';
