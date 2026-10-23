@@ -6,6 +6,7 @@
      • មិនរាប់ OT និងប្រាក់បាយក្នុងការធានា
      • ខែ 31 ថ្ងៃ (បានលើសប្រាក់ខែ) → បំពេញ $0 (មិនកាត់អ្វីទេ)
    មិនធានា បើ៖ មានអវត្តមាន · មានថ្ងៃមិនទាន់កត់ · មានច្បាប់គ្មានប្រាក់ឈ្នួល · ឈប់ការងារ · ចូលធ្វើការកណ្តាលខែ
+   🧪 របៀបសាកល្បង: ធីក → ប៊ូតុងទាំងអស់បង្ហាញលទ្ធផលជាមុន មិនរក្សាទុក · 🔍 ការគណនាលម្អិត + 📈 ព្យាករណ៍ · ⬇ CSV
    រក្សាទុកជាធាតុ "អត្ថប្រយោជន៍" ក្នុង payroll_items (id ថេរ មិនស្ទួន) → ចូល Payslip / ប្រាក់ខែសុទ្ធដោយស្វ័យប្រវត្តិ
    គ្មានការកំណត់ត្រូវរក្សាទុក → មិនត្រូវការ SQL
 
@@ -32,6 +33,7 @@
   const monthEnded = m => { const ds = daysInMonth(m); return todayStr() > ds[ds.length - 1]; };
 
   let overlay = null, curMonth = '', rows = [];
+  let testMode = false, showDetail = false;
 
   // ---------------------------------------------------------------- គណនា ----
   // ចំនួនថ្ងៃច្បាប់ "គ្មានប្រាក់ឈ្នួល" (unpaid) ក្នុងខែ — ពេញថ្ងៃ + កន្លះថ្ងៃ/តាមម៉ោង
@@ -52,17 +54,19 @@
     return n;
   }
 
-  // ប្រាក់ឈ្នួលមូលដ្ឋាន (ដោយមិនរាប់ ×2 អាទិត្យ/បុណ្យ, OT, ប្រាក់បាយ)
+  // ប្រាក់ឈ្នួលមូលដ្ឋាន (ដោយមិនរាប់ ×2 អាទិត្យ/បុណ្យ, OT, ប្រាក់បាយ) + ព័ត៌មានលម្អិតសម្រាប់ផ្ទៀងផ្ទាត់
   function basePay(emp, month) {
-    let base = 0;
+    let work = 0, leave = 0, wd = 0, ld = 0, open = 0;
+    const start = emp.startDate || '0000-00-00';
     daysInMonth(month).forEach(date => {
       const rec = attendance[date] && attendance[date][emp.id];
-      if (!rec) return;
+      if (!rec || !rec.status) { if (date >= start && dayMultiplier(date) <= 1) open++; return; } // ថ្ងៃធម្មតាដែលមិនទាន់មានវត្តមាន
       const r = computeRow(emp, rec, date);
       const mult = r.mult > 0 ? r.mult : 1;
-      base += (r.workPay || 0) / mult + (r.leavePay || 0);
+      work += (r.workPay || 0) / mult; leave += (r.leavePay || 0);
+      if (rec.status === 'present') wd++; else if (rec.status === 'leave') ld++;
     });
-    return base;
+    return { base: work + leave, work, leave, wd, ld, open };
   }
 
   function calc(emp, month) {
@@ -78,9 +82,15 @@
     if (absent > 0) why.push(`អវត្តមាន ${num(absent)}`);
     if (unmarked > 0) why.push(`មិនទាន់កត់ ${unmarked} ថ្ងៃ`);
     if (unpaid > 1e-9) why.push(`ច្បាប់គ្មានប្រាក់ឈ្នួល ${num(unpaid)}`);
-    const base = basePay(emp, month);
+    const b = basePay(emp, month);
+    const base = b.base;
     const gap = Math.max(0, r2(salary - base));
-    return { salary, base, gap, absent, unmarked, unpaid, eligible: why.length === 0, why, topup: why.length === 0 && gap > EPS ? gap : 0 };
+    const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
+    // ការព្យាករណ៍៖ ឧបមាថាថ្ងៃធម្មតាដែលមិនទាន់មានវត្តមាន (មិនទាន់កត់ + ថ្ងៃអនាគត) មកធ្វើការគ្រប់ថ្ងៃ
+    const projBase = base + b.open * dailyRate;
+    const projGap = Math.max(0, r2(salary - projBase));
+    return { salary, base, gap, absent, unmarked, unpaid, eligible: why.length === 0, why, topup: why.length === 0 && gap > EPS ? gap : 0,
+      dailyRate, work: b.work, leave: b.leave, workDays: b.wd, leaveDays: b.ld, open: b.open, projBase, projGap };
   }
 
   function buildRows() {
@@ -126,6 +136,9 @@
           <input type="text" id="stQ" placeholder="🔍 ស្វែងរកអត្តលេខ ឬ ឈ្មោះ..." style="min-width:190px">
           <select id="stF"><option value="">ទាំងអស់</option><option value="need">ត្រូវបំពេញ</option><option value="ok">គ្រប់ប្រាក់ខែរួច</option><option value="no">មិនធានា</option></select>
           <button id="stApplyAll">🛡️ បំពេញអ្នកត្រូវបំពេញទាំងអស់</button>
+          <button class="secondary" id="stCsv" title="ទាញយកតារាងជា CSV">⬇ CSV</button>
+          <label style="display:flex;gap:5px;align-items:center;font-size:.78rem"><input type="checkbox" id="stTest"> 🧪 របៀបសាកល្បង (មិនរក្សាទុក)</label>
+          <label style="display:flex;gap:5px;align-items:center;font-size:.78rem"><input type="checkbox" id="stDetail"> 🔍 បង្ហាញការគណនាលម្អិត</label>
           <span class="st-sum" id="stSum"></span>
         </div>
         <div id="stStatus"></div>
@@ -148,9 +161,13 @@
     $('stQ').addEventListener('input', render);
     $('stF').addEventListener('change', render);
     $('stApplyAll').addEventListener('click', bulk);
+    $('stCsv').addEventListener('click', exportCsv);
+    $('stTest').addEventListener('change', e => { testMode = e.target.checked; render(); });
+    $('stDetail').addEventListener('change', e => { showDetail = e.target.checked; render(); });
     $('stBody').addEventListener('click', async ev => {
       const btn = ev.target.closest('button[data-act]'); if (!btn) return;
       const id = btn.closest('tr').dataset.id, act = btn.dataset.act;
+      if (testMode) { await previewOne(id, act); return; }
       btn.disabled = true;
       try { if (act === 'del') await removeItem(id); else await applyItem(id); }
       finally { btn.disabled = false; }
@@ -178,25 +195,31 @@
     $('stMonthTxt').textContent = curMonth;
     $('stMonth').value = curMonth;
     const locked = isMonthLocked(curMonth), ended = monthEnded(curMonth);
-    $('stStatus').innerHTML = (locked ? '<div class="st-warn">🔒 ខែនេះបានបិទហើយ — មើលបានតែមិនអាចបំពេញ/ដកបានទេ។</div>' : '')
+    $('stStatus').innerHTML = (testMode ? '<div class="st-warn" style="background:#dbeafe;color:#1e40af">🧪 របៀបសាកល្បង៖ ប៊ូតុងទាំងអស់បង្ហាញលទ្ធផលជាមុនតែប៉ុណ្ណោះ — <b>គ្មានអ្វីត្រូវបានរក្សាទុកទេ</b> (ដំណើរការបានទោះខែបិទ ឬមិនទាន់ចប់)។ ដកធីកដើម្បីប្រើពិត។</div>' : '')
+      + (locked ? '<div class="st-warn">🔒 ខែនេះបានបិទហើយ — មើលបានតែមិនអាចបំពេញ/ដកបានទេ។</div>' : '')
       + (!ended ? '<div class="st-warn">⏳ ខែនេះមិនទាន់ចប់ — ចំនួនខ្វះនៅបណ្ដោះអាសន្ន (ថ្ងៃនៅសល់នៅមិនទាន់គិត)។ ប៊ូតុង "បំពេញទាំងអស់" បិទរហូតដល់ចប់ខែ។</div>' : '');
-    $('stApplyAll').disabled = locked || !ended;
+    $('stApplyAll').disabled = !testMode && (locked || !ended);
+    $('stApplyAll').textContent = testMode ? '🧪 មើលជាមុន៖ បំពេញទាំងអស់' : '🛡️ បំពេញអ្នកត្រូវបំពេញទាំងអស់';
     buildRows();
     let nNeed = 0, nOk = 0, nNo = 0, sum = 0;
     rows.forEach(r => { if (!r.c.eligible) nNo++; else if (r.c.topup > 0) nNeed++; else nOk++; if (r.item) sum += Number(r.item.amount) || 0; });
     $('stSum').textContent = `ត្រូវបំពេញ ${nNeed} នាក់ · គ្រប់ប្រាក់ខែរួច ${nOk} នាក់ · មិនធានា ${nNo} នាក់ · បានបំពេញសរុប +$${money(sum)}`;
     $('stBody').innerHTML = rows.length ? rows.map(({ e, c, item }, i) => {
-      const dis = locked ? 'disabled' : '';
+      const dis = locked && !testMode ? 'disabled' : '';
       const status = !c.eligible ? `<span class="st-no">✕ មិនធានា</span><div class="st-why">${esc(c.why.join(' · '))}</div>`
         : (c.topup > 0 ? '<span class="st-no">⚠ ខ្វះ</span>' : '<span class="st-ok">✓ គ្រប់ប្រាក់ខែ</span>');
       const cur = item ? `<span class="st-ok">➕ +$${money(item.amount)}</span>` : '<span style="color:var(--text-muted)">—</span>';
       const stale = item && Math.abs((Number(item.amount) || 0) - c.topup) > EPS ? ` <span class="st-no" title="ចំនួនបានបំពេញខុសពីការគណនាថ្មី">≠ $${money(c.topup)}</span>` : '';
+      const detail = showDetail ? `<tr class="st-det"><td></td><td colspan="9" style="white-space:normal;font-size:.72rem;color:var(--text-muted,#5b6b80);padding:2px 8px 8px">
+        តម្លៃថ្ងៃ $${money(c.dailyRate)} (= ${money(c.salary)} ÷ ${num(settings.workDaysPerMonth)}) · ថ្ងៃធ្វើការ ${c.workDays} · ថ្ងៃច្បាប់/បុណ្យ ${c.leaveDays} · ឈ្នួលធម្មតា $${money(c.work)} + LeavePay $${money(c.leave)} = <b>$${money(c.base)}</b><br>
+        ខ្វះ = ${money(c.salary)} − ${money(c.base)} = <b>$${money(c.gap)}</b>${c.eligible ? '' : ' (មិនធានា → $0)'}
+        ${c.open > 0 ? `<br>📈 ព្យាករណ៍៖ បើ ${c.open} ថ្ងៃធម្មតាដែលនៅមិនទាន់មានវត្តមាន មកធ្វើការគ្រប់ → ឈ្នួល $${money(c.projBase)} → ខ្វះ <b>$${money(c.projGap)}</b>` : ''}</td></tr>` : '';
       return `<tr data-id="${esc(e.id)}">
         <td>${i + 1}</td><td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td><td>${esc(e.dept || '')}</td>
         <td style="text-align:right">${money(c.salary)}</td><td style="text-align:right">${money(c.base)}</td><td style="text-align:right">${c.eligible ? money(c.gap) : '—'}</td>
         <td>${status}</td><td>${cur}${stale}</td>
         <td>${c.topup > 0 || (item && c.eligible) ? `<button class="st-act" data-act="add" ${dis}>🛡️ ${item ? 'អាប់ដេត' : 'បំពេញ'}</button>` : ''}${item ? ` <button class="secondary st-act" data-act="del" title="ដកចេញ" ${dis}>✕</button>` : ''}</td>
-      </tr>`;
+      </tr>${detail}`;
     }).join('') : '<tr><td colspan="10" style="padding:16px">មិនមានបុគ្គលិក</td></tr>';
   }
 
@@ -243,8 +266,35 @@
     return true;
   }
 
+  async function previewOne(empId, act) {
+    const emp = payrollEmployeesForMonth(curMonth).find(e => String(e.id) === String(empId));
+    if (!emp) return;
+    const c = calc(emp, curMonth);
+    if (act === 'del') { await customAlert(`🧪 សាកល្បង: នឹងដកធាតុ "បំពេញប្រាក់ខែ" របស់ ${emp.name} (មិនបានធ្វើ)`); return; }
+    await customAlert(`🧪 សាកល្បង (មិនរក្សាទុក) — ${emp.name}\nប្រាក់ខែ $${money(c.salary)} · ឈ្នួលបាន $${money(c.base)} · ខ្វះ $${money(c.gap)}\n` + (c.eligible ? (c.topup > 0 ? `នឹងបំពេញ +$${money(c.topup)}` : 'គ្រប់ប្រាក់ខែរួច មិនបាច់បំពេញ') : `មិនធានា៖ ${c.why.join(' · ')}`)
+      + (c.open > 0 ? `\n📈 បើ ${c.open} ថ្ងៃដែលនៅសល់មកគ្រប់ → ខ្វះ $${money(c.projGap)}` : ''));
+  }
+
+  function exportCsv() {
+    buildRows();
+    const head = ['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែ', 'តម្លៃថ្ងៃ', 'ថ្ងៃធ្វើការ', 'ថ្ងៃច្បាប់/បុណ្យ', 'ឈ្នួលធម្មតា', 'LeavePay', 'ប្រាក់ឈ្នួលបាន', 'ខ្វះ', 'ធានា', 'មូលហេតុមិនធានា', 'ត្រូវបំពេញ', 'ថ្ងៃនៅសល់(មិនទាន់កត់)', 'ខ្វះបើមកគ្រប់', 'បានបំពេញរួច'];
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [head.map(q).join(',')].concat(rows.map(({ e, c, item }) => [e.username, e.name, e.dept, r2(c.salary), r2(c.dailyRate), c.workDays, c.leaveDays, r2(c.work), r2(c.leave), r2(c.base), r2(c.gap),
+      c.eligible ? 'បាទ' : 'ទេ', c.why.join(' · '), r2(c.topup), c.open, r2(c.projGap), item ? r2(item.amount) : ''].map(q).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `salary-topup-${curMonth}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
   async function bulk() {
     const month = curMonth;
+    if (testMode) { // សាកល្បង៖ បង្ហាញលទ្ធផលជាមុន មិនរក្សាទុក
+      const all = payrollEmployeesForMonth(month).map(e => ({ e, c: calc(e, month), item: payrollItems.find(p => p.id === itemId(e.id, month)) }));
+      const need = all.filter(({ c }) => c.topup > 0);
+      const lines = need.map(t => `${t.e.name}: +$${money(t.c.topup)}`).join('\n') || '(គ្មាន)';
+      await customAlert(`🧪 សាកល្បង (មិនរក្សាទុក) — ខែ ${month}${monthEnded(month) ? '' : ' · ⏳ មិនទាន់ចប់ខែ (លេខបណ្ដោះអាសន្ន)'}\nនឹងបំពេញ ${need.length} នាក់ សរុប +$${money(need.reduce((a, t) => a + t.c.topup, 0))}\n${lines}`);
+      return;
+    }
     if (guardLocked(month, 'បំពេញប្រាក់ខែ')) return;
     if (!monthEnded(month)) { await customAlert('ខែនេះមិនទាន់ចប់ — សូមបំពេញក្រោយចប់ខែ'); return; }
     const all = payrollEmployeesForMonth(month).map(e => ({ e, c: calc(e, month), item: payrollItems.find(p => p.id === itemId(e.id, month)) }));
