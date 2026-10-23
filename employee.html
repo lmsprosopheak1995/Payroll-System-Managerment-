@@ -1683,7 +1683,7 @@ async function renderHistory() {
     .order('date', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានកំណត់ត្រាខែនេះទេ</div>'; return; }
-  list.innerHTML = data.map(r => {
+  const rowsHtml = data.map(r => {
     const parts = [];
     if (r.checkin) parts.push('ចូល ' + r.checkin);
     if (r.break_out) parts.push('ចេញបាយ ' + r.break_out);
@@ -1696,6 +1696,11 @@ async function renderHistory() {
     if (parts.length) {
       right = parts.join(' · ');
     } else {
+      if (!r.status) { // គ្មានស្ថានភាព/ស្កេន (ឧ. ថ្ងៃអាទិត្យ) → មិនបង្ហាញជួរទទេ "-"
+        if (holidays[r.date] === undefined) return '';
+        right = 'សម្រាកបុណ្យជាតិ' + (holidays[r.date] ? ' · ' + escapeHtml(holidays[r.date]) : '');
+        return `<div class="hist-row"><span class="d">${r.date} (${dayLabelHl(r.date)})</span><span>${right}</span></div>`;
+      }
       right = empStatusLabel(r.date, r.status); // សម្រាកបំណាច់ឆ្នាំ / សម្រាកមានប្រាក់ឈ្នួល ... តាមប្រភេទច្បាប់ ដូច Admin
       if (r.status === 'leave' && holidays[r.date] !== undefined) {
         if (right === STATUS_LABELS.leave) right = 'សម្រាកបុណ្យជាតិ';
@@ -1703,7 +1708,8 @@ async function renderHistory() {
       }
     }
     return `<div class="hist-row"><span class="d">${r.date} (${dayLabelHl(r.date)})</span><span>${right}</span></div>`;
-  }).join('');
+  }).filter(Boolean);
+  list.innerHTML = rowsHtml.length ? rowsHtml.join('') : '<div class="hist-empty">មិនទាន់មានកំណត់ត្រាខែនេះទេ</div>';
 }
 
 // ==== Monthly attendance table (វត្តមាន tab) ====
