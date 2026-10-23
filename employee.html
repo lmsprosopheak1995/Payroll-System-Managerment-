@@ -1689,8 +1689,20 @@ async function renderHistory() {
     if (r.break_out) parts.push('ចេញបាយ ' + r.break_out);
     if (r.break_in) parts.push('ចូលវិញ ' + r.break_in);
     if (r.checkout) parts.push('ចេញ ' + r.checkout);
-    const right = parts.length ? parts.join(' · ') : (STATUS_LABELS[r.status] || '-');
-    return `<div class="hist-row"><span class="d">${r.date} (${weekdayLabel(r.date)})</span><span>${right}</span></div>`;
+    // ម៉ោងច្បាប់មិនពេញថ្ងៃ (ឧ. ធ្វើការ 4 ម៉ោង + ច្បាប់ 4 ម៉ោង) — បង្ហាញដូចប្រព័ន្ធ Admin
+    const lh = r.status === 'leave' ? 0 : (partialLeaveByDate[r.date] || 0);
+    if (lh > 0) parts.push('ច្បាប់ ' + (Math.round(lh * 100) / 100) + ' ម៉ោង');
+    let right;
+    if (parts.length) {
+      right = parts.join(' · ');
+    } else {
+      right = empStatusLabel(r.date, r.status); // សម្រាកបំណាច់ឆ្នាំ / សម្រាកមានប្រាក់ឈ្នួល ... តាមប្រភេទច្បាប់ ដូច Admin
+      if (r.status === 'leave' && holidays[r.date] !== undefined) {
+        if (right === STATUS_LABELS.leave) right = 'សម្រាកបុណ្យជាតិ';
+        if (holidays[r.date]) right += ' · ' + escapeHtml(holidays[r.date]);
+      }
+    }
+    return `<div class="hist-row"><span class="d">${r.date} (${dayLabelHl(r.date)})</span><span>${right}</span></div>`;
   }).join('');
 }
 
