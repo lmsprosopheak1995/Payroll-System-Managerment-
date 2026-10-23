@@ -1404,7 +1404,8 @@ function renderPayrollTab() {
 
   const empId = currentPayrollEmployeeId();
   const month = currentPayrollMonth();
-  const items = payrollItems.filter(p => p.employeeId === empId);
+  // បង្ហាញតែធាតុថេរ + ធាតុនៃខែដែលបានជ្រើស (ដូចការគណនាប្រាក់ខែ) — ធាតុខែផ្សេងមិនលេចចូលបញ្ជី
+  const items = payrollItems.filter(p => p.employeeId === empId && (p.recurrence === 'fixed' || p.month === month));
 
   const renderRows = (list) => list.map(p => `
     <tr>
