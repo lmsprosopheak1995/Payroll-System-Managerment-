@@ -2776,7 +2776,17 @@ async function applyDeductionItem(empId, silent) {
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
   if (isMonthLocked(month)) { if (!silent) guardLocked(month, 'បញ្ចូលប្រាក់កាត់'); return; }
   const r = calcDeductionRow(emp, month);
-  if (r.total <= 0) return;
+  if (r.total <= 0) {
+    // ក្បួនបច្ចុប្បន្នមិនកាត់ទៀត → ដកធាតុស្វ័យប្រវត្តិចាស់ (បើមាន) ចេញ ដើម្បីកុំឱ្យប្រាក់កាត់ចាស់នៅជាប់
+    const stale = payrollItems.find(x => x.id === dedItemId(empId, month));
+    if (stale) {
+      payrollItems = payrollItems.filter(x => x.id !== stale.id);
+      await deletePayrollItemRow(stale.id);
+      logAudit('deduction_remove', { entity: 'payroll_item', ref: stale.id, month, employeeId: empId, old: { name: stale.name, type: 'deduction', currency: 'USD', amount: stale.amount } });
+      if (!silent) { renderDeductTab(); renderPayrollTab(); }
+    }
+    return;
+  }
   const item = {
     id: dedItemId(empId, month),
     employeeId: empId,
@@ -2810,7 +2820,8 @@ async function removeDeductionItem(empId) {
 async function applyAllDeductions() {
   const month = document.getElementById('dedMonth').value || todayStr().slice(0, 7);
   if (guardLocked(month, 'បញ្ចូលប្រាក់កាត់')) return;
-  const targets = employees.filter(e => e.status === 'active').filter(e => calcDeductionRow(e, month).total > 0);
+  const targets = employees.filter(e => e.status === 'active')
+    .filter(e => calcDeductionRow(e, month).total > 0 || payrollItems.some(p => p.id === dedItemId(e.id, month)));   // រួមទាំងធាតុស្វ័យប្រវត្តិចាស់ដែលត្រូវដកចេញ
   if (targets.length === 0) { customAlert('មិនមានប្រាក់ត្រូវកាត់ទេ (សូមពិនិត្យលក្ខខណ្ឌកាត់លុយ)'); return; }
   if (!(await customConfirm(`បន្ថែមប្រាក់កាត់សម្រាប់បុគ្គលិក ${targets.length} នាក់ ក្នុងខែ ${month}? (ធាតុដែលមានស្រាប់នឹងត្រូវអាប់ដេត)`))) return;
   for (const e of targets) await applyDeductionItem(e.id, true);
@@ -3159,7 +3170,7 @@ function monthlyRows(month) {
       const t = summarizeEmpMonth(e, month);
       const dedAuto = calcDeductionRow(e, month).total;
       const applied = payrollItems.find(p => p.id === dedItemId(e.id, month));
-      const pendingDed = dedAuto > 0 && (!applied || Math.abs(payrollItemToUSD(applied) - dedAuto) > 0.0001);
+      const pendingDed = (dedAuto > 0 && (!applied || Math.abs(payrollItemToUSD(applied) - dedAuto) > 0.0001)) || (dedAuto <= 0 && !!applied);
       const snap = getLockedSnapshot(e.id, month);
       if (snap) return { e, t, unmarked: 0, pendingDed: false, dedAuto: 0, adv: snap.advance || calcAdvanceRow(e, month) };
       return { e, t, unmarked: countUnmarkedDays(e, month), pendingDed, dedAuto, adv: calcAdvanceRow(e, month) };
@@ -3180,7 +3191,7 @@ function renderMonthlyTab() {
     g.adv += adv.amount; g.total += t.total; g.ben += t.benefitsUSD; g.ded += t.deductionsUSD; g.net += t.net; g.netRiel += t.netRiel; g.netR2 += Math.round(t.net * 100) / 100;
     const warns = [];
     if (unmarked > 0) warns.push(`⚠️ មិនទាន់កត់វត្តមាន ${unmarked} ថ្ងៃ`);
-    if (pendingDed) warns.push(`⚠️ មានប្រាក់កាត់ $${fmtUSD2(dedAuto)} មិនទាន់បញ្ចូល`);
+    if (pendingDed) warns.push(dedAuto > 0 ? `⚠️ មានប្រាក់កាត់ $${fmtUSD2(dedAuto)} មិនទាន់បញ្ចូល` : '⚠️ ប្រាក់កាត់ស្វ័យប្រវត្តិចាស់ មិនត្រូវទៀតទេ — សូមអាប់ដេតក្នុងទំព័រ «កាត់លុយ»');
     if (!(parseFloat(e.salary) > 0)) warns.push('⚠️ គ្មានប្រាក់ខែមូលដ្ឋាន');
     if (warns.length) g.warn++;
     return `<tr>
