@@ -325,8 +325,8 @@
     const locked = isMonthLocked(curMonth), ended = monthEnded(curMonth);
     $('fmStatus').innerHTML = (!rulesReady ? `<div class="fm-warn">⚠️ មិនអាចផ្ទុក/រក្សាទុកលក្ខខណ្ឌក្នុង Supabase បាន៖ ${esc(rulesError || 'មិនស្គាល់')}<br>ប៊ូតុង "ផ្តល់/កាត់ទាំងអស់" ត្រូវបានបិទ រហូតដល់ដោះស្រាយ។ <button class="secondary fm-act" id="fmRetry">↻ ព្យាយាមម្តងទៀត</button></div>` : (rulesError ? `<div class="fm-warn">⚠️ រក្សាទុកលក្ខខណ្ឌមិនជោគជ័យ៖ ${esc(rulesError)}</div>` : ''))
       + (locked ? '<div class="fm-warn">🔒 ខែនេះបានបិទហើយ — មើលបានតែមិនអាចបន្ថែម/កាត់ព្រីមបានទេ។</div>' : '')
-      + (!ended ? '<div class="fm-warn">⏳ ខែនេះមិនទាន់ចប់ — ស្ថានភាព "ពេញខែ" នៅបណ្ដោះអាសន្ន ហើយអាចប្តូរបើមានអវត្តមាន/យឺតបន្ថែម។</div>' : '');
-    ['fmAddAll', 'fmCutAll'].forEach(id => { $(id).disabled = locked || !rulesReady; });
+      + (!ended ? '<div class="fm-warn">⏳ ខែនេះមិនទាន់ចប់ — ស្ថានភាព "ពេញខែ" នៅបណ្ដោះអាសន្ន ហើយអាចប្តូរបើមានអវត្តមាន/យឺតបន្ថែម។ ប៊ូតុងបន្ថែម/កាត់ព្រីម <b>ត្រូវបានបិទ រហូតដល់ចប់ខែ</b>។</div>' : '');
+    ['fmAddAll', 'fmCutAll'].forEach(id => { $(id).disabled = locked || !ended || !rulesReady; }); // ខែមិនទាន់ចប់ → បិទ
     const rt = $('fmRetry'); if (rt) rt.addEventListener('click', open);
     buildRows();
     let nFull = 0, nPart = 0, sumAdd = 0, sumCut = 0;
@@ -336,7 +336,7 @@
     $('fmBody').innerHTML = rows.length ? rows.map(({ e, c, add, cut }, i) => {
       const cur = add ? `<span class="fm-add">➕ +$${money(add.amount)}</span>` : (cut ? `<span class="fm-cut">➖ −$${money(cut.amount)}</span>` : '<span style="color:var(--text-muted)">—</span>');
       const amt = add ? add.amount : (cut ? cut.amount : rules.amount);
-      const dis = locked ? 'disabled' : '';
+      const dis = (locked || !ended) ? 'disabled' : ''; // ខែមិនទាន់ចប់ → បិទ
       return `<tr data-id="${esc(e.id)}">
         <td>${i + 1}</td><td>${esc(e.username || '')}</td><td>${esc(e.name || '')}</td><td>${esc(e.dept || '')}</td>
         <td>${num(c.work)}</td><td>${c.absent ? `<b class="fm-no">${num(c.absent)}</b>` : '0'}</td><td>${c.leave ? num(c.leave) : '0'}${partialBadgeHtml(c)}${rules.leaveBreaks && c.leaveExempt > 1e-9 ? `<div class="fm-ok" style="font-size:.66rem;font-weight:500">មានប្រាក់ឈ្នួល ${num(c.leaveExempt)}</div>` : ''}</td><td>${c.late || '0'}</td><td>${c.unmarked || '0'}</td>
@@ -359,6 +359,7 @@
   async function applyPremium(empId, kind, amount, silent) {
     const month = curMonth;
     if (isMonthLocked(month)) { if (!silent) guardLocked(month, 'កែព្រីម'); return false; }
+    if (!monthEnded(month)) { if (!silent) customAlert('ខែនេះមិនទាន់ចប់ — សូមកែព្រីមក្រោយចប់ខែ'); return false; }
     amount = r2(amount);
     if (!(amount > 0)) { if (!silent) await customAlert('សូមបញ្ចូលចំនួនព្រីមឱ្យលើសពី 0'); return false; }
     const item = kind === 'add'
@@ -388,6 +389,7 @@
   async function removePremium(empId, silent) {
     const month = curMonth;
     if (isMonthLocked(month)) { if (!silent) guardLocked(month, 'ដកព្រីម'); return false; }
+    if (!monthEnded(month)) { if (!silent) customAlert('ខែនេះមិនទាន់ចប់ — សូមដកព្រីមក្រោយចប់ខែ'); return false; }
     let any = false;
     for (const id of [addId(empId, month), cutId(empId, month)]) {
       const prev = payrollItems.find(p => p.id === id);
@@ -404,6 +406,7 @@
   async function bulk(kind) {
     const month = curMonth;
     if (guardLocked(month, kind === 'add' ? 'ផ្តល់ព្រីម' : 'កាត់ព្រីម')) return;
+    if (!monthEnded(month)) { await customAlert('ខែនេះមិនទាន់ចប់ — សូមផ្តល់/កាត់ព្រីមក្រោយចប់ខែ'); return; }
     if (!rulesReady) { await customAlert('មិនទាន់ទាញលក្ខខណ្ឌពី Supabase បាន — មិនអាចដំណើរការទាំងអស់បានទេ'); return; }
     const amount = r2(rules.amount);
     if (!(amount > 0)) { await customAlert('សូមកំណត់ "ចំនួនព្រីម ($)" ឱ្យលើសពី 0 ជាមុន'); return; }
