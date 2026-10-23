@@ -5,6 +5,7 @@
        • វិជ្ជមាន (ខែខ្លី/អាទិត្យ ៥) → បន្ថែម "បំពេញប្រាក់ខែ" (អត្ថប្រយោជន៍)
        • អវិជ្ជមាន (ខែ 31 ថ្ងៃ បានលើស) → កាត់ "តម្រឹមប្រាក់ខែ" (ប្រាក់កាត់) ឱ្យស្មើប្រាក់ខែ
      • ថ្ងៃអាទិត្យ/បុណ្យដែលមកធ្វើការ (×2) មិនរាប់ក្នុងមូលដ្ឋាន → ប្រាក់នោះនៅជារបស់បុគ្គលិកទាំងស្រុង
+     • ថ្ងៃដែលបានមកតែធ្វើការក្រោម 8 ម៉ោង (ដោយគ្មានច្បាប់)៖ ម៉ោងដែលខ្វះ **មិនបំពេញត្រឡប់វិញ** (បាត់ប្រាក់តាមម៉ោង)
      • មិនប៉ះពាល់ OT និងប្រាក់បាយ
    មិនតម្រឹម បើ៖ មានអវត្តមាន · មានថ្ងៃមិនទាន់កត់ · មានច្បាប់គ្មានប្រាក់ឈ្នួល · ឈប់ការងារ · ចូលធ្វើការកណ្តាលខែ
    🧪 របៀបសាកល្បង: ធីក → ប៊ូតុងទាំងអស់បង្ហាញលទ្ធផលជាមុន មិនរក្សាទុក · 🔍 ការគណនាលម្អិត + 📈 ព្យាករណ៍ · ⬇ CSV
@@ -58,7 +59,8 @@
 
   // ប្រាក់ឈ្នួលមូលដ្ឋាន = ឈ្នួលថ្ងៃធម្មតា + សម្រាកមានប្រាក់ឈ្នួល/បុណ្យ (មិនរាប់ថ្ងៃអាទិត្យ/បុណ្យដែលមកធ្វើការ ×2, OT, ប្រាក់បាយ)
   function basePay(emp, month) {
-    let work = 0, leave = 0, wd = 0, ld = 0, xd = 0, open = 0;
+    let work = 0, leave = 0, wd = 0, ld = 0, xd = 0, open = 0, shortH = 0;
+    const stdH = settings.standardHours > 0 ? settings.standardHours : 8;
     const start = emp.startDate || '0000-00-00';
     daysInMonth(month).forEach(date => {
       const rec = attendance[date] && attendance[date][emp.id];
@@ -68,9 +70,13 @@
       if (rec.status === 'leave') { leave += (r.leavePay || 0); ld++; return; }
       if (premium) { if (rec.status === 'present') xd++; return; } // ធ្វើការអាទិត្យ/បុណ្យ → បន្ថែមទាំងស្រុង មិនរាប់ក្នុងមូលដ្ឋាន
       work += (r.workPay || 0); leave += (r.leavePay || 0);
-      if (rec.status === 'present') wd++;
+      if (rec.status === 'present') {
+        wd++;
+        // ម៉ោងដែលខ្វះក្នុងថ្ងៃដែលបានមក (ក្រោម 8 ម៉ោង ដកម៉ោងច្បាប់) → ជាការខាត មិនបំពេញត្រឡប់វិញ
+        shortH += Math.max(0, stdH - (r.normalHours || 0) - (r.leavePayHours || 0));
+      }
     });
-    return { base: work + leave, work, leave, wd, ld, xd, open };
+    return { base: work + leave, work, leave, wd, ld, xd, open, shortH };
   }
 
   function calc(emp, month) {
@@ -88,15 +94,18 @@
     if (unpaid > 1e-9) why.push(`ច្បាប់គ្មានប្រាក់ឈ្នួល ${num(unpaid)}`);
     const b = basePay(emp, month);
     const base = b.base;
-    const diff = r2(salary - base); // + ខ្វះ · − លើស
     const dailyRate = settings.workDaysPerMonth > 0 ? salary / settings.workDaysPerMonth : 0;
+    const hourlyRate = dailyRate / (settings.standardHours > 0 ? settings.standardHours : 8);
+    const short = r2(b.shortH * hourlyRate);           // ប្រាក់នៃម៉ោងខ្វះក្នុងថ្ងៃដែលបានមក (មិនបំពេញ)
+    const baseFull = base + b.shortH * hourlyRate;     // ចាត់ថ្ងៃដែលបានមកទាំងអស់ជាថ្ងៃពេញ → បំពេញតែថ្ងៃទាំងមូលដែលខ្វះ
+    const diff = r2(salary - baseFull); // + ខ្វះ · − លើស
     const eligible = why.length === 0;
     const adj = eligible && Math.abs(diff) > EPS ? diff : 0; // ចំនួនតម្រឹម (+ បំពេញ / − កាត់)
     // ការព្យាករណ៍៖ ឧបមាថាថ្ងៃធម្មតាដែលមិនទាន់មានវត្តមាន (មិនទាន់កត់ + ថ្ងៃអនាគត) មកធ្វើការគ្រប់ថ្ងៃ
-    const projBase = base + b.open * dailyRate;
+    const projBase = baseFull + b.open * dailyRate;
     const projDiff = r2(salary - projBase);
     return { salary, base, diff, adj, absent, unmarked, unpaid, eligible, why,
-      dailyRate, work: b.work, leave: b.leave, workDays: b.wd, leaveDays: b.ld, premiumDays: b.xd, open: b.open, projBase, projDiff };
+      dailyRate, short, shortHours: b.shortH, work: b.work, leave: b.leave, workDays: b.wd, leaveDays: b.ld, premiumDays: b.xd, open: b.open, projBase, projDiff };
   }
 
   function buildRows() {
@@ -222,7 +231,7 @@
       const diffTxt = c.eligible ? (c.diff > 0 ? '+' : c.diff < 0 ? '−' : '') + money(Math.abs(c.diff)) : '—';
       const detail = showDetail ? `<tr class="st-det"><td></td><td colspan="9" style="white-space:normal;font-size:.72rem;color:var(--text-muted,#5b6b80);padding:2px 8px 8px">
         តម្លៃថ្ងៃ $${money(c.dailyRate)} (= ${money(c.salary)} ÷ ${num(settings.workDaysPerMonth)}) · ថ្ងៃធម្មតាធ្វើការ ${c.workDays} · ថ្ងៃច្បាប់/បុណ្យ ${c.leaveDays}${c.premiumDays ? ` · ធ្វើការអាទិត្យ/បុណ្យ ${c.premiumDays} ថ្ងៃ (ប្រាក់ ×2 នៅជារបស់បុគ្គលិក មិនរាប់)` : ''}<br>
-        ឈ្នួលធម្មតា $${money(c.work)} + LeavePay $${money(c.leave)} = <b>$${money(c.base)}</b> · ប្រាក់ខែ − ឈ្នួល = ${money(c.salary)} − ${money(c.base)} = <b>${c.diff >= 0 ? '+' : '−'}$${money(Math.abs(c.diff))}</b>${c.eligible ? '' : ' (មិនតម្រឹម → $0)'}
+        ឈ្នួលធម្មតា $${money(c.work)} + LeavePay $${money(c.leave)} = <b>$${money(c.base)}</b>${c.short > 0 ? ` · ម៉ោងខ្វះក្នុងថ្ងៃដែលបានមក ${num(c.shortHours)} ម៉ោង (−$${money(c.short)}) មិនបំពេញ` : ''}<br>ប្រាក់ខែ − (ឈ្នួល + ម៉ោងខ្វះ) = ${money(c.salary)} − ${money(c.base + c.short)} = <b>${c.diff >= 0 ? '+' : '−'}$${money(Math.abs(c.diff))}</b>${c.eligible ? '' : ' (មិនតម្រឹម → $0)'}
         ${c.open > 0 ? `<br>📈 ព្យាករណ៍៖ បើ ${c.open} ថ្ងៃធម្មតាដែលនៅមិនទាន់មានវត្តមាន មកធ្វើការគ្រប់ → ឈ្នួល $${money(c.projBase)} → ${c.projDiff > 0 ? 'ខ្វះ' : c.projDiff < 0 ? 'លើស' : 'ស្មើ'} <b>$${money(Math.abs(c.projDiff))}</b>` : ''}</td></tr>` : '';
       const btn = c.adj !== 0 || (cur && c.eligible) ? `<button class="st-act" data-act="add" ${dis}>🛡️ ${cur ? 'អាប់ដេត' : (c.adj < 0 ? 'កាត់តម្រឹម' : 'បំពេញ')}</button>` : '';
       return `<tr data-id="${esc(e.id)}">
@@ -300,9 +309,9 @@
 
   function exportCsv() {
     buildRows();
-    const head = ['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែ', 'តម្លៃថ្ងៃ', 'ថ្ងៃធ្វើការ', 'ថ្ងៃច្បាប់/បុណ្យ', 'ថ្ងៃអាទិត្យ/បុណ្យធ្វើការ', 'ឈ្នួលធម្មតា', 'LeavePay', 'ប្រាក់ឈ្នួលបាន', 'ខ្វះ(+)/លើស(−)', 'តម្រឹម', 'មូលហេតុមិនតម្រឹម', 'ត្រូវតម្រឹម(+/−)', 'ថ្ងៃនៅសល់(មិនទាន់កត់)', 'ព្យាករណ៍ ខ្វះ(+)/លើស(−) បើមកគ្រប់', 'បានតម្រឹមរួច(+/−)'];
+    const head = ['អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ប្រាក់ខែ', 'តម្លៃថ្ងៃ', 'ថ្ងៃធ្វើការ', 'ថ្ងៃច្បាប់/បុណ្យ', 'ថ្ងៃអាទិត្យ/បុណ្យធ្វើការ', 'ឈ្នួលធម្មតា', 'LeavePay', 'ប្រាក់ឈ្នួលបាន', 'ម៉ោងខ្វះ($ មិនបំពេញ)', 'ខ្វះ(+)/លើស(−)', 'តម្រឹម', 'មូលហេតុមិនតម្រឹម', 'ត្រូវតម្រឹម(+/−)', 'ថ្ងៃនៅសល់(មិនទាន់កត់)', 'ព្យាករណ៍ ខ្វះ(+)/លើស(−) បើមកគ្រប់', 'បានតម្រឹមរួច(+/−)'];
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const lines = [head.map(q).join(',')].concat(rows.map(({ e, c, cur }) => [e.username, e.name, e.dept, r2(c.salary), r2(c.dailyRate), c.workDays, c.leaveDays, c.premiumDays, r2(c.work), r2(c.leave), r2(c.base), r2(c.diff),
+    const lines = [head.map(q).join(',')].concat(rows.map(({ e, c, cur }) => [e.username, e.name, e.dept, r2(c.salary), r2(c.dailyRate), c.workDays, c.leaveDays, c.premiumDays, r2(c.work), r2(c.leave), r2(c.base), r2(c.short), r2(c.diff),
       c.eligible ? 'បាទ' : 'ទេ', c.why.join(' · '), r2(c.adj), c.open, r2(c.projDiff), cur ? r2(cur.sign * (Number(cur.item.amount) || 0)) : ''].map(q).join(',')));
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `salary-adjust-${curMonth}.csv`;
