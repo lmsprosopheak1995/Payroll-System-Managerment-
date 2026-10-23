@@ -2695,7 +2695,7 @@ function calcDeductionRow(emp, month) {
       leaveDays++;
       const isSubst = !!(req && (req.reason || '').includes(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
       if (type === 'maternity') { maternityDays++; maternityDeductDays += matFrac(date); }
-      else if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
+      else if (deductRules.leaveTypes.includes(type) && !isSubst && holidays[date] === undefined) deductibleLeaveDays++; // ថ្ងៃបុណ្យជាតិ → មិនកាត់
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }
   });
