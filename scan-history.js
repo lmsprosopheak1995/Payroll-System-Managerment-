@@ -750,9 +750,27 @@
     });
     decorate();
   }
+  // ---------- បញ្ជីបុគ្គលិក៖ លាក់អ្នក "ឈប់បម្រើការ" ជាលំនាំដើម (តែម្តងពេលចូលទំព័រ) ----------
+  function defaultActiveFilter() {
+    const sf = $('statusFilter');
+    if (!sf || sf.dataset.shInit) return;
+    sf.dataset.shInit = '1';
+    const hint = document.createElement('span');
+    hint.style.cssText = 'font-size:0.72rem;color:var(--text-muted);white-space:nowrap;';
+    hint.textContent = '(លាក់អ្នកឈប់)';
+    sf.insertAdjacentElement('afterend', hint);
+    const update = () => { hint.style.display = sf.value === 'active' ? '' : 'none'; };
+    sf.addEventListener('change', update);
+    if (!sf.value && Array.from(sf.options).some(o => o.value === 'active')) {
+      sf.value = 'active';
+      try { if (typeof employees !== 'undefined' && employees.length && typeof renderTable === 'function') renderTable(); } catch (e) { console.warn('renderTable:', e); }
+    }
+    update();
+  }
+
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeEmp(); });
 
-  try { ensureTab(); ensureNav(); hookEmployeeList(); } catch (e) { console.error('scan-history init:', e); }
+  try { ensureTab(); ensureNav(); hookEmployeeList(); defaultActiveFilter(); } catch (e) { console.error('scan-history init:', e); }
 
   const _showTab = window.showTab;
   window.showTab = function (tab) {
