@@ -31,7 +31,9 @@
   let logs = {};          // scan_log៖ "date|emp|step" -> row
   let logsMissing = false;
   let shown = [];         // ជួរក្រោយចម្រោះ
+  let corr = {};          // សំណើកែវត្តមានដែលកំពុងរង់ចាំ៖ "date|emp" -> true
   let overviewOpen = false;
+  let sortKey = 'name', sortDir = 1; // តម្រៀបតារាងសង្ខេប
   let inited = false;
   let loading = false;
 
@@ -73,7 +75,7 @@
           <button type="button" id="shOverClose" class="secondary" style="padding:2px 10px;">បិទ</button></span>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th title="មិនរាប់ថ្ងៃនេះ (កំពុងដំណើរការ) និងថ្ងៃដែលមានច្បាប់អនុម័ត">ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
+          <thead><tr style="cursor:pointer;" title="ចុចក្បាលជួរដើម្បីតម្រៀប"><th data-sort="name">បុគ្គលិក</th><th data-sort="dept">ផ្នែក</th><th data-sort="days">ថ្ងៃមកធ្វើការ</th><th data-sort="late">ចូលយឺត</th><th data-sort="lateMin">នាទីយឺតសរុប</th><th data-sort="incomplete" title="មិនរាប់ថ្ងៃនេះ (កំពុងដំណើរការ) និងថ្ងៃដែលមានច្បាប់អនុម័ត">ស្កេនមិនគ្រប់</th><th class="shQrCol" data-sort="qr">QR</th><th class="shQrCol" data-sort="manual">Admin/ដៃ</th></tr></thead>
           <tbody id="shOverBody"></tbody>
         </table></div>
       </div>
@@ -131,6 +133,13 @@
       const btn = ev.target.closest('button[data-photo]');
       if (btn) showPhoto(btn.dataset.photo, btn.dataset.label);
     });
+    document.querySelector('#shOverview thead').addEventListener('click', ev => {
+      const th = ev.target.closest('th[data-sort]');
+      if (!th) return;
+      const k = th.dataset.sort;
+      if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'name' || k === 'dept') ? 1 : -1; }
+      renderOverview();
+    });
     $('shOverBody').addEventListener('click', ev => {
       const a = ev.target.closest('[data-emp]');
       if (!a) return;
@@ -148,7 +157,8 @@
     } catch (_) { /* ignore */ }
     return rec && rec.status === 'leave' ? 'ច្បាប់' : '';
   }
-  const leaveBadge = r => r.leave ? ` <span class="badge pending" style="font-size:0.62rem;">${esc(r.leave)}</span>` : '';
+  const leaveBadge = r => (r.leave ? ` <span class="badge pending" style="font-size:0.62rem;">${esc(r.leave)}</span>` : '')
+    + (r.pending ? ' <span class="badge pending" style="font-size:0.62rem;" title="មានសំណើកែវត្តមានកំពុងរង់ចាំ Admin អនុម័ត">📝 សំណើកែ</span>' : '');
 
   // ---------- ប៊ូតុងខែ ----------
   function renderMonths() {
@@ -181,6 +191,18 @@
     return { data: out, error: null };
   }
 
+  async function fetchPending(from, to, empId) {
+    const m = {};
+    try {
+      if (typeof supabaseClient === 'undefined') return m;
+      let q = supabaseClient.from('attendance_corrections').select('employee_id,date,status').eq('status', 'pending').gte('date', from).lte('date', to).limit(1000);
+      if (empId) q = q.eq('employee_id', empId);
+      const r = await q;
+      if (!r.error) (r.data || []).forEach(c => { m[`${c.date}|${c.employee_id}`] = true; });
+    } catch (e) { console.warn('attendance_corrections:', e); }
+    return m;
+  }
+
   async function load(force) {
     if (loading) return;
     loading = true;
@@ -198,12 +220,14 @@
         else (r.data || []).forEach(l => { logs[`${l.date}|${l.employee_id}|${l.step}`] = l; });
       } else logsMissing = true;
 
-      rows = buildRows(from, to, logs);
+      corr = await fetchPending(from, to);
+      rows = buildRows(from, to, logs, null, corr);
       render();
     } finally { loading = false; }
   }
 
-  function buildRows(from, to, lg, onlyEmp) {
+  function buildRows(from, to, lg, onlyEmp, cr) {
+    cr = cr || {};
     const att = (typeof attendance !== 'undefined' && attendance) || {};
     const empMap = {};
     (typeof employees !== 'undefined' ? employees : []).forEach(e => { empMap[e.id] = e; });
@@ -227,18 +251,19 @@
           if (log && log.photo) photo[step] = log.photo;
         });
         if (!any) return;
-        let late = false;
+        let late = false, lateMin = 0;
         if (t.checkin) {
           try {
             const start = lateStartMinutes(getEmpShift(empId));
             const m = parseMin(t.checkin);
             late = start !== null && start !== undefined && m !== null && m > start;
+            if (late) lateMin = m - start;
           } catch (_) { late = false; }
         }
         const emp = empMap[empId];
         const leave = leaveOf(empId, date, rec);
         out.push({
-          date, empId, t, src, photo, late, qr, manual, leave,
+          date, empId, t, src, photo, late, lateMin, qr, manual, leave, pending: !!cr[`${date}|${empId}`],
           name: emp ? emp.name : String(empId),
           dept: emp ? (emp.dept || '') : '',
           incomplete: date < now && !leave && STEPS.some(s => !t[s[0]]),
@@ -270,7 +295,7 @@
     if (!time) return '<span style="color:var(--text-muted);">-</span>';
     let h = `<b>${esc(time)}</b>`;
     if (!lm) h += r.src[step] === 'qr' ? tag('QR', '#d1fae5', '#065f46') : tag('ដៃ', '#ffedd5', '#9a3412');
-    if (step === 'checkin' && r.late) h += ' <span class="badge inactive">យឺត</span>';
+    if (step === 'checkin' && r.late) h += ` <span class="badge inactive">យឺត ${r.lateMin} នាទី</span>`;
     if (r.photo[step]) h += ` <button type="button" class="secondary" style="padding:0 6px;" data-photo="${esc(r.photo[step])}" data-label="${esc(r.name + ' · ' + r.date + ' ' + time + ' · ' + label)}">📷</button>`;
     return h;
   }
@@ -310,14 +335,19 @@
   function summarize() {
     const map = {};
     shown.forEach(r => {
-      const o = map[r.empId] || (map[r.empId] = { empId: r.empId, name: r.name, dept: r.dept, days: 0, late: 0, incomplete: 0, qr: 0, manual: 0 });
+      const o = map[r.empId] || (map[r.empId] = { empId: r.empId, name: r.name, dept: r.dept, days: 0, late: 0, lateMin: 0, incomplete: 0, qr: 0, manual: 0 });
       o.days++;
+      o.lateMin += r.lateMin || 0;
       if (r.late) o.late++;
       if (r.incomplete) o.incomplete++;
       o.qr += r.qr;
       o.manual += r.manual;
     });
-    return Object.values(map).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return Object.values(map).sort((a, b) => {
+      const x = a[sortKey], y = b[sortKey];
+      const c = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y));
+      return (c || String(a.name).localeCompare(String(b.name))) * sortDir;
+    });
   }
 
   function renderOverview() {
@@ -326,7 +356,7 @@
     if (!overviewOpen) return;
     const from = $('shFrom').value, to = $('shTo').value;
     const sum = summarize();
-    const tot = sum.reduce((a, o) => ({ days: a.days + o.days, late: a.late + o.late, incomplete: a.incomplete + o.incomplete, qr: a.qr + o.qr, manual: a.manual + o.manual }), { days: 0, late: 0, incomplete: 0, qr: 0, manual: 0 });
+    const tot = sum.reduce((a, o) => ({ days: a.days + o.days, late: a.late + o.late, lateMin: a.lateMin + o.lateMin, incomplete: a.incomplete + o.incomplete, qr: a.qr + o.qr, manual: a.manual + o.manual }), { days: 0, late: 0, lateMin: 0, incomplete: 0, qr: 0, manual: 0 });
     const isMonth = from.slice(0, 7) === to.slice(0, 7) && from.endsWith('-01') && to === monthEnd(from.slice(0, 7));
     $('shOverTitle').textContent = `📊 សង្ខេប${isMonth ? 'ខែ ' + monthLabel(from.slice(0, 7)) : ` ${from} → ${to}`} · ${sum.length} នាក់`;
     const qrCols = o => logsMissing ? '' : `<td>${o.qr}</td><td>${o.manual}</td>`;
@@ -334,9 +364,10 @@
       <td><a href="#" data-emp="${esc(o.empId)}" style="color:inherit;text-decoration:underline;">${esc(o.name)}</a></td>
       <td>${esc(o.dept)}</td><td>${o.days}</td>
       <td>${o.late ? `<span style="color:#dc2626;font-weight:700;">${o.late}</span>` : '0'}</td>
+      <td>${o.lateMin ? `<span style="color:#dc2626;font-weight:700;">${o.lateMin}</span>` : '0'}</td>
       <td>${o.incomplete ? `<span style="color:#f97316;font-weight:700;">${o.incomplete}</span>` : '0'}</td>
       ${qrCols(o)}</tr>`).join('') +
-      (sum.length ? `<tr style="font-weight:700;"><td>សរុប</td><td></td><td>${tot.days}</td><td>${tot.late}</td><td>${tot.incomplete}</td>${qrCols(tot)}</tr>` : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>');
+      (sum.length ? `<tr style="font-weight:700;"><td>សរុប</td><td></td><td>${tot.days}</td><td>${tot.late}</td><td>${tot.lateMin}</td><td>${tot.incomplete}</td>${qrCols(tot)}</tr>` : '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>');
   }
 
   // ---------- រូបថត ----------
@@ -381,18 +412,18 @@
 
   function downloadDetail() {
     if (!shown.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
-    const headers = ['ថ្ងៃ', 'បុគ្គលិក', 'ផ្នែក', 'ចូល', 'ចេញបាយ', 'ចូលវិញ', 'ចេញ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់/ច្បាប់']
+    const headers = ['ថ្ងៃ', 'បុគ្គលិក', 'ផ្នែក', 'ចូល', 'ចេញបាយ', 'ចូលវិញ', 'ចេញ', 'ចូលយឺត', 'នាទីយឺត', 'ស្កេនមិនគ្រប់/ច្បាប់', 'សំណើកែរង់ចាំ']
       .concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
     const data = shown.map(r => [r.date, r.name, r.dept, r.t.checkin || '', r.t.break_out || '', r.t.break_in || '', r.t.checkout || '',
-      r.late ? 'យឺត' : '', r.incomplete ? 'មិនគ្រប់' : (r.leave || '')].concat(logsMissing ? [] : [r.qr, r.manual]));
+      r.late ? 'យឺត' : '', r.lateMin || '', r.incomplete ? 'មិនគ្រប់' : (r.leave || ''), r.pending ? 'មាន' : ''].concat(logsMissing ? [] : [r.qr, r.manual]));
     saveCsv(headers, data, `scan-history_${range()}.csv`);
   }
 
   function downloadSummary() {
     const sum = summarize();
     if (!sum.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
-    const headers = ['បុគ្គលិក', 'ផ្នែក', 'ថ្ងៃមកធ្វើការ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់'].concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
-    const data = sum.map(o => [o.name, o.dept, o.days, o.late, o.incomplete].concat(logsMissing ? [] : [o.qr, o.manual]));
+    const headers = ['បុគ្គលិក', 'ផ្នែក', 'ថ្ងៃមកធ្វើការ', 'ចូលយឺត', 'នាទីយឺតសរុប', 'ស្កេនមិនគ្រប់'].concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
+    const data = sum.map(o => [o.name, o.dept, o.days, o.late, o.lateMin, o.incomplete].concat(logsMissing ? [] : [o.qr, o.manual]));
     saveCsv(headers, data, `scan-summary_${range()}.csv`);
   }
 
@@ -436,9 +467,11 @@
       if (!q.error) { lm = false; (q.data || []).forEach(l => { lg[`${l.date}|${l.employee_id}|${l.step}`] = l; }); }
     }
     if (mState !== st || st.ym !== ym) return; // បានប្តូរខែ/បិទរួច
-    const list = buildRows(from, to, lg, st.empId);
+    const cr = await fetchPending(from, to, st.empId);
+    if (mState !== st || st.ym !== ym) return;
+    const list = buildRows(from, to, lg, st.empId, cr);
     const emp = (typeof employees !== 'undefined' ? employees : []).find(e => String(e.id) === st.empId);
-    const sum = list.reduce((a, r) => ({ days: a.days + 1, late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, inc: 0, qr: 0, manual: 0 });
+    const sum = list.reduce((a, r) => ({ days: a.days + 1, lateMin: a.lateMin + (r.lateMin || 0), late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, lateMin: 0, inc: 0, qr: 0, manual: 0 });
     const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
     const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}${leaveBadge(r)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
       || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានការស្កេនក្នុងខែនេះទេ</td></tr>';
@@ -453,7 +486,7 @@
           <button type="button" id="scanhistEmpClose" style="margin-left:10px;">បិទ</button></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-        ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}
+        ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('នាទីយឺត', sum.lateMin, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}
         ${lm ? '' : chip('QR', sum.qr, '#16a34a') + chip('Admin/ដៃ', sum.manual, '#9a3412')}
       </div>
       <div class="table-wrap"><table>
