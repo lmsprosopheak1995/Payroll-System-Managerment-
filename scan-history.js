@@ -465,6 +465,8 @@
       if (ph) { showPhoto(ph.dataset.photo, ph.dataset.label); return; }
       const emp = empById(mState.empId);
       if (e.target.closest('button[data-reveal]')) { mState.showId = !mState.showId; renderEmp().catch(console.error); return; }
+      const at = e.target.closest('button[data-attach]');
+      if (at) { openAttachment(at.dataset.attach); return; }
       const vp = e.target.closest('button[data-viewphoto]');
       if (vp && emp) { viewImage(emp.photo, emp.name); return; }
       const ps = e.target.closest('button[data-pslip]');
@@ -489,6 +491,22 @@
     return (typeof adminPrintPayslipMonth === 'function' ? eyeBtn(`data-pslip="${month}"`, 'មើល Payslip') + ' ' : '')
       + (typeof adminPdfPayslipMonth === 'function' ? `<button type="button" class="secondary" style="${st}" data-ppdf="${month}">⬇ PDF</button>` : '');
   };
+
+  // ឯកសារភ្ជាប់ច្បាប់៖ bucket មិនមែន Public → ប្រើ signed URL (តំណ /object/public/ នឹងបង្ហាញ "Bucket not found")
+  async function openAttachment(url) {
+    const w = window.open('', '_blank');
+    try {
+      const m = /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/([^?#]+)/.exec(url);
+      if (!m || typeof supabaseClient === 'undefined') { if (w) w.location.href = url; else window.open(url, '_blank'); return; }
+      const { data, error } = await supabaseClient.storage.from(m[1]).createSignedUrl(decodeURIComponent(m[2]), 600);
+      if (error || !data || !data.signedUrl) throw error || new Error('no signed url');
+      if (w) w.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    } catch (e) {
+      console.warn('attachment:', e);
+      if (w) w.close();
+      alertMsg('មិនអាចបើកឯកសារភ្ជាប់បានទេ — ឯកសារប្រហែលត្រូវបានលុប ឬគ្មានសិទ្ធិអាន (Storage policy)');
+    }
+  }
 
   function viewImage(src, label) {
     const safe = typeof safeImgSrc === 'function' ? safeImgSrc(src) : '';
@@ -636,7 +654,7 @@
 
     const rowsHtml = reqs.map(r => {
       const att = r.attachment_url && /^https?:\/\/[^\s"'<>`]+$/i.test(r.attachment_url)
-        ? `<a class="secondary" href="${esc(r.attachment_url)}" target="_blank" rel="noopener" title="មើលឯកសារភ្ជាប់" style="display:inline-flex;vertical-align:middle;padding:3px 7px;border-radius:8px;">${EYE_SVG}</a>` : '-';
+        ? eyeBtn(`data-attach="${esc(r.attachment_url)}"`, 'មើលឯកសារភ្ជាប់') : '-';
       let days = '';
       try { days = typeof leaveWeightDays === 'function' ? fmtD(leaveWeightDays(r)) : ''; } catch (e) { days = ''; }
       return `<tr>
