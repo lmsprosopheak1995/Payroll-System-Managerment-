@@ -427,7 +427,7 @@
     saveCsv(headers, data, `scan-summary_${range()}.csv`);
   }
 
-  // ---------- Overview ប្រវត្តិស្កេនរបស់បុគ្គលិកម្នាក់ (ចុចលើឈ្មោះ) ----------
+  // ---------- Overview បុគ្គលិកម្នាក់៖ ប្រវត្តិរូប · ប្រវត្តិស្កេន · Payroll ----------
   let mState = null;
   function closeEmp() { const o = $('scanhistEmpOverlay'); if (o) o.remove(); mState = null; }
   function shiftYm(ym, d) {
@@ -435,57 +435,137 @@
     const dt = new Date(y, m - 1 + d, 1);
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
   }
+  const empById = id => (typeof employees !== 'undefined' ? employees : []).find(e => String(e.id) === String(id));
+  function tenure(start) {
+    if (!start) return '';
+    const a = new Date(start + 'T00:00:00'), b = new Date(today() + 'T00:00:00');
+    let m = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+    if (b.getDate() < a.getDate()) m--;
+    if (isNaN(m) || m < 0) return '';
+    const y = Math.floor(m / 12), r = m % 12;
+    return (y ? `${y} ឆ្នាំ ` : '') + `${r} ខែ`;
+  }
+  const usd = n => (typeof fmtUSD2 === 'function' ? fmtUSD2(n) : (Math.round((n || 0) * 100) / 100).toFixed(2));
 
-  function openEmp(empId, ym) {
+  function openEmp(empId, ym, tab) {
     closeEmp();
-    mState = { empId: String(empId), ym: ym || today().slice(0, 7) };
+    mState = { empId: String(empId), ym: ym || today().slice(0, 7), tab: tab || 'scan', range: '12' };
     const ov = document.createElement('div');
     ov.id = 'scanhistEmpOverlay';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:18px;';
-    ov.innerHTML = '<div id="scanhistEmpBox" style="background:var(--card-bg,#fff);color:var(--text,#111827);border-radius:16px;max-width:860px;width:100%;max-height:90vh;overflow:auto;padding:18px;">កំពុងផ្ទុក…</div>';
+    ov.innerHTML = '<div id="scanhistEmpBox" style="background:var(--card-bg,#fff);color:var(--text,#111827);border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:18px;">កំពុងផ្ទុក…</div>';
     ov.addEventListener('click', e => {
-      if (e.target === ov) { closeEmp(); return; }
-      if (e.target.closest('#scanhistEmpClose')) { closeEmp(); return; }
+      if (e.target === ov || e.target.closest('#scanhistEmpClose')) { closeEmp(); return; }
+      if (!mState) return;
+      const tb = e.target.closest('button[data-tab]');
+      if (tb) { mState.tab = tb.dataset.tab; renderEmp().catch(console.error); return; }
       const nav = e.target.closest('button[data-nav]');
-      if (nav && mState) { mState.ym = shiftYm(mState.ym, +nav.dataset.nav); renderEmp().catch(console.error); return; }
+      if (nav) { mState.ym = shiftYm(mState.ym, +nav.dataset.nav); renderEmp().catch(console.error); return; }
       const ph = e.target.closest('button[data-photo]');
-      if (ph) showPhoto(ph.dataset.photo, ph.dataset.label);
+      if (ph) { showPhoto(ph.dataset.photo, ph.dataset.label); return; }
+      const emp = empById(mState.empId);
+      const ps = e.target.closest('button[data-pslip]');
+      if (ps && emp && typeof adminPrintPayslipMonth === 'function') { adminPrintPayslipMonth(emp.id, ps.dataset.pslip); return; }
+      const pd = e.target.closest('button[data-ppdf]');
+      if (pd && emp && typeof adminPdfPayslipMonth === 'function') adminPdfPayslipMonth(emp.id, pd.dataset.ppdf, pd);
+    });
+    ov.addEventListener('change', e => {
+      if (e.target.id === 'shPayRange' && mState) { mState.range = e.target.value; renderEmp().catch(console.error); }
     });
     document.body.appendChild(ov);
     renderEmp().catch(console.error);
   }
 
-  async function renderEmp() {
-    const st = mState;
-    if (!st) return;
-    const ym = st.ym;
-    const from = ym + '-01', to = monthEnd(ym);
+  const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
+  const slipBtns = (month, small) => {
+    const st = small ? 'padding:1px 8px;' : '';
+    return (typeof adminPrintPayslipMonth === 'function' ? `<button type="button" class="secondary" style="${st}" data-pslip="${month}">🖨 Payslip</button> ` : '')
+      + (typeof adminPdfPayslipMonth === 'function' ? `<button type="button" class="secondary" style="${st}" data-ppdf="${month}">⬇ PDF</button>` : '');
+  };
+
+  // --- ប្រវត្តិរូប + ឯកសារ ---
+  function profileContent(emp) {
+    const photo = typeof safeImgSrc === 'function' ? safeImgSrc(emp.photo) : '';
+    const avatar = photo
+      ? `<img src="${esc(photo)}" alt="" style="width:110px;height:110px;border-radius:50%;object-fit:cover;">`
+      : `<div style="width:110px;height:110px;border-radius:50%;background:#0d9488;color:#fff;display:flex;align-items:center;justify-content:center;font-size:2.4rem;font-weight:700;">${esc((emp.name || '?').trim().charAt(0).toUpperCase() || '?')}</div>`;
+    const salary = emp.salary !== '' && emp.salary != null ? '$' + usd(parseFloat(emp.salary) || 0) : '-';
+    const fields = [
+      ['អត្តលេខ', emp.username || '-'], ['តួនាទី', emp.position || '-'], ['ផ្នែក', emp.dept || '-'],
+      ['ទូរស័ព្ទ', emp.phone || '-'], ['អ៊ីមែល', emp.email || '-'],
+      ['ថ្ងៃចូលធ្វើការ', emp.startDate ? emp.startDate + (tenure(emp.startDate) ? ` (${tenure(emp.startDate)})` : '') : '-'],
+      ['ប្រាក់ខែគោល', salary],
+    ];
+    const months = [0, 1, 2].map(i => shiftYm(today().slice(0, 7), -i)).filter(m => !emp.startDate || m >= emp.startDate.slice(0, 7));
+    const slips = (typeof adminPrintPayslipMonth === 'function' || typeof adminPdfPayslipMonth === 'function')
+      ? months.map(m => `<div style="display:flex;gap:10px;align-items:center;margin:4px 0;"><b style="min-width:70px;">${m}</b>${slipBtns(m, true)}</div>`).join('')
+      : '<span style="color:var(--text-muted);">មិនមានមុខងារ Payslip</span>';
+    const docRow = (label, val) => `<div style="display:flex;gap:10px;margin:4px 0;"><span style="min-width:170px;color:var(--text-muted);">${label}</span><b>${val}</b></div>`;
+    return `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+        ${avatar}
+        <div><div style="font-size:1.25rem;font-weight:700;">${esc(emp.name)}</div>
+          <div style="color:var(--text-muted);">${esc(emp.position)} · ${esc(emp.dept)}</div>
+          <div style="margin-top:6px;"><span class="badge ${emp.status === 'active' ? 'active' : 'inactive'}">${emp.status === 'active' ? 'កំពុងបម្រើការ' : 'ឈប់បម្រើការ'}</span></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 18px;margin-bottom:16px;">
+        ${fields.map(f => `<div><div style="font-size:0.75rem;color:var(--text-muted);">${f[0]}</div><div style="font-weight:600;">${esc(f[1])}</div></div>`).join('')}
+      </div>
+      <h4 style="margin:0 0 6px;">📄 ឯកសារ</h4>
+      ${docRow('លេខអត្តសញ្ញាណប័ណ្ណ', esc(emp.idCard) || '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់បញ្ចូល</span>')}
+      ${docRow('រូបថតប្រវត្តិរូប', photo ? 'មាន' : '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់មាន</span>')}
+      <div style="margin-top:6px;color:var(--text-muted);font-size:0.8rem;">Payslip ៣ ខែចុងក្រោយ៖</div>
+      ${slips}`;
+  }
+
+  // --- Payroll ---
+  function payContent(emp, st) {
+    if (typeof summarizeEmpMonth !== 'function') return '<p class="scan-hint">មិនមានមុខងារគណនាប្រាក់ខែ (summarizeEmpMonth)</p>';
+    const startM = emp.startDate ? emp.startDate.slice(0, 7) : '';
+    const limit = st.range === 'all' ? 60 : 12;
+    const cur = today().slice(0, 7);
+    const months = [];
+    for (let i = 0; i < limit; i++) { const m = shiftYm(cur, -i); if (startM && m < startM) break; months.push(m); }
+    const tot = { days: 0, ben: 0, ded: 0, net: 0 };
+    const body = months.map(m => {
+      let t;
+      try { t = summarizeEmpMonth(emp, m); } catch (e) { t = null; }
+      if (!t) return `<tr><td>${m}</td><td colspan="6" style="color:var(--text-muted);">គណនាមិនបាន</td></tr>`;
+      tot.days += t.workDays || 0; tot.ben += t.benefitsUSD || 0; tot.ded += t.deductionsUSD || 0; tot.net += t.net || 0;
+      const riel = typeof netRielRounded === 'function' && typeof fmtRiel === 'function' ? fmtRiel(netRielRounded(t)) + ' ៛' : '';
+      return `<tr><td>${m}</td><td>${t.workDays ?? ''}</td><td>+$${usd(t.benefitsUSD)}</td><td>−$${usd(t.deductionsUSD)}</td>
+        <td><b>$${usd(t.net)}</b></td><td>${riel}</td><td>${slipBtns(m, true)}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>';
+    return `
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+        <label>រយៈពេល <select id="shPayRange"><option value="12"${st.range === '12' ? ' selected' : ''}>12 ខែចុងក្រោយ</option><option value="all"${st.range === 'all' ? ' selected' : ''}>ទាំងអស់</option></select></label>
+        ${chip('ប្រាក់ខែសុទ្ធសរុប', '$' + usd(tot.net), '#0d9488')}${chip('ថ្ងៃធ្វើការសរុប', tot.days, '#2563eb')}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ខែ</th><th>ថ្ងៃធ្វើការ</th><th>ប្រាក់បន្ថែម</th><th>ប្រាក់កាត់</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>Payslip</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table></div>`;
+  }
+
+  // --- ប្រវត្តិស្កេន ---
+  async function scanContent(st) {
+    const ym = st.ym, from = ym + '-01', to = monthEnd(ym);
     const lg = {};
     let lm = true;
     if (typeof supabaseClient !== 'undefined') {
       const q = await supabaseClient.from('scan_log').select('*').eq('employee_id', st.empId).gte('date', from).lte('date', to).limit(1000);
       if (!q.error) { lm = false; (q.data || []).forEach(l => { lg[`${l.date}|${l.employee_id}|${l.step}`] = l; }); }
     }
-    if (mState !== st || st.ym !== ym) return; // បានប្តូរខែ/បិទរួច
     const cr = await fetchPending(from, to, st.empId);
-    if (mState !== st || st.ym !== ym) return;
     const list = buildRows(from, to, lg, st.empId, cr);
-    const emp = (typeof employees !== 'undefined' ? employees : []).find(e => String(e.id) === st.empId);
     const sum = list.reduce((a, r) => ({ days: a.days + 1, lateMin: a.lateMin + (r.lateMin || 0), late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, lateMin: 0, inc: 0, qr: 0, manual: 0 });
-    const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
     const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}${leaveBadge(r)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
       || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានការស្កេនក្នុងខែនេះទេ</td></tr>';
-    const box = $('scanhistEmpBox');
-    if (!box) return;
-    box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-        <h3 style="margin:0;">🕘 ${esc(emp ? emp.name : st.empId)} <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${esc(emp ? (emp.dept || '') : '')}</span></h3>
-        <span><button type="button" class="secondary" data-nav="-1" style="padding:2px 10px;">‹</button>
-          <b style="margin:0 8px;">${esc(monthLabel(ym))}</b>
-          <button type="button" class="secondary" data-nav="1" style="padding:2px 10px;">›</button>
-          <button type="button" id="scanhistEmpClose" style="margin-left:10px;">បិទ</button></span>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+    return `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <button type="button" class="secondary" data-nav="-1" style="padding:2px 10px;">‹</button>
+        <b>${esc(monthLabel(ym))}</b>
+        <button type="button" class="secondary" data-nav="1" style="padding:2px 10px;">›</button>
         ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('នាទីយឺត', sum.lateMin, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}
         ${lm ? '' : chip('QR', sum.qr, '#16a34a') + chip('Admin/ដៃ', sum.manual, '#9a3412')}
       </div>
@@ -493,6 +573,27 @@
         <thead><tr><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>`;
+  }
+
+  async function renderEmp() {
+    const st = mState;
+    if (!st) return;
+    const emp = empById(st.empId);
+    const tab = st.tab, ym = st.ym;
+    if (!emp) { const b = $('scanhistEmpBox'); if (b) b.innerHTML = '<p>រកមិនឃើញបុគ្គលិក</p><button type="button" id="scanhistEmpClose">បិទ</button>'; return; }
+    const content = tab === 'scan' ? await scanContent(st) : tab === 'pay' ? payContent(emp, st) : profileContent(emp);
+    if (mState !== st || st.tab !== tab || st.ym !== ym) return; // បានប្តូរ/បិទរួច
+    const box = $('scanhistEmpBox');
+    if (!box) return;
+    const col = '#0d9488';
+    const tabBtn = (k, label) => `<button type="button" data-tab="${k}" style="border:2px solid ${col};background:${tab === k ? col : 'transparent'};color:${tab === k ? '#fff' : col};border-radius:999px;padding:3px 14px;font-weight:700;cursor:pointer;">${label}</button>`;
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <h3 style="margin:0;">${esc(emp.name)} <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${esc(emp.dept || '')}</span></h3>
+        <button type="button" id="scanhistEmpClose">បិទ</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${tabBtn('profile', '👤 ប្រវត្តិរូប · ឯកសារ')}${tabBtn('scan', '🕘 ប្រវត្តិស្កេន')}${tabBtn('pay', '💰 Payroll')}</div>
+      ${content}`;
   }
 
   // ---------- wiring ----------
@@ -516,7 +617,7 @@
       if (!td || td.cellIndex !== 2) return;
       const btn = td.parentNode.querySelector('button[onclick*="openEditModal"]');
       const m = btn && /openEditModal\('([^']*)'\)/.exec(btn.getAttribute('onclick') || '');
-      if (m) openEmp(m[1], today().slice(0, 7));
+      if (m) openEmp(m[1], today().slice(0, 7), 'profile');
     });
   }
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeEmp(); });
