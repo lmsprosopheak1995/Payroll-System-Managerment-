@@ -482,6 +482,12 @@ ${o.sum.depts.map(d => `<tr><td>${escHtml(d.dept)}</td><td class="c">${d.n}</td>
       rowEl(urlInput, btn('📋 ចម្លង', async () => { await say((await copyText(url)) ? '✓ បានចម្លងតំណរ' : 'ចម្លងមិនបាន — សូមចម្លងដោយដៃ'); })),
       h('p', { class: 'fin-muted', text: 'ផ្ញើតំណរនេះឲ្យអ្នក Finance ជាមួយឈ្មោះអ្នកប្រើ និងពាក្យសម្ងាត់របស់ពួកគេ។' })));
 
+    // ---- admin ដែលចូលដោយគណនី Username (admin-users.sql)៖ ប្រើ session token ជំនួសពាក្យសម្ងាត់ (មិនបាច់វាយម្តងទៀត) ----
+    const ses = window.appSession;
+    if (!adminPwMem && ses && ses.role === 'admin' && ses.user && ses.user.username) {
+      try { adminPwMem = sessionStorage.getItem('app_session_token') || null; } catch (_) { adminPwMem = null; }
+    }
+
     // ---- ជំហាន ១៖ ដោះសោដោយពាក្យសម្ងាត់ admin ----
     if (!adminPwMem) {
       const pw = h('input', { type: 'password', placeholder: 'ពាក្យសម្ងាត់ admin', autocomplete: 'current-password', style: 'min-width:240px' });
