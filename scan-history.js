@@ -125,9 +125,7 @@
     });
     $('scanhistBody').addEventListener('click', ev => {
       const btn = ev.target.closest('button[data-photo]');
-      if (btn) { showPhoto(btn.dataset.photo, btn.dataset.label); return; }
-      const a = ev.target.closest('[data-open-emp]');
-      if (a) { ev.preventDefault(); openEmp(a.dataset.openEmp, a.dataset.ym); }
+      if (btn) showPhoto(btn.dataset.photo, btn.dataset.label);
     });
     $('shOverBody').addEventListener('click', ev => {
       const a = ev.target.closest('[data-emp]');
@@ -276,7 +274,7 @@
 
     $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(r => `<tr>
       <td>${esc(r.date)}</td>
-      <td><a href="#" data-open-emp="${esc(r.empId)}" data-ym="${esc(r.date.slice(0, 7))}" style="color:inherit;text-decoration:underline;">${esc(r.name)}</a></td>
+      <td>${esc(r.name)}</td>
       <td>${esc(r.dept)}</td>
       ${STEPS.map(s => `<td>${cell(r, s[0], s[1])}</td>`).join('')}</tr>`).join('');
 
