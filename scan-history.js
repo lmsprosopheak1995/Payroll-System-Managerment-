@@ -503,7 +503,25 @@
     load(false).catch(console.error);
   }
 
-  try { ensureTab(); ensureNav(); } catch (e) { console.error('scan-history init:', e); }
+  // ---------- ចុចឈ្មោះក្នុង "បញ្ជីបុគ្គលិក" → Overview ប្រវត្តិធ្វើការរបស់បុគ្គលិកនោះ ----------
+  function hookEmployeeList() {
+    const tb = $('tableBody');
+    if (!tb || tb.dataset.shHook) return;
+    tb.dataset.shHook = '1';
+    const st = document.createElement('style');
+    st.textContent = '#tableBody td:nth-child(3){cursor:pointer;text-decoration:underline;}';
+    document.head.appendChild(st);
+    tb.addEventListener('click', ev => {
+      const td = ev.target.closest('td');
+      if (!td || td.cellIndex !== 2) return;
+      const btn = td.parentNode.querySelector('button[onclick*="openEditModal"]');
+      const m = btn && /openEditModal\('([^']*)'\)/.exec(btn.getAttribute('onclick') || '');
+      if (m) openEmp(m[1], today().slice(0, 7));
+    });
+  }
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeEmp(); });
+
+  try { ensureTab(); ensureNav(); hookEmployeeList(); } catch (e) { console.error('scan-history init:', e); }
 
   const _showTab = window.showTab;
   window.showTab = function (tab) {
