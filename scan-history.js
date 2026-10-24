@@ -73,7 +73,7 @@
           <button type="button" id="shOverClose" class="secondary" style="padding:2px 10px;">បិទ</button></span>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th title="មិនរាប់ថ្ងៃនេះ ព្រោះកំពុងដំណើរការ">ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
+          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th title="មិនរាប់ថ្ងៃនេះ (កំពុងដំណើរការ) និងថ្ងៃដែលមានច្បាប់អនុម័ត">ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
           <tbody id="shOverBody"></tbody>
         </table></div>
       </div>
@@ -138,6 +138,17 @@
       openEmp(a.dataset.emp, ($('shFrom').value || today()).slice(0, 7));
     });
   }
+
+  // ---------- ច្បាប់ដែលបានអនុម័ត (មិនរាប់ជា "ស្កេនមិនគ្រប់") ----------
+  function leaveOf(empId, date, rec) {
+    try {
+      const q = (typeof leaveRequests !== 'undefined' ? leaveRequests : []).find(r =>
+        String(r.employee_id) === String(empId) && r.status === 'approved' && r.start_date <= date && date <= r.end_date);
+      if (q) return 'ច្បាប់ · ' + (typeof leaveUnitLabel === 'function' ? leaveUnitLabel(q) : '');
+    } catch (_) { /* ignore */ }
+    return rec && rec.status === 'leave' ? 'ច្បាប់' : '';
+  }
+  const leaveBadge = r => r.leave ? ` <span class="badge pending" style="font-size:0.62rem;">${esc(r.leave)}</span>` : '';
 
   // ---------- ប៊ូតុងខែ ----------
   function renderMonths() {
@@ -225,11 +236,12 @@
           } catch (_) { late = false; }
         }
         const emp = empMap[empId];
+        const leave = leaveOf(empId, date, rec);
         out.push({
-          date, empId, t, src, photo, late, qr, manual,
+          date, empId, t, src, photo, late, qr, manual, leave,
           name: emp ? emp.name : String(empId),
           dept: emp ? (emp.dept || '') : '',
-          incomplete: date < now && STEPS.some(s => !t[s[0]]),
+          incomplete: date < now && !leave && STEPS.some(s => !t[s[0]]),
         });
       });
     });
@@ -286,7 +298,7 @@
     $('shEmpty').style.display = shown.length ? 'none' : 'block';
 
     $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(r => `<tr>
-      <td>${esc(r.date)}</td>
+      <td>${esc(r.date)}${leaveBadge(r)}</td>
       <td>${esc(r.name)}</td>
       <td>${esc(r.dept)}</td>
       ${STEPS.map(s => `<td>${cell(r, s[0], s[1])}</td>`).join('')}</tr>`).join('');
@@ -369,10 +381,10 @@
 
   function downloadDetail() {
     if (!shown.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
-    const headers = ['ថ្ងៃ', 'បុគ្គលិក', 'ផ្នែក', 'ចូល', 'ចេញបាយ', 'ចូលវិញ', 'ចេញ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់']
+    const headers = ['ថ្ងៃ', 'បុគ្គលិក', 'ផ្នែក', 'ចូល', 'ចេញបាយ', 'ចូលវិញ', 'ចេញ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់/ច្បាប់']
       .concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
     const data = shown.map(r => [r.date, r.name, r.dept, r.t.checkin || '', r.t.break_out || '', r.t.break_in || '', r.t.checkout || '',
-      r.late ? 'យឺត' : '', r.incomplete ? 'មិនគ្រប់' : ''].concat(logsMissing ? [] : [r.qr, r.manual]));
+      r.late ? 'យឺត' : '', r.incomplete ? 'មិនគ្រប់' : (r.leave || '')].concat(logsMissing ? [] : [r.qr, r.manual]));
     saveCsv(headers, data, `scan-history_${range()}.csv`);
   }
 
@@ -428,7 +440,7 @@
     const emp = (typeof employees !== 'undefined' ? employees : []).find(e => String(e.id) === st.empId);
     const sum = list.reduce((a, r) => ({ days: a.days + 1, late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, inc: 0, qr: 0, manual: 0 });
     const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
-    const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
+    const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}${leaveBadge(r)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
       || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានការស្កេនក្នុងខែនេះទេ</td></tr>';
     const box = $('scanhistEmpBox');
     if (!box) return;
