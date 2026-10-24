@@ -617,14 +617,42 @@
     const cr = await fetchPending(from, to, st.empId);
     const list = buildRows(from, to, lg, st.empId, cr);
     const sum = list.reduce((a, r) => ({ days: a.days + 1, lateMin: a.lateMin + (r.lateMin || 0), late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, lateMin: 0, inc: 0, qr: 0, manual: 0 });
-    const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}${leaveBadge(r)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
-      || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានការស្កេនក្នុងខែនេះទេ</td></tr>';
+    // គ្រប់ថ្ងៃក្នុងខែ (រហូតដល់ថ្ងៃនេះ)៖ ថ្ងៃមានស្កេន + ថ្ងៃច្បាប់ / អវត្តមាន / ថ្ងៃបុណ្យ / ថ្ងៃអាទិត្យ
+    const emp = empById(st.empId);
+    const att = (typeof attendance !== 'undefined' && attendance) || {};
+    const byDate = {};
+    list.forEach(r => { byDate[r.date] = r; });
+    const lastDay = to < today() ? to : today();
+    const tag = (txt, bg, fg) => `<span style="padding:1px 8px;border-radius:999px;background:${bg};color:${fg};font-size:0.78rem;">${esc(txt)}</span>`;
+    const hol = d => (typeof holidays !== 'undefined' && holidays && holidays[d]) || '';
+    const isSun = d => new Date(d + 'T00:00:00').getDay() === 0;
+    const dayNote = d => hol(d) ? ' ' + tag('🎉 ' + hol(d), '#dbeafe', '#1e40af') : (isSun(d) ? ' ' + tag('អាទិត្យ', '#e5e7eb', '#374151') : '');
+    let leaveDays = 0, absentDays = 0;
+    const trs = [];
+    for (let d = from; d <= lastDay; d = d.slice(0, 8) + String(+d.slice(8) + 1).padStart(2, '0')) {
+      if (emp && emp.startDate && d < emp.startDate) continue;
+      const r = byDate[d];
+      if (r) {
+        trs.push(`<tr><td>${esc(d)}${leaveBadge(r)}${dayNote(d)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`);
+        continue;
+      }
+      const rec = (att[d] && att[d][emp ? emp.id : st.empId]) || {};
+      const lv = leaveOf(st.empId, d, rec);
+      let label;
+      if (lv) { label = tag('🏖 ' + lv, '#ffedd5', '#9a3412'); leaveDays++; }
+      else if (rec.status === 'absent') { label = tag('🚫 អវត្តមាន', '#fee2e2', '#991b1b'); absentDays++; }
+      else if (hol(d)) label = tag('🎉 ថ្ងៃបុណ្យ · ' + hol(d), '#dbeafe', '#1e40af');
+      else if (isSun(d)) label = tag('ថ្ងៃអាទិត្យ (ឈប់សម្រាក)', '#e5e7eb', '#374151');
+      else label = '<span style="color:var(--text-muted);">គ្មានទិន្នន័យ</span>';
+      trs.push(`<tr><td>${esc(d)}</td><td colspan="4" style="text-align:center;">${label}</td></tr>`);
+    }
+    const body = trs.join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យក្នុងខែនេះទេ</td></tr>';
     return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
         <button type="button" class="secondary" data-nav="-1" style="padding:2px 10px;">‹</button>
         <b>${esc(monthLabel(ym))}</b>
         <button type="button" class="secondary" data-nav="1" style="padding:2px 10px;">›</button>
-        ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('នាទីយឺត', sum.lateMin, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}
+        ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('នាទីយឺត', sum.lateMin, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}${leaveDays ? chip('ថ្ងៃច្បាប់', leaveDays, '#9a3412') : ''}${absentDays ? chip('អវត្តមាន', absentDays, '#dc2626') : ''}
         ${lm ? '' : chip('QR', sum.qr, '#16a34a') + chip('Admin/ដៃ', sum.manual, '#9a3412')}
       </div>
       <div class="table-wrap"><table>
