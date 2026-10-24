@@ -639,7 +639,7 @@
       const rec = (att[d] && att[d][emp ? emp.id : st.empId]) || {};
       const lv = leaveOf(st.empId, d, rec);
       let label;
-      if (lv) { label = tag('🏖 ' + lv, '#ffedd5', '#9a3412'); leaveDays++; }
+      if (lv && !hol(d)) { label = tag('🏖 ' + lv, '#ffedd5', '#9a3412'); leaveDays++; } // ថ្ងៃបុណ្យ → បង្ហាញជាថ្ងៃបុណ្យ មិនរាប់ជាថ្ងៃច្បាប់
       else if (rec.status === 'absent') { label = tag('🚫 អវត្តមាន', '#fee2e2', '#991b1b'); absentDays++; }
       else if (hol(d)) label = tag('🎉 ថ្ងៃបុណ្យ · ' + hol(d), '#dbeafe', '#1e40af');
       else if (isSun(d)) label = tag('ថ្ងៃអាទិត្យ (ឈប់សម្រាក)', '#e5e7eb', '#374151');
