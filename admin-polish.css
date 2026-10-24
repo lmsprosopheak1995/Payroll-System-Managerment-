@@ -1,0 +1,164 @@
+/* ==========================================================================
+   admin-polish.css — ជំហានប្រសើរ UI សម្រាប់កម្មវិធី admin (index.html)
+   ដាក់ក្រោម ui-modern.css ក្នុង <head>៖  <link rel="stylesheet" href="admin-polish.css">
+   • មិនប៉ះ logic / HTML · លុបបន្ទាត់ <link> ចេញ → ត្រឡប់ទៅរូបរាងដើមវិញភ្លាម
+   • ប្រើតែ token ដែលមានស្រាប់ (--accent, --border, --card-bg …) ដូច្នេះគាំទ្រ dark mode ដោយស្វ័យប្រវត្តិ
+   • អនុវត្តតែលើអេក្រង់ (@media screen) — មិនប៉ះពាល់ការបោះពុម្ព payslip / របាយការណ៍
+   ========================================================================== */
+@media screen {
+
+:root {
+  --p-r-sm: 10px;
+  --p-r-md: 14px;
+  --p-r-lg: 18px;
+  --p-ring: 0 0 0 3px color-mix(in srgb, var(--accent, #0d9488) 22%, transparent);
+  --p-hover: color-mix(in srgb, var(--accent, #0d9488) 7%, transparent);
+  --p-head: color-mix(in srgb, var(--accent, #0d9488) 7%, var(--card-bg, #fff));
+}
+
+/* ---------- ១) មូលដ្ឋាន ---------- */
+html { scroll-behavior: smooth; }
+body {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection { background: color-mix(in srgb, var(--accent, #0d9488) 28%, transparent); }
+:focus-visible { outline: 2px solid var(--accent, #0d9488); outline-offset: 2px; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted, #64748b) 45%, transparent) transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted, #64748b) 40%, transparent); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-muted, #64748b) 65%, transparent); background-clip: content-box; }
+
+/* ---------- ២) ក្បាលទំព័រ + ចំណងជើង ---------- */
+body header { margin-bottom: 18px; }
+body header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; }
+.page-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 12px; }
+.sec-title { font-size: 0.92rem; font-weight: 700; margin: 0 0 10px; }
+.tab-content.active { animation: pFadeIn .18s ease; }
+@keyframes pFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- ៣) ម៉ឺនុយខាងឆ្វេង ---------- */
+.sidebar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); background-clip: content-box; }
+.sidebar .sidebar-brand { font-size: 0.92rem; letter-spacing: .01em; padding-bottom: 14px; }
+.sidebar .nav-item {
+  border-radius: var(--p-r-sm);
+  padding: 9px 11px;
+  font-size: 0.83rem;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.sidebar .nav-item:hover { background: rgba(255,255,255,.09); }
+.sidebar .nav-item.active { box-shadow: 0 6px 16px rgba(0,0,0,.22); }
+.sidebar .nav-sub { margin-left: 6px; padding-left: 4px; border-left: 1px solid rgba(255,255,255,.1); }
+.sidebar .nav-sub .nav-item { font-size: 0.8rem; padding: 7px 10px; }
+
+/* ---------- ៤) ប៊ូតុង ---------- */
+body button:not(.nav-item) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 36px;
+  padding: 7px 14px;
+  border-radius: var(--p-r-sm);
+  font-size: 0.83rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+body button:not(.nav-item):focus-visible { box-shadow: var(--p-ring); outline: none; }
+body button:not(.nav-item):disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
+body button.secondary:not(.nav-item) { background: var(--card-bg, #fff); border: 1px solid var(--border); color: var(--text); }
+body button.secondary:not(.nav-item):hover { background: var(--p-hover); border-color: color-mix(in srgb, var(--accent, #0d9488) 55%, var(--border)); }
+.row-actions button, td button:not(.nav-item) { min-height: 30px; padding: 4px 10px; font-size: 0.75rem; border-radius: 8px; }
+
+/* ---------- ៥) ប្រអប់បញ្ចូល ---------- */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]), select, textarea {
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 0.85rem;
+  border-radius: var(--p-r-sm);
+  border: 1px solid var(--border);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+textarea { min-height: 72px; line-height: 1.5; }
+input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--text-muted, #64748b) 75%, transparent); }
+input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent, #0d9488) 40%, var(--border)); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent, #0d9488); box-shadow: var(--p-ring); }
+input:disabled, select:disabled, textarea:disabled { opacity: .6; cursor: not-allowed; background: color-mix(in srgb, var(--text-muted, #64748b) 8%, var(--card-bg, #fff)); }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent, #0d9488); width: 16px; height: 16px; }
+td input:not([type=checkbox]):not([type=radio]), td select { min-height: 30px; padding: 4px 8px; font-size: 0.8rem; border-radius: 8px; }
+.form-group label, .form-group > label { font-size: 0.78rem; margin-bottom: 5px; }
+.toolbar { gap: 10px; margin-bottom: 16px; }
+
+/* ---------- ៦) កាត ---------- */
+.scan-result-card, .scan-camera-card, .table-wrap, .portal-card {
+  border-radius: var(--p-r-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.scan-result-card, .scan-camera-card { transition: box-shadow .2s ease, border-color .2s ease; }
+.scan-result-card:hover { border-color: color-mix(in srgb, var(--accent, #0d9488) 22%, var(--border)); }
+details.scan-result-card > summary { padding: 2px 0; user-select: none; }
+.scan-hint { font-size: 0.78rem; line-height: 1.55; color: var(--text-muted); }
+
+/* ---------- ៧) កាតស្ថិតិ ---------- */
+.stats { gap: 14px; margin-bottom: 22px; }
+.stat-card { border-radius: var(--p-r-md); padding: 12px 14px; }
+.stat-card .num { font-size: 1.3rem; line-height: 1.25; }
+.stat-card .label { font-size: 0.76rem; margin-top: 2px; }
+.stat-card[onclick]:hover { box-shadow: 0 10px 24px color-mix(in srgb, var(--accent, #0d9488) 20%, transparent); }
+
+/* ---------- ៨) តារាង ---------- */
+.table-wrap { border-radius: var(--p-r-md); overflow-x: auto; }
+table { border-collapse: separate; border-spacing: 0; }
+th, td { padding: 10px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+th {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0; text-transform: none;
+  background: var(--p-head);
+  color: color-mix(in srgb, var(--text) 70%, var(--text-muted, #64748b));
+}
+tbody tr { transition: background .12s ease; }
+tbody tr:hover { background: var(--p-hover); }
+tbody tr:last-child td { border-bottom: 0; }
+.table-wrap thead th:first-child { border-top-left-radius: calc(var(--p-r-md) - 1px); }
+.table-wrap thead th:last-child { border-top-right-radius: calc(var(--p-r-md) - 1px); }
+.empty-state { padding: 56px 20px; font-size: 0.9rem; }
+
+/* ---------- ៩) Badge ---------- */
+.badge { padding: 3px 10px; font-size: 0.72rem; line-height: 1.4; }
+
+/* ---------- ១០) Modal ---------- */
+.modal-overlay { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); background: rgba(8, 15, 28, .55); }
+.modal-overlay.open .modal { animation: pPop .18s ease; }
+@keyframes pPop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+.modal { border-radius: var(--p-r-lg); padding: 22px; }
+.modal h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 14px; }
+.modal-actions { margin-top: 22px; }
+
+/* ---------- ១១) Finance (ផ្ទាំងថ្មី) ---------- */
+.fin-tabs { gap: 8px; margin: 8px 0 16px; align-items: center; }
+.fin-sep { font-size: 0.74rem; color: var(--text); opacity: .7; margin-left: 12px; padding: 3px 9px; border-radius: 99px; background: color-mix(in srgb, var(--text-muted, #64748b) 12%, transparent); }
+.fin-tabs button.secondary { border-radius: 99px; padding: 6px 14px; min-height: 34px; }
+.fin-card { border-radius: var(--p-r-md); padding: 16px 18px; box-shadow: var(--shadow); }
+.fin-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
+.fin-muted { font-size: 0.82rem; line-height: 1.55; }
+.fin-stat { border-radius: var(--p-r-md); padding: 12px 14px; }
+.fin-badge { padding: 2px 10px; }
+
+/* ---------- ១២) ទូរស័ព្ទ ---------- */
+@media (max-width: 640px) {
+  body { font-size: 0.88rem; }
+  body header h1 { font-size: 1.05rem; }
+  th, td { padding: 8px 8px; font-size: 0.76rem; }
+  .stat-card .num { font-size: 1.15rem; }
+  .modal { padding: 16px; border-radius: 16px; }
+  .fin-card { padding: 12px 12px; }
+}
+
+/* ---------- ១៣) សម្រាប់អ្នកដែលបិទ animation ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .tab-content.active, .modal-overlay.open .modal { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+}
