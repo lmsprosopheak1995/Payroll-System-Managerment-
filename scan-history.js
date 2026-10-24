@@ -449,7 +449,7 @@
 
   function openEmp(empId, ym, tab) {
     closeEmp();
-    mState = { empId: String(empId), ym: ym || today().slice(0, 7), tab: tab || 'scan', range: '12', showId: false };
+    mState = { empId: String(empId), ym: ym || today().slice(0, 7), tab: tab || 'scan', range: '12', showId: false, leaveYear: +today().slice(0, 4) };
     const ov = document.createElement('div');
     ov.id = 'scanhistEmpOverlay';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:18px;';
@@ -474,6 +474,7 @@
     });
     ov.addEventListener('change', e => {
       if (e.target.id === 'shPayRange' && mState) { mState.range = e.target.value; renderEmp().catch(console.error); }
+      if (e.target.id === 'shLeaveYear' && mState) { mState.leaveYear = +e.target.value; renderEmp().catch(console.error); }
     });
     document.body.appendChild(ov);
     renderEmp().catch(console.error);
@@ -599,13 +600,80 @@
       </table></div>`;
   }
 
+  // --- ឈប់សម្រាក · ច្បាប់ ---
+  function leaveContent(emp, st) {
+    const year = st.leaveYear;
+    const y0 = parseInt((emp.startDate || '').slice(0, 4), 10);
+    const nowY = +today().slice(0, 4);
+    const first = Math.min(isNaN(y0) ? nowY - 3 : y0, nowY);
+    const years = []; for (let y = nowY; y >= first; y--) years.push(y);
+    const reqs = (typeof leaveRequests !== 'undefined' ? leaveRequests : [])
+      .filter(r => String(r.employee_id) === String(emp.id) && r.start_date <= `${year}-12-31` && r.end_date >= `${year}-01-01`)
+      .sort((a, b) => (a.start_date < b.start_date ? 1 : a.start_date > b.start_date ? -1 : 0));
+    const typeLbl = k => (typeof LEAVE_TYPE_LABELS !== 'undefined' && LEAVE_TYPE_LABELS[k]) || k || '-';
+    const statLbl = k => (typeof REQUEST_STATUS_LABELS !== 'undefined' && REQUEST_STATUS_LABELS[k]) || k || '';
+    const unitLbl = r => (typeof leaveUnitLabel === 'function' ? leaveUnitLabel(r) : '');
+    const noTag = r => (typeof stripUnitTag === 'function' ? stripUnitTag(r.reason) : (r.reason || ''));
+    const fmtD = n => String(Math.round(n * 100) / 100);
+
+    // សមតុល្យ + ថ្ងៃប្រើតាមប្រភេទ
+    let chips = '';
+    try {
+      if (typeof calcLeaveBalanceRow === 'function' && typeof lbRules !== 'undefined') {
+        const b = calcLeaveBalanceRow(emp, year, lbRules);
+        chips += chip('បំណាច់ឆ្នាំ នៅសល់', `${fmtD(b.remaining)}/${fmtD(b.quota + b.carry)}`, '#0d9488');
+        if (b.paidQuota) chips += chip('ច្បាប់មានប្រាក់ ប្រើ', `${fmtD(b.paidUsed)}/${fmtD(b.paidQuota)}`, '#2563eb');
+      }
+    } catch (e) { console.warn('leave balance:', e); }
+    if (typeof usedLeaveDays === 'function' && typeof LEAVE_TYPE_LABELS !== 'undefined') {
+      ['sick', 'unpaid', 'maternity', 'other'].forEach(k => {
+        let u = 0; try { u = usedLeaveDays(emp.id, year, k); } catch (e) { u = 0; }
+        if (u > 0) chips += chip(typeLbl(k), fmtD(u) + ' ថ្ងៃ', '#9a3412');
+      });
+    }
+    const pending = reqs.filter(r => r.status === 'pending').length;
+    if (pending) chips += chip('កំពុងរង់ចាំ', pending, '#f97316');
+
+    const rowsHtml = reqs.map(r => {
+      const att = r.attachment_url && /^https?:\/\/[^\s"'<>`]+$/i.test(r.attachment_url)
+        ? `<a class="secondary" href="${esc(r.attachment_url)}" target="_blank" rel="noopener" title="មើលឯកសារភ្ជាប់" style="display:inline-flex;vertical-align:middle;padding:3px 7px;border-radius:8px;">${EYE_SVG}</a>` : '-';
+      let days = '';
+      try { days = typeof leaveWeightDays === 'function' ? fmtD(leaveWeightDays(r)) : ''; } catch (e) { days = ''; }
+      return `<tr>
+        <td>${esc(typeLbl(r.leave_type))}<div style="font-size:0.68rem;color:var(--text-muted);">${esc(unitLbl(r))}</div></td>
+        <td>${esc(r.start_date)}</td><td>${esc(r.end_date)}</td><td>${esc(days)}</td>
+        <td style="max-width:220px;white-space:normal;">${esc(noTag(r) || '-')}</td>
+        <td><span class="badge ${esc(r.status)}">${esc(statLbl(r.status))}</span>${r.admin_note ? `<div style="font-size:0.68rem;color:var(--text-muted);">${esc(r.admin_note)}</div>` : ''}</td>
+        <td>${att}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">គ្មានប្រវត្តិច្បាប់ក្នុងឆ្នាំនេះទេ</td></tr>';
+
+    let absent = [];
+    try { absent = typeof absentDatesOf === 'function' ? absentDatesOf(emp.id, year) : []; } catch (e) { absent = []; }
+    const absentHtml = absent.length
+      ? absent.slice().reverse().map(d => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 10px;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:0.8rem;">${esc(d)}</span>`).join('')
+      : '<span style="color:var(--text-muted);">គ្មានថ្ងៃអវត្តមានទេ 🎉</span>';
+
+    return `
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+        <label>ឆ្នាំ <select id="shLeaveYear">${years.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
+        ${chips}
+      </div>
+      <h4 style="margin:0 0 6px;">🏖 ប្រវត្តិច្បាប់ (${reqs.length})</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ប្រភេទ</th><th>ចាប់ពី</th><th>ដល់</th><th>ថ្ងៃ</th><th>មូលហេតុ</th><th>ស្ថានភាព</th><th>ឯកសារ</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table></div>
+      <h4 style="margin:14px 0 6px;">🚫 ថ្ងៃឈប់សម្រាក / អវត្តមាន (${absent.length} ថ្ងៃ)</h4>
+      <div>${absentHtml}</div>`;
+  }
+
   async function renderEmp() {
     const st = mState;
     if (!st) return;
     const emp = empById(st.empId);
     const tab = st.tab, ym = st.ym;
     if (!emp) { const b = $('scanhistEmpBox'); if (b) b.innerHTML = '<p>រកមិនឃើញបុគ្គលិក</p><button type="button" id="scanhistEmpClose">បិទ</button>'; return; }
-    const content = tab === 'scan' ? await scanContent(st) : tab === 'pay' ? payContent(emp, st) : profileContent(emp, st);
+    const content = tab === 'scan' ? await scanContent(st) : tab === 'pay' ? payContent(emp, st) : tab === 'leave' ? leaveContent(emp, st) : profileContent(emp, st);
     if (mState !== st || st.tab !== tab || st.ym !== ym) return; // បានប្តូរ/បិទរួច
     const box = $('scanhistEmpBox');
     if (!box) return;
@@ -616,7 +684,7 @@
         <h3 style="margin:0;">${esc(emp.name)} <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${esc(emp.dept || '')}</span></h3>
         <button type="button" id="scanhistEmpClose">បិទ</button>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${tabBtn('profile', '👤 ប្រវត្តិរូប · ឯកសារ')}${tabBtn('scan', '🕘 ប្រវត្តិស្កេន')}${tabBtn('pay', '💰 Payroll')}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${tabBtn('profile', '👤 ប្រវត្តិរូប · ឯកសារ')}${tabBtn('scan', '🕘 ប្រវត្តិស្កេន')}${tabBtn('pay', '💰 Payroll')}${tabBtn('leave', '🏖 ឈប់សម្រាក · ច្បាប់')}</div>
       ${content}`;
   }
 
