@@ -449,7 +449,7 @@
 
   function openEmp(empId, ym, tab) {
     closeEmp();
-    mState = { empId: String(empId), ym: ym || today().slice(0, 7), tab: tab || 'scan', range: '12' };
+    mState = { empId: String(empId), ym: ym || today().slice(0, 7), tab: tab || 'scan', range: '12', showId: false };
     const ov = document.createElement('div');
     ov.id = 'scanhistEmpOverlay';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:18px;';
@@ -464,6 +464,9 @@
       const ph = e.target.closest('button[data-photo]');
       if (ph) { showPhoto(ph.dataset.photo, ph.dataset.label); return; }
       const emp = empById(mState.empId);
+      if (e.target.closest('button[data-reveal]')) { mState.showId = !mState.showId; renderEmp().catch(console.error); return; }
+      const vp = e.target.closest('button[data-viewphoto]');
+      if (vp && emp) { viewImage(emp.photo, emp.name); return; }
       const ps = e.target.closest('button[data-pslip]');
       if (ps && emp && typeof adminPrintPayslipMonth === 'function') { adminPrintPayslipMonth(emp.id, ps.dataset.pslip); return; }
       const pd = e.target.closest('button[data-ppdf]');
@@ -477,18 +480,37 @@
   }
 
   const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
+  const EYE_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19c-7 0-11-7-11-7a19.8 19.8 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a19.7 19.7 0 0 1-3.17 4.19M1 1l22 22"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>';
+  const eyeBtn = (attr, title, off) => `<button type="button" class="secondary" ${attr} title="${esc(title)}" aria-label="${esc(title)}" style="padding:3px 7px;display:inline-flex;vertical-align:middle;">${off ? EYE_OFF_SVG : EYE_SVG}</button>`;
   const slipBtns = (month, small) => {
     const st = small ? 'padding:1px 8px;' : '';
-    return (typeof adminPrintPayslipMonth === 'function' ? `<button type="button" class="secondary" style="${st}" data-pslip="${month}">🖨 Payslip</button> ` : '')
+    return (typeof adminPrintPayslipMonth === 'function' ? eyeBtn(`data-pslip="${month}"`, 'មើល Payslip') + ' ' : '')
       + (typeof adminPdfPayslipMonth === 'function' ? `<button type="button" class="secondary" style="${st}" data-ppdf="${month}">⬇ PDF</button>` : '');
   };
 
+  function viewImage(src, label) {
+    const safe = typeof safeImgSrc === 'function' ? safeImgSrc(src) : '';
+    if (!safe) return;
+    closePhoto();
+    const ov = document.createElement('div');
+    ov.id = 'scanhistOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = `<div style="background:var(--card-bg,#fff);color:var(--text,#111827);border-radius:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto;padding:18px;text-align:center;">
+      <div style="font-weight:700;margin-bottom:8px;">${esc(label)}</div><img src="${esc(safe)}" alt="" style="width:100%;border-radius:12px;">
+      <div style="margin-top:12px;"><button type="button" id="scanhistClose">បិទ</button></div></div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) closePhoto(); });
+    document.body.appendChild(ov);
+    $('scanhistClose').addEventListener('click', closePhoto);
+  }
+
   // --- ប្រវត្តិរូប + ឯកសារ ---
-  function profileContent(emp) {
+  function profileContent(emp, st) {
     const photo = typeof safeImgSrc === 'function' ? safeImgSrc(emp.photo) : '';
     const avatar = photo
       ? `<img src="${esc(photo)}" alt="" style="width:110px;height:110px;border-radius:50%;object-fit:cover;">`
       : `<div style="width:110px;height:110px;border-radius:50%;background:#0d9488;color:#fff;display:flex;align-items:center;justify-content:center;font-size:2.4rem;font-weight:700;">${esc((emp.name || '?').trim().charAt(0).toUpperCase() || '?')}</div>`;
+    const idCard = String(emp.idCard || '');
     const salary = emp.salary !== '' && emp.salary != null ? '$' + usd(parseFloat(emp.salary) || 0) : '-';
     const fields = [
       ['អត្តលេខ', emp.username || '-'], ['តួនាទី', emp.position || '-'], ['ផ្នែក', emp.dept || '-'],
@@ -512,8 +534,10 @@
         ${fields.map(f => `<div><div style="font-size:0.75rem;color:var(--text-muted);">${f[0]}</div><div style="font-weight:600;">${esc(f[1])}</div></div>`).join('')}
       </div>
       <h4 style="margin:0 0 6px;">📄 ឯកសារ</h4>
-      ${docRow('លេខអត្តសញ្ញាណប័ណ្ណ', esc(emp.idCard) || '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់បញ្ចូល</span>')}
-      ${docRow('រូបថតប្រវត្តិរូប', photo ? 'មាន' : '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់មាន</span>')}
+      ${docRow('លេខអត្តសញ្ញាណប័ណ្ណ', idCard
+        ? `${esc(st.showId ? idCard : '•'.repeat(Math.max(idCard.length - 3, 0)) + idCard.slice(-3))} ${eyeBtn('data-reveal="1"', st.showId ? 'លាក់លេខ' : 'បង្ហាញលេខ', st.showId)}`
+        : '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់បញ្ចូល</span>')}
+      ${docRow('រូបថតប្រវត្តិរូប', photo ? `មាន ${eyeBtn('data-viewphoto="1"', 'មើលរូបថត')}` : '<span style="color:var(--text-muted);font-weight:400;">មិនទាន់មាន</span>')}
       <div style="margin-top:6px;color:var(--text-muted);font-size:0.8rem;">Payslip ៣ ខែចុងក្រោយ៖</div>
       ${slips}`;
   }
@@ -581,7 +605,7 @@
     const emp = empById(st.empId);
     const tab = st.tab, ym = st.ym;
     if (!emp) { const b = $('scanhistEmpBox'); if (b) b.innerHTML = '<p>រកមិនឃើញបុគ្គលិក</p><button type="button" id="scanhistEmpClose">បិទ</button>'; return; }
-    const content = tab === 'scan' ? await scanContent(st) : tab === 'pay' ? payContent(emp, st) : profileContent(emp);
+    const content = tab === 'scan' ? await scanContent(st) : tab === 'pay' ? payContent(emp, st) : profileContent(emp, st);
     if (mState !== st || st.tab !== tab || st.ym !== ym) return; // បានប្តូរ/បិទរួច
     const box = $('scanhistEmpBox');
     if (!box) return;
