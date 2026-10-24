@@ -51,6 +51,7 @@
         <label>ដល់ថ្ងៃ<br><input type="date" id="shTo"></label>
         <label>បុគ្គលិក<br><select id="shEmp"><option value="">ទាំងអស់</option></select></label>
         <label>ស្ថានភាព<br><select id="shStat">
+          <option value="attention" selected>ត្រូវយកចិត្តទុកដាក់ (យឺត/មិនគ្រប់)</option>
           <option value="">ទាំងអស់</option>
           <option value="incomplete">ស្កេនមិនគ្រប់ ៤</option>
           <option value="late">ចូលយឺត</option>
@@ -72,10 +73,9 @@
           <button type="button" id="shOverClose" class="secondary" style="padding:2px 10px;">បិទ</button></span>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th>ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
+          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th title="មិនរាប់ថ្ងៃនេះ ព្រោះកំពុងដំណើរការ">ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
           <tbody id="shOverBody"></tbody>
         </table></div>
-        <p class="scan-hint">ចុចឈ្មោះបុគ្គលិកដើម្បីមើលប្រវត្តិស្កេនលម្អិតរបស់គាត់ · "ស្កេនមិនគ្រប់" មិនរាប់ថ្ងៃនេះទេ (ព្រោះកំពុងដំណើរការ)</p>
       </div>
       <p class="scan-hint" id="shSummary"></p>
       <div class="table-wrap">
@@ -111,6 +111,10 @@
     ['shFrom', 'shTo'].forEach(id => $(id).addEventListener('change', () => load(false).catch(console.error)));
     ['shEmp', 'shStat', 'shSrc'].forEach(id => $(id).addEventListener('change', render));
     $('shSearch').addEventListener('input', render);
+    $('shSummary').addEventListener('click', ev => {
+      const b = ev.target.closest('button[data-stat]');
+      if (b) { $('shStat').value = b.dataset.stat; render(); }
+    });
     $('shRefresh').addEventListener('click', () => load(true).catch(console.error));
     $('shCsv').addEventListener('click', downloadDetail);
     $('shCsvSum').addEventListener('click', downloadSummary);
@@ -239,6 +243,7 @@
     const q = $('shSearch').value.trim().toLowerCase();
     return rows.filter(r =>
       (!emp || String(r.empId) === emp) &&
+      (stat !== 'attention' || r.late || r.incomplete) &&
       (stat !== 'incomplete' || r.incomplete) &&
       (stat !== 'late' || r.late) &&
       (!src || logsMissing || (src === 'qr' ? r.qr > 0 : r.manual > 0)) &&
@@ -269,7 +274,15 @@
 
     shown = filtered();
     const people = new Set(shown.map(r => r.empId)).size;
-    $('shSummary').textContent = `${shown.length} ជួរ (ថ្ងៃ × បុគ្គលិក) · ${people} នាក់` + (shown.length > MAX_ROWS ? ` (បង្ហាញ ${MAX_ROWS} ជួរដំបូង — ទាញយក CSV ដើម្បីបានទាំងអស់)` : '');
+    const stat = $('shStat').value;
+    let line = stat === 'attention' ? `${shown.length} ជួរត្រូវយកចិត្តទុកដាក់ (ចូលយឺត ឬស្កេនមិនគ្រប់) · ${people} នាក់` : `${shown.length} ជួរ · ${people} នាក់`;
+    if (shown.length > MAX_ROWS) line += ` (បង្ហាញ ${MAX_ROWS} ជួរដំបូង — ទាញយក CSV ដើម្បីបានទាំងអស់)`;
+    if (overviewOpen) line += ' · ចុចឈ្មោះក្នុងតារាងសង្ខេបដើម្បីមើលលម្អិត';
+    const btnStyle = 'padding:1px 10px;margin-left:8px;';
+    const toggle = stat === 'attention' ? `<button type="button" class="secondary" data-stat="" style="${btnStyle}">បង្ហាញទាំងអស់ (${rows.length})</button>`
+      : stat === '' ? `<button type="button" class="secondary" data-stat="attention" style="${btnStyle}">បង្ហាញតែជួរសំខាន់</button>` : '';
+    $('shSummary').innerHTML = esc(line) + toggle;
+    $('shEmpty').textContent = stat === 'attention' && rows.length ? '✅ គ្មានជួរដែលត្រូវយកចិត្តទុកដាក់ទេ — ចុច "បង្ហាញទាំងអស់" ដើម្បីមើលពេញ' : 'គ្មានការស្កេនក្នុងចន្លោះនេះទេ';
     $('shEmpty').style.display = shown.length ? 'none' : 'block';
 
     $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(r => `<tr>
