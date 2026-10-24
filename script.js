@@ -1534,6 +1534,16 @@ function netRielRounded(t) {
   return Math.round((Math.round((t.net || 0) * 100) / 100) * rate);
 }
 
+// ខែដំបូងបំផុត (YYYY-MM) ដែលបុគ្គលិកមានកំណត់ត្រាវត្តមាន ឬម៉ោងស្កេន · គ្មាន → ''
+function firstAttendanceMonth(empId) {
+  let first = '';
+  Object.keys(attendance).forEach(date => {
+    const r = attendance[date] && attendance[date][empId];
+    if (r && (r.status || r.checkin) && (!first || date < first)) first = date;
+  });
+  return first ? first.slice(0, 7) : '';
+}
+
 function renderPayrollHistory() {
   const body = document.getElementById('payHistoryBody');
   const empty = document.getElementById('payHistoryEmpty');
@@ -1559,6 +1569,10 @@ function renderPayrollHistory() {
   } else {
     months = monthsBack(endMonth, parseInt(rangeVal, 10) || 12);
   }
+
+  // បង្ហាញតែខែចាប់ពីខែដែលមានវត្តមាន/ការស្កេនដំបូងរបស់បុគ្គលិកនេះ (មិនបង្ហាញខែទទេមុនចាប់ផ្តើមប្រើប្រព័ន្ធ)
+  const firstAttMonth = firstAttendanceMonth(emp.id);
+  months = firstAttMonth ? months.filter(m => m >= firstAttMonth) : months.filter(m => m === endMonth);
 
   if (months.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
