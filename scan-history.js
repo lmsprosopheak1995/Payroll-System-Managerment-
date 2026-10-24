@@ -445,6 +445,17 @@
     const y = Math.floor(m / 12), r = m % 12;
     return (y ? `${y} ឆ្នាំ ` : '') + `${r} ខែ`;
   }
+  // ខែដំបូងដែលបុគ្គលិកចាប់ផ្តើមមានការស្កេន (ម៉ោងណាមួយក្នុង attendance) — Payroll/Payslip ចាប់ពីខែនេះ
+  function firstScanMonth(emp) {
+    const att = (typeof attendance !== 'undefined' && attendance) || {};
+    let min = '';
+    Object.keys(att).forEach(date => {
+      const rec = att[date] && att[date][emp.id];
+      if (!rec || !(rec.checkin || rec.breakOut || rec.breakIn || rec.checkout)) return;
+      if (!min || date < min) min = date;
+    });
+    return min ? min.slice(0, 7) : '';
+  }
   const usd = n => (typeof fmtUSD2 === 'function' ? fmtUSD2(n) : (Math.round((n || 0) * 100) / 100).toFixed(2));
 
   function openEmp(empId, ym, tab) {
@@ -537,8 +548,10 @@
       ['ថ្ងៃចូលធ្វើការ', emp.startDate ? emp.startDate + (tenure(emp.startDate) ? ` (${tenure(emp.startDate)})` : '') : '-'],
       ['ប្រាក់ខែគោល', salary],
     ];
-    const months = [0, 1, 2].map(i => shiftYm(today().slice(0, 7), -i)).filter(m => !emp.startDate || m >= emp.startDate.slice(0, 7));
-    const slips = (typeof adminPrintPayslipMonth === 'function' || typeof adminPdfPayslipMonth === 'function')
+    const firstM = firstScanMonth(emp);
+    const months = [0, 1, 2].map(i => shiftYm(today().slice(0, 7), -i)).filter(m => firstM && m >= firstM);
+    const slips = !months.length ? '<span style="color:var(--text-muted);">មិនទាន់មាន Payslip (មិនទាន់មានទិន្នន័យស្កេន)</span>'
+      : (typeof adminPrintPayslipMonth === 'function' || typeof adminPdfPayslipMonth === 'function')
       ? months.map(m => `<div style="display:flex;gap:10px;align-items:center;margin:4px 0;"><b style="min-width:70px;">${m}</b>${slipBtns(m, true)}</div>`).join('')
       : '<span style="color:var(--text-muted);">មិនមានមុខងារ Payslip</span>';
     const docRow = (label, val) => `<div style="display:flex;gap:10px;margin:4px 0;"><span style="min-width:170px;color:var(--text-muted);">${label}</span><b>${val}</b></div>`;
@@ -564,7 +577,8 @@
   // --- Payroll ---
   function payContent(emp, st) {
     if (typeof summarizeEmpMonth !== 'function') return '<p class="scan-hint">មិនមានមុខងារគណនាប្រាក់ខែ (summarizeEmpMonth)</p>';
-    const startM = emp.startDate ? emp.startDate.slice(0, 7) : '';
+    const startM = firstScanMonth(emp);
+    if (!startM) return '<p class="scan-hint">មិនទាន់មានទិន្នន័យស្កេនទេ — Payroll បង្ហាញចាប់ពីខែដែលចាប់ផ្តើមស្កេន</p>';
     const limit = st.range === 'all' ? 60 : 12;
     const cur = today().slice(0, 7);
     const months = [];
@@ -584,6 +598,7 @@
         <label>រយៈពេល <select id="shPayRange"><option value="12"${st.range === '12' ? ' selected' : ''}>12 ខែចុងក្រោយ</option><option value="all"${st.range === 'all' ? ' selected' : ''}>ទាំងអស់</option></select></label>
         ${chip('ប្រាក់ខែសុទ្ធសរុប', '$' + usd(tot.net), '#0d9488')}${chip('ថ្ងៃធ្វើការសរុប', tot.days, '#2563eb')}
       </div>
+      <p class="scan-hint" style="margin:0 0 6px;">ចាប់ពីខែ ${esc(startM)} (ខែដំបូងដែលមានការស្កេន)</p>
       <div class="table-wrap"><table>
         <thead><tr><th>ខែ</th><th>ថ្ងៃធ្វើការ</th><th>ប្រាក់បន្ថែម</th><th>ប្រាក់កាត់</th><th>ប្រាក់ខែសុទ្ធ ($)</th><th>ប្រាក់ខែសុទ្ធ (៛)</th><th>Payslip</th></tr></thead>
         <tbody>${body}</tbody>
