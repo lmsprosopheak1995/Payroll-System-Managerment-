@@ -1,9 +1,10 @@
 /* ==========================================================================
-   scan-history.js — ប្រវត្តិស្កេន (Admin) = បញ្ជីម៉ោងស្កេនទាំងអស់ តាមថ្ងៃ/បុគ្គលិក/ប្រភេទ ព្រមទាំងទាញយក CSV
-   ប្រភពទិន្នន័យ៖ អញ្ញត្តិ attendance (ចូល · ចេញបាយ · ចូលវិញ · ចេញ) ដែល script.js បានទាញរួច
-   ជម្រើស៖ បើមានតារាង scan_log (scan-extras.sql) នឹងបង្ហាញថា ជាការស្កេន QR ដោយបុគ្គលិកខ្លួនឯង និងរូបថត
+   scan-history.js — ប្រវត្តិស្កេន (Admin)
+   • ១ ជួរ = ១ ថ្ងៃ × ១ បុគ្គលិក  ជាមួយម៉ោង ៤ ជួរ៖ ចូល · ចេញបាយ · ចូលវិញ · ចេញ
+   • ចុចខែណាមួយ → បង្ហាញ "សង្ខេបខែ" (ថ្ងៃមកធ្វើការ · យឺត · ស្កេនមិនគ្រប់ · QR · ដៃ) ក្នុងមួយបុគ្គលិក
+   • ទាញយក CSV (លម្អិត និងសង្ខេប)
+   ប្រភពទិន្នន័យ៖ attendance (ពី script.js) · ជម្រើស scan_log (QR / រូបថត)
    ដាក់ក្រោម script.js និង scan-extras.js ក្នុង index.html៖  <script src="scan-history.js"></script>
-   បើ index.html មិនមាន #scanhistTab ឬប៊ូតុង nav ទេ ឯកសារនេះនឹងបង្កើតឲ្យដោយស្វ័យប្រវត្តិ (មិនកែ logic ដើម)
    ========================================================================== */
 (function () {
   'use strict';
@@ -12,10 +13,9 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const PHOTO_BUCKET = 'scan-photos';
   const STEPS = [['checkin', 'ចូល', 'checkin'], ['break_out', 'ចេញបាយ', 'breakOut'], ['break_in', 'ចូលវិញ', 'breakIn'], ['checkout', 'ចេញ', 'checkout']];
-  const STEP_ORDER = { checkin: 0, break_out: 1, break_in: 2, checkout: 3 };
   const parseMin = t => { const m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-  const stepLabel = k => (STEPS.find(s => s[0] === k) || [k, k])[1];
-  const MAX_ROWS = 1500; // ចំនួនជួរអតិបរមាក្នុងតារាង (CSV ទាញយកទាំងអស់)
+  const MAX_ROWS = 1500;
+  const MONTH_NAMES = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
 
   function today() {
     if (typeof todayStr === 'function') return todayStr();
@@ -23,12 +23,15 @@
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   }
   const startOfMonth = () => today().slice(0, 8) + '01';
+  const monthEnd = ym => { const [y, m] = ym.split('-').map(Number); return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+  const monthLabel = ym => { const [y, m] = ym.split('-').map(Number); return `${MONTH_NAMES[m - 1]} ${y}`; };
   const alertMsg = m => (typeof customAlert === 'function' ? customAlert(m) : window.alert(m));
 
-  let events = [];            // ការស្កេនទាំងអស់ក្នុងចន្លោះថ្ងៃ (មុនចម្រោះ)
-  let logs = {};              // scan_log៖ "date|emp|step" -> row
+  let rows = [];          // ១ ជួរ = ១ ថ្ងៃ × ១ បុគ្គលិក (មុនចម្រោះ)
+  let logs = {};          // scan_log៖ "date|emp|step" -> row
   let logsMissing = false;
-  let shown = [];             // ជួរដែលកំពុងបង្ហាញ (ក្រោយចម្រោះ) — ប្រើសម្រាប់ CSV
+  let shown = [];         // ជួរក្រោយចម្រោះ
+  let overviewOpen = false;
   let inited = false;
   let loading = false;
 
@@ -42,21 +45,42 @@
     div.id = 'scanhistTab';
     div.innerHTML = `
       <div class="toolbar" style="margin-bottom:10px;"><h3 style="margin:0;font-size:0.95rem;">🕘 ប្រវត្តិស្កេន</h3></div>
+      <div id="shMonths" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
         <label>ពីថ្ងៃ<br><input type="date" id="shFrom"></label>
         <label>ដល់ថ្ងៃ<br><input type="date" id="shTo"></label>
         <label>បុគ្គលិក<br><select id="shEmp"><option value="">ទាំងអស់</option></select></label>
-        <label>ប្រភេទ<br><select id="shStep"><option value="">ទាំងអស់</option>${STEPS.map(s => `<option value="${s[0]}">${s[1]}</option>`).join('')}</select></label>
-        <label id="shSrcWrap">ប្រភព<br><select id="shSrc"><option value="">ទាំងអស់</option><option value="qr">ស្កេន QR</option><option value="manual">Admin / កែដោយដៃ</option></select></label>
+        <label>ស្ថានភាព<br><select id="shStat">
+          <option value="">ទាំងអស់</option>
+          <option value="incomplete">ស្កេនមិនគ្រប់ ៤</option>
+          <option value="late">ចូលយឺត</option>
+        </select></label>
+        <label id="shSrcWrap">ប្រភព<br><select id="shSrc">
+          <option value="">ទាំងអស់</option>
+          <option value="qr">មានស្កេន QR</option>
+          <option value="manual">មាន Admin / កែដោយដៃ</option>
+        </select></label>
         <label>ស្វែងរក<br><input type="search" id="shSearch" placeholder="ឈ្មោះ / ផ្នែក"></label>
         <button type="button" id="shRefresh" class="secondary">🔄 ផ្ទុកឡើងវិញ</button>
         <button type="button" id="shCsv">⬇ CSV</button>
       </div>
       <p class="scan-hint" id="shWarn" style="display:none;"></p>
+      <div id="shOverview" style="display:none;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+          <h3 id="shOverTitle" style="margin:0;font-size:0.9rem;"></h3>
+          <span><button type="button" id="shCsvSum" class="secondary" style="padding:2px 10px;">⬇ CSV សង្ខេប</button>
+          <button type="button" id="shOverClose" class="secondary" style="padding:2px 10px;">បិទ</button></span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th>ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
+          <tbody id="shOverBody"></tbody>
+        </table></div>
+        <p class="scan-hint">ចុចឈ្មោះបុគ្គលិកដើម្បីមើលម៉ោងលម្អិតរបស់គាត់ · "ស្កេនមិនគ្រប់" មិនរាប់ថ្ងៃនេះទេ (ព្រោះកំពុងដំណើរការ)</p>
+      </div>
       <p class="scan-hint" id="shSummary"></p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>ថ្ងៃ</th><th>ម៉ោង</th><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ប្រភេទ</th><th>ប្រភព</th><th>រូបថត</th></tr></thead>
+          <thead><tr><th>ថ្ងៃ</th><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th></tr></thead>
           <tbody id="scanhistBody"></tbody>
         </table>
         <div class="empty-state" id="shEmpty" style="display:none;">គ្មានការស្កេនក្នុងចន្លោះនេះទេ</div>
@@ -82,18 +106,51 @@
     inited = true;
     $('shFrom').value = startOfMonth();
     $('shTo').value = today();
-    const empSel = $('shEmp');
     const list = (typeof employees !== 'undefined' ? employees : []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
-    empSel.insertAdjacentHTML('beforeend', list.map(e => `<option value="${esc(e.id)}">${esc(e.name)}${e.status && e.status !== 'active' ? ' (ឈប់)' : ''}</option>`).join(''));
+    $('shEmp').insertAdjacentHTML('beforeend', list.map(e => `<option value="${esc(e.id)}">${esc(e.name)}${e.status && e.status !== 'active' ? ' (ឈប់)' : ''}</option>`).join(''));
     ['shFrom', 'shTo'].forEach(id => $(id).addEventListener('change', () => load(false).catch(console.error)));
-    ['shEmp', 'shStep', 'shSrc'].forEach(id => $(id).addEventListener('change', render));
+    ['shEmp', 'shStat', 'shSrc'].forEach(id => $(id).addEventListener('change', render));
     $('shSearch').addEventListener('input', render);
     $('shRefresh').addEventListener('click', () => load(true).catch(console.error));
-    $('shCsv').addEventListener('click', download);
+    $('shCsv').addEventListener('click', downloadDetail);
+    $('shCsvSum').addEventListener('click', downloadSummary);
+    $('shOverClose').addEventListener('click', () => { overviewOpen = false; render(); });
+    $('shMonths').addEventListener('click', ev => {
+      const b = ev.target.closest('button[data-month]');
+      if (!b) return;
+      $('shFrom').value = b.dataset.month + '-01';
+      $('shTo').value = monthEnd(b.dataset.month);
+      overviewOpen = true;
+      load(false).catch(console.error);
+    });
     $('scanhistBody').addEventListener('click', ev => {
       const btn = ev.target.closest('button[data-photo]');
       if (btn) showPhoto(btn.dataset.photo, btn.dataset.label);
     });
+    $('shOverBody').addEventListener('click', ev => {
+      const a = ev.target.closest('[data-emp]');
+      if (!a) return;
+      ev.preventDefault();
+      $('shEmp').value = a.dataset.emp;
+      render();
+      $('scanhistBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // ---------- ប៊ូតុងខែ ----------
+  function renderMonths() {
+    const box = $('shMonths');
+    if (!box) return;
+    const set = new Set([today().slice(0, 7)]);
+    const att = (typeof attendance !== 'undefined' && attendance) || {};
+    Object.keys(att).forEach(d => { if (/^\d{4}-\d{2}-\d{2}$/.test(d)) set.add(d.slice(0, 7)); });
+    const months = Array.from(set).sort().reverse().slice(0, 24);
+    const from = $('shFrom').value, to = $('shTo').value;
+    box.innerHTML = '<span style="align-self:center;font-size:0.8rem;color:var(--text-muted);">📅 ខែ៖</span>' + months.map(m => {
+      const on = overviewOpen && from === m + '-01' && to === monthEnd(m);
+      const col = '#0d9488';
+      return `<button type="button" data-month="${m}" style="border:2px solid ${col};background:${on ? col : 'transparent'};color:${on ? '#fff' : col};border-radius:999px;padding:3px 12px;font-weight:700;cursor:pointer;">${esc(monthLabel(m))}</button>`;
+    }).join('');
   }
 
   // ---------- ទាញទិន្នន័យ ----------
@@ -128,89 +185,132 @@
         else (r.data || []).forEach(l => { logs[`${l.date}|${l.employee_id}|${l.step}`] = l; });
       } else logsMissing = true;
 
-      buildEvents(from, to);
+      buildRows(from, to);
       render();
     } finally { loading = false; }
   }
 
-  function buildEvents(from, to) {
+  function buildRows(from, to) {
     const att = (typeof attendance !== 'undefined' && attendance) || {};
     const empMap = {};
     (typeof employees !== 'undefined' ? employees : []).forEach(e => { empMap[e.id] = e; });
-    events = [];
+    const now = today();
+    rows = [];
     Object.keys(att).forEach(date => {
       if (date < from || date > to) return;
       const day = att[date] || {};
       Object.keys(day).forEach(empId => {
         const rec = day[empId] || {};
-        const emp = empMap[empId];
+        const t = {}, src = {}, photo = {};
+        let any = false, qr = 0, manual = 0;
         STEPS.forEach(([step, , field]) => {
-          const time = rec[field];
-          if (!time) return;
-          const log = logs[`${date}|${empId}|${step}`] || null;
-          let late = false;
-          if (step === 'checkin') {
-            try {
-              const start = lateStartMinutes(getEmpShift(empId));
-              const m = parseMin(time);
-              late = start !== null && start !== undefined && m !== null && m > start;
-            } catch (_) { late = false; }
-          }
-          events.push({
-            date, time, empId, step,
-            name: emp ? emp.name : String(empId),
-            dept: emp ? (emp.dept || '') : '',
-            src: log ? 'qr' : 'manual',
-            photo: log && log.photo ? log.photo : '',
-            late,
-          });
+          if (!rec[field]) return;
+          any = true;
+          t[step] = rec[field];
+          const log = logs[`${date}|${empId}|${step}`];
+          src[step] = log ? 'qr' : 'manual';
+          if (log) qr++; else manual++;
+          if (log && log.photo) photo[step] = log.photo;
+        });
+        if (!any) return;
+        let late = false;
+        if (t.checkin) {
+          try {
+            const start = lateStartMinutes(getEmpShift(empId));
+            const m = parseMin(t.checkin);
+            late = start !== null && start !== undefined && m !== null && m > start;
+          } catch (_) { late = false; }
+        }
+        const emp = empMap[empId];
+        rows.push({
+          date, empId, t, src, photo, late, qr, manual,
+          name: emp ? emp.name : String(empId),
+          dept: emp ? (emp.dept || '') : '',
+          incomplete: date < now && STEPS.some(s => !t[s[0]]),
         });
       });
     });
-    events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)
-      || (parseMin(b.time) - parseMin(a.time))
-      || (STEP_ORDER[b.step] - STEP_ORDER[a.step]));
+    rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) || String(a.name).localeCompare(String(b.name)));
   }
 
   // ---------- ការបង្ហាញ ----------
   function filtered() {
-    const emp = $('shEmp').value, step = $('shStep').value, src = $('shSrc').value;
+    const emp = $('shEmp').value, stat = $('shStat').value, src = $('shSrc').value;
     const q = $('shSearch').value.trim().toLowerCase();
-    return events.filter(e =>
-      (!emp || String(e.empId) === emp) &&
-      (!step || e.step === step) &&
-      (!src || logsMissing || e.src === src) &&
-      (!q || e.name.toLowerCase().includes(q) || e.dept.toLowerCase().includes(q)));
+    return rows.filter(r =>
+      (!emp || String(r.empId) === emp) &&
+      (stat !== 'incomplete' || r.incomplete) &&
+      (stat !== 'late' || r.late) &&
+      (!src || logsMissing || (src === 'qr' ? r.qr > 0 : r.manual > 0)) &&
+      (!q || r.name.toLowerCase().includes(q) || r.dept.toLowerCase().includes(q)));
+  }
+
+  const tag = (txt, bg, fg) => `<span style="font-size:0.62rem;padding:1px 6px;border-radius:999px;background:${bg};color:${fg};margin-left:3px;">${txt}</span>`;
+
+  function cell(r, step, label) {
+    const time = r.t[step];
+    if (!time) return '<span style="color:var(--text-muted);">-</span>';
+    let h = `<b>${esc(time)}</b>`;
+    if (!logsMissing) h += r.src[step] === 'qr' ? tag('QR', '#d1fae5', '#065f46') : tag('ដៃ', '#ffedd5', '#9a3412');
+    if (step === 'checkin' && r.late) h += ' <span class="badge inactive">យឺត</span>';
+    if (r.photo[step]) h += ` <button type="button" class="secondary" style="padding:0 6px;" data-photo="${esc(r.photo[step])}" data-label="${esc(r.name + ' · ' + r.date + ' ' + time + ' · ' + label)}">📷</button>`;
+    return h;
   }
 
   function render() {
     if (!$('scanhistBody')) return;
+    renderMonths();
     const warn = $('shWarn');
     warn.style.display = logsMissing ? '' : 'none';
-    warn.style.color = 'var(--text-muted)';
     warn.textContent = logsMissing ? 'ℹ មិនទាន់មានតារាង scan_log (scan-extras.sql) — មិនអាចបែងចែក QR / កែដោយដៃ ឬបង្ហាញរូបថតបានទេ។' : '';
     $('shSrcWrap').style.display = logsMissing ? 'none' : '';
+    document.querySelectorAll('#scanhistTab .shQrCol').forEach(el => { el.style.display = logsMissing ? 'none' : ''; });
 
     shown = filtered();
-    const people = new Set(shown.map(e => e.empId)).size;
-    $('shSummary').textContent = `${shown.length} ការស្កេន · ${people} នាក់` + (shown.length > MAX_ROWS ? ` (បង្ហាញ ${MAX_ROWS} ជួរដំបូង — ទាញយក CSV ដើម្បីបានទាំងអស់)` : '');
+    const people = new Set(shown.map(r => r.empId)).size;
+    $('shSummary').textContent = `${shown.length} ជួរ (ថ្ងៃ × បុគ្គលិក) · ${people} នាក់` + (shown.length > MAX_ROWS ? ` (បង្ហាញ ${MAX_ROWS} ជួរដំបូង — ទាញយក CSV ដើម្បីបានទាំងអស់)` : '');
     $('shEmpty').style.display = shown.length ? 'none' : 'block';
 
-    $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(e => {
-      const srcCell = logsMissing ? '<span style="color:var(--text-muted);">-</span>'
-        : e.src === 'qr' ? '<span class="badge active">QR</span>' : '<span class="badge pending">Admin/ដៃ</span>';
-      const photoCell = e.photo
-        ? `<button type="button" class="secondary" style="padding:2px 10px;" data-photo="${esc(e.photo)}" data-label="${esc(e.name + ' · ' + e.date + ' ' + e.time + ' · ' + stepLabel(e.step))}">📷</button>`
-        : '<span style="color:var(--text-muted);">-</span>';
-      return `<tr>
-        <td>${esc(e.date)}</td>
-        <td><b>${esc(e.time)}</b>${e.late ? ' <span class="badge inactive">យឺត</span>' : ''}</td>
-        <td>${esc(e.name)}</td>
-        <td>${esc(e.dept)}</td>
-        <td>${esc(stepLabel(e.step))}</td>
-        <td>${srcCell}</td>
-        <td>${photoCell}</td></tr>`;
-    }).join('');
+    $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(r => `<tr>
+      <td>${esc(r.date)}</td>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.dept)}</td>
+      ${STEPS.map(s => `<td>${cell(r, s[0], s[1])}</td>`).join('')}</tr>`).join('');
+
+    renderOverview();
+  }
+
+  // ---------- សង្ខេបខែ ----------
+  function summarize() {
+    const map = {};
+    shown.forEach(r => {
+      const o = map[r.empId] || (map[r.empId] = { empId: r.empId, name: r.name, dept: r.dept, days: 0, late: 0, incomplete: 0, qr: 0, manual: 0 });
+      o.days++;
+      if (r.late) o.late++;
+      if (r.incomplete) o.incomplete++;
+      o.qr += r.qr;
+      o.manual += r.manual;
+    });
+    return Object.values(map).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  }
+
+  function renderOverview() {
+    const box = $('shOverview');
+    box.style.display = overviewOpen ? '' : 'none';
+    if (!overviewOpen) return;
+    const from = $('shFrom').value, to = $('shTo').value;
+    const sum = summarize();
+    const tot = sum.reduce((a, o) => ({ days: a.days + o.days, late: a.late + o.late, incomplete: a.incomplete + o.incomplete, qr: a.qr + o.qr, manual: a.manual + o.manual }), { days: 0, late: 0, incomplete: 0, qr: 0, manual: 0 });
+    const isMonth = from.slice(0, 7) === to.slice(0, 7) && from.endsWith('-01') && to === monthEnd(from.slice(0, 7));
+    $('shOverTitle').textContent = `📊 សង្ខេប${isMonth ? 'ខែ ' + monthLabel(from.slice(0, 7)) : ` ${from} → ${to}`} · ${sum.length} នាក់`;
+    const qrCols = o => logsMissing ? '' : `<td>${o.qr}</td><td>${o.manual}</td>`;
+    $('shOverBody').innerHTML = sum.map(o => `<tr>
+      <td><a href="#" data-emp="${esc(o.empId)}" style="color:inherit;text-decoration:underline;">${esc(o.name)}</a></td>
+      <td>${esc(o.dept)}</td><td>${o.days}</td>
+      <td>${o.late ? `<span style="color:#dc2626;font-weight:700;">${o.late}</span>` : '0'}</td>
+      <td>${o.incomplete ? `<span style="color:#f97316;font-weight:700;">${o.incomplete}</span>` : '0'}</td>
+      ${qrCols(o)}</tr>`).join('') +
+      (sum.length ? `<tr style="font-weight:700;"><td>សរុប</td><td></td><td>${tot.days}</td><td>${tot.late}</td><td>${tot.incomplete}</td>${qrCols(tot)}</tr>` : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">គ្មានទិន្នន័យ</td></tr>');
   }
 
   // ---------- រូបថត ----------
@@ -241,21 +341,33 @@
     if (/^[=+\-@]/.test(s)) s = "'" + s; // ការពារ formula injection ក្នុង Excel
     return `"${s.replace(/"/g, '""')}"`;
   };
-  function download() {
-    if (!shown.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
-    const headers = ['ថ្ងៃ', 'ម៉ោង', 'បុគ្គលិក', 'ផ្នែក', 'ប្រភេទ', 'ប្រភព', 'យឺត', 'មានរូបថត'];
-    const rows = shown.map(e => [
-      e.date, e.time, e.name, e.dept, stepLabel(e.step),
-      logsMissing ? '' : (e.src === 'qr' ? 'QR' : 'Admin/ដៃ'), e.late ? 'យឺត' : '', e.photo ? 'មាន' : '',
-    ]);
-    const csv = '\uFEFF' + headers.map(csvCell).join(',') + '\n' + rows.map(r => r.map(csvCell).join(',')).join('\n');
+  function saveCsv(headers, data, filename) {
+    const csv = '\uFEFF' + headers.map(csvCell).join(',') + '\n' + data.map(r => r.map(csvCell).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    a.download = `scan-history_${$('shFrom').value}_${$('shTo').value}.csv`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
+  }
+  const range = () => `${$('shFrom').value}_${$('shTo').value}`;
+
+  function downloadDetail() {
+    if (!shown.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
+    const headers = ['ថ្ងៃ', 'បុគ្គលិក', 'ផ្នែក', 'ចូល', 'ចេញបាយ', 'ចូលវិញ', 'ចេញ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់']
+      .concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
+    const data = shown.map(r => [r.date, r.name, r.dept, r.t.checkin || '', r.t.break_out || '', r.t.break_in || '', r.t.checkout || '',
+      r.late ? 'យឺត' : '', r.incomplete ? 'មិនគ្រប់' : ''].concat(logsMissing ? [] : [r.qr, r.manual]));
+    saveCsv(headers, data, `scan-history_${range()}.csv`);
+  }
+
+  function downloadSummary() {
+    const sum = summarize();
+    if (!sum.length) { alertMsg('មិនមានទិន្នន័យសម្រាប់ទាញយកទេ'); return; }
+    const headers = ['បុគ្គលិក', 'ផ្នែក', 'ថ្ងៃមកធ្វើការ', 'ចូលយឺត', 'ស្កេនមិនគ្រប់'].concat(logsMissing ? [] : ['ស្កេន QR', 'Admin/ដៃ']);
+    const data = sum.map(o => [o.name, o.dept, o.days, o.late, o.incomplete].concat(logsMissing ? [] : [o.qr, o.manual]));
+    saveCsv(headers, data, `scan-summary_${range()}.csv`);
   }
 
   // ---------- wiring ----------
@@ -275,5 +387,5 @@
     return r;
   };
 
-  window.scanHistory = { refresh: () => load(true), download, showPhoto, closePhoto };
+  window.scanHistory = { refresh: () => load(true), download: downloadDetail, downloadSummary, showPhoto, closePhoto };
 })();
