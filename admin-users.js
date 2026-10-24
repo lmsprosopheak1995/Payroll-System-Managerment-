@@ -80,6 +80,16 @@
           const isMe = u.id === me.id;
           const td = (...k) => h('td', { style: 'padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle;' }, ...k);
           const acts = h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' });
+          acts.appendChild(h('button', { class: 'secondary', type: 'button', text: '✏️ ឈ្មោះ', onclick: async () => {
+            const n = await ask('ឈ្មោះពេញសម្រាប់ «' + u.username + '»៖', false);
+            if (n === null || n === undefined) return;
+            try { const r = await rpc('set_admin_user_full_name', { p_token: tok(), p_id: u.id, p_full_name: n });
+              if (r && r.ok) {
+                refresh();
+                const b = document.getElementById('adminWhoBadge');
+                if (isMe && b) b.textContent = '👤 ' + (n.trim() || u.username);
+              } else say(errKm(r && r.error)); } catch (e) { say('មានបញ្ហា៖ ' + e.message); }
+          } }));
           if (!isMe) {
             acts.appendChild(h('button', { class: 'secondary', type: 'button', text: '🔑 ពាក្យសម្ងាត់ថ្មី', onclick: async () => {
               const p = await ask('ពាក្យសម្ងាត់ថ្មីសម្រាប់ «' + u.username + '» (យ៉ាងតិច ៦ តួ)៖', true);
