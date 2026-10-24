@@ -75,7 +75,7 @@
           <thead><tr><th>បុគ្គលិក</th><th>ផ្នែក</th><th>ថ្ងៃមកធ្វើការ</th><th>ចូលយឺត</th><th>ស្កេនមិនគ្រប់</th><th class="shQrCol">QR</th><th class="shQrCol">Admin/ដៃ</th></tr></thead>
           <tbody id="shOverBody"></tbody>
         </table></div>
-        <p class="scan-hint">ចុចឈ្មោះបុគ្គលិកដើម្បីមើលម៉ោងលម្អិតរបស់គាត់ · "ស្កេនមិនគ្រប់" មិនរាប់ថ្ងៃនេះទេ (ព្រោះកំពុងដំណើរការ)</p>
+        <p class="scan-hint">ចុចឈ្មោះបុគ្គលិកដើម្បីមើលប្រវត្តិស្កេនលម្អិតរបស់គាត់ · "ស្កេនមិនគ្រប់" មិនរាប់ថ្ងៃនេះទេ (ព្រោះកំពុងដំណើរការ)</p>
       </div>
       <p class="scan-hint" id="shSummary"></p>
       <div class="table-wrap">
@@ -125,15 +125,15 @@
     });
     $('scanhistBody').addEventListener('click', ev => {
       const btn = ev.target.closest('button[data-photo]');
-      if (btn) showPhoto(btn.dataset.photo, btn.dataset.label);
+      if (btn) { showPhoto(btn.dataset.photo, btn.dataset.label); return; }
+      const a = ev.target.closest('[data-open-emp]');
+      if (a) { ev.preventDefault(); openEmp(a.dataset.openEmp, a.dataset.ym); }
     });
     $('shOverBody').addEventListener('click', ev => {
       const a = ev.target.closest('[data-emp]');
       if (!a) return;
       ev.preventDefault();
-      $('shEmp').value = a.dataset.emp;
-      render();
-      $('scanhistBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      openEmp(a.dataset.emp, ($('shFrom').value || today()).slice(0, 7));
     });
   }
 
@@ -185,21 +185,22 @@
         else (r.data || []).forEach(l => { logs[`${l.date}|${l.employee_id}|${l.step}`] = l; });
       } else logsMissing = true;
 
-      buildRows(from, to);
+      rows = buildRows(from, to, logs);
       render();
     } finally { loading = false; }
   }
 
-  function buildRows(from, to) {
+  function buildRows(from, to, lg, onlyEmp) {
     const att = (typeof attendance !== 'undefined' && attendance) || {};
     const empMap = {};
     (typeof employees !== 'undefined' ? employees : []).forEach(e => { empMap[e.id] = e; });
     const now = today();
-    rows = [];
+    const out = [];
     Object.keys(att).forEach(date => {
       if (date < from || date > to) return;
       const day = att[date] || {};
       Object.keys(day).forEach(empId => {
+        if (onlyEmp != null && String(empId) !== String(onlyEmp)) return;
         const rec = day[empId] || {};
         const t = {}, src = {}, photo = {};
         let any = false, qr = 0, manual = 0;
@@ -207,7 +208,7 @@
           if (!rec[field]) return;
           any = true;
           t[step] = rec[field];
-          const log = logs[`${date}|${empId}|${step}`];
+          const log = lg[`${date}|${empId}|${step}`];
           src[step] = log ? 'qr' : 'manual';
           if (log) qr++; else manual++;
           if (log && log.photo) photo[step] = log.photo;
@@ -222,7 +223,7 @@
           } catch (_) { late = false; }
         }
         const emp = empMap[empId];
-        rows.push({
+        out.push({
           date, empId, t, src, photo, late, qr, manual,
           name: emp ? emp.name : String(empId),
           dept: emp ? (emp.dept || '') : '',
@@ -230,7 +231,8 @@
         });
       });
     });
-    rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) || String(a.name).localeCompare(String(b.name)));
+    out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) || String(a.name).localeCompare(String(b.name)));
+    return out;
   }
 
   // ---------- ការបង្ហាញ ----------
@@ -247,11 +249,12 @@
 
   const tag = (txt, bg, fg) => `<span style="font-size:0.62rem;padding:1px 6px;border-radius:999px;background:${bg};color:${fg};margin-left:3px;">${txt}</span>`;
 
-  function cell(r, step, label) {
+  function cell(r, step, label, lm) {
+    if (lm === undefined) lm = logsMissing;
     const time = r.t[step];
     if (!time) return '<span style="color:var(--text-muted);">-</span>';
     let h = `<b>${esc(time)}</b>`;
-    if (!logsMissing) h += r.src[step] === 'qr' ? tag('QR', '#d1fae5', '#065f46') : tag('ដៃ', '#ffedd5', '#9a3412');
+    if (!lm) h += r.src[step] === 'qr' ? tag('QR', '#d1fae5', '#065f46') : tag('ដៃ', '#ffedd5', '#9a3412');
     if (step === 'checkin' && r.late) h += ' <span class="badge inactive">យឺត</span>';
     if (r.photo[step]) h += ` <button type="button" class="secondary" style="padding:0 6px;" data-photo="${esc(r.photo[step])}" data-label="${esc(r.name + ' · ' + r.date + ' ' + time + ' · ' + label)}">📷</button>`;
     return h;
@@ -273,7 +276,7 @@
 
     $('scanhistBody').innerHTML = shown.slice(0, MAX_ROWS).map(r => `<tr>
       <td>${esc(r.date)}</td>
-      <td>${esc(r.name)}</td>
+      <td><a href="#" data-open-emp="${esc(r.empId)}" data-ym="${esc(r.date.slice(0, 7))}" style="color:inherit;text-decoration:underline;">${esc(r.name)}</a></td>
       <td>${esc(r.dept)}</td>
       ${STEPS.map(s => `<td>${cell(r, s[0], s[1])}</td>`).join('')}</tr>`).join('');
 
@@ -370,6 +373,72 @@
     saveCsv(headers, data, `scan-summary_${range()}.csv`);
   }
 
+  // ---------- Overview ប្រវត្តិស្កេនរបស់បុគ្គលិកម្នាក់ (ចុចលើឈ្មោះ) ----------
+  let mState = null;
+  function closeEmp() { const o = $('scanhistEmpOverlay'); if (o) o.remove(); mState = null; }
+  function shiftYm(ym, d) {
+    const [y, m] = ym.split('-').map(Number);
+    const dt = new Date(y, m - 1 + d, 1);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function openEmp(empId, ym) {
+    closeEmp();
+    mState = { empId: String(empId), ym: ym || today().slice(0, 7) };
+    const ov = document.createElement('div');
+    ov.id = 'scanhistEmpOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = '<div id="scanhistEmpBox" style="background:var(--card-bg,#fff);color:var(--text,#111827);border-radius:16px;max-width:860px;width:100%;max-height:90vh;overflow:auto;padding:18px;">កំពុងផ្ទុក…</div>';
+    ov.addEventListener('click', e => {
+      if (e.target === ov) { closeEmp(); return; }
+      if (e.target.closest('#scanhistEmpClose')) { closeEmp(); return; }
+      const nav = e.target.closest('button[data-nav]');
+      if (nav && mState) { mState.ym = shiftYm(mState.ym, +nav.dataset.nav); renderEmp().catch(console.error); return; }
+      const ph = e.target.closest('button[data-photo]');
+      if (ph) showPhoto(ph.dataset.photo, ph.dataset.label);
+    });
+    document.body.appendChild(ov);
+    renderEmp().catch(console.error);
+  }
+
+  async function renderEmp() {
+    const st = mState;
+    if (!st) return;
+    const ym = st.ym;
+    const from = ym + '-01', to = monthEnd(ym);
+    const lg = {};
+    let lm = true;
+    if (typeof supabaseClient !== 'undefined') {
+      const q = await supabaseClient.from('scan_log').select('*').eq('employee_id', st.empId).gte('date', from).lte('date', to).limit(1000);
+      if (!q.error) { lm = false; (q.data || []).forEach(l => { lg[`${l.date}|${l.employee_id}|${l.step}`] = l; }); }
+    }
+    if (mState !== st || st.ym !== ym) return; // បានប្តូរខែ/បិទរួច
+    const list = buildRows(from, to, lg, st.empId);
+    const emp = (typeof employees !== 'undefined' ? employees : []).find(e => String(e.id) === st.empId);
+    const sum = list.reduce((a, r) => ({ days: a.days + 1, late: a.late + (r.late ? 1 : 0), inc: a.inc + (r.incomplete ? 1 : 0), qr: a.qr + r.qr, manual: a.manual + r.manual }), { days: 0, late: 0, inc: 0, qr: 0, manual: 0 });
+    const chip = (label, val, col) => `<span style="border:2px solid ${col};color:${col};border-radius:999px;padding:3px 12px;font-weight:700;">${label} ${val}</span>`;
+    const body = list.slice().reverse().map(r => `<tr><td>${esc(r.date)}</td>${STEPS.map(s => `<td>${cell(r, s[0], s[1], lm)}</td>`).join('')}</tr>`).join('')
+      || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">គ្មានការស្កេនក្នុងខែនេះទេ</td></tr>';
+    const box = $('scanhistEmpBox');
+    if (!box) return;
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <h3 style="margin:0;">🕘 ${esc(emp ? emp.name : st.empId)} <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${esc(emp ? (emp.dept || '') : '')}</span></h3>
+        <span><button type="button" class="secondary" data-nav="-1" style="padding:2px 10px;">‹</button>
+          <b style="margin:0 8px;">${esc(monthLabel(ym))}</b>
+          <button type="button" class="secondary" data-nav="1" style="padding:2px 10px;">›</button>
+          <button type="button" id="scanhistEmpClose" style="margin-left:10px;">បិទ</button></span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        ${chip('ថ្ងៃមកធ្វើការ', sum.days, '#0d9488')}${chip('ចូលយឺត', sum.late, '#dc2626')}${chip('ស្កេនមិនគ្រប់', sum.inc, '#f97316')}
+        ${lm ? '' : chip('QR', sum.qr, '#16a34a') + chip('Admin/ដៃ', sum.manual, '#9a3412')}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ថ្ងៃ</th><th>ចូល</th><th>ចេញបាយ</th><th>ចូលវិញ</th><th>ចេញ</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table></div>`;
+  }
+
   // ---------- wiring ----------
   function onTab(tab) {
     if (tab !== 'scanhist') return;
@@ -387,5 +456,5 @@
     return r;
   };
 
-  window.scanHistory = { refresh: () => load(true), download: downloadDetail, downloadSummary, showPhoto, closePhoto };
+  window.scanHistory = { refresh: () => load(true), download: downloadDetail, downloadSummary, showPhoto, closePhoto, openEmp };
 })();
