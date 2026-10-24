@@ -604,21 +604,41 @@
     load(false).catch(console.error);
   }
 
-  // ---------- ចុចឈ្មោះក្នុង "បញ្ជីបុគ្គលិក" → Overview ប្រវត្តិធ្វើការរបស់បុគ្គលិកនោះ ----------
+  // ---------- រូប 👁 តូចក្បែរឈ្មោះក្នុង "បញ្ជីបុគ្គលិក" → Overview បុគ្គលិកនោះ ----------
   function hookEmployeeList() {
     const tb = $('tableBody');
     if (!tb || tb.dataset.shHook) return;
     tb.dataset.shHook = '1';
     const st = document.createElement('style');
-    st.textContent = '#tableBody td:nth-child(3){cursor:pointer;text-decoration:underline;}';
+    st.textContent = '#tableBody button.sh-eye{all:unset;display:inline-flex;vertical-align:middle;margin-left:6px;padding:3px;border-radius:6px;color:#0d9488;cursor:pointer;opacity:.75;}'
+      + '#tableBody button.sh-eye:hover,#tableBody button.sh-eye:focus-visible{opacity:1;background:rgba(13,148,136,.14);}';
     document.head.appendChild(st);
+    const EYE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const editBtn = tr => tr.querySelector('button[onclick*="openEditModal"]');
+    const decorate = () => {
+      obs.disconnect();
+      tb.querySelectorAll('tr').forEach(tr => {
+        const td = tr.cells[2];
+        if (!td || td.querySelector('.sh-eye') || !editBtn(tr)) return;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sh-eye';
+        b.title = 'មើលប្រវត្តិបុគ្គលិក';
+        b.setAttribute('aria-label', 'មើលប្រវត្តិបុគ្គលិក');
+        b.innerHTML = EYE;
+        td.appendChild(b);
+      });
+      obs.observe(tb, { childList: true });
+    };
+    const obs = new MutationObserver(decorate);
     tb.addEventListener('click', ev => {
-      const td = ev.target.closest('td');
-      if (!td || td.cellIndex !== 2) return;
-      const btn = td.parentNode.querySelector('button[onclick*="openEditModal"]');
+      const eye = ev.target.closest('button.sh-eye');
+      if (!eye) return;
+      const btn = editBtn(eye.closest('tr'));
       const m = btn && /openEditModal\('([^']*)'\)/.exec(btn.getAttribute('onclick') || '');
       if (m) openEmp(m[1], today().slice(0, 7), 'profile');
     });
+    decorate();
   }
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeEmp(); });
 
