@@ -480,3 +480,29 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
   margin-top: auto; font-size: 1.08rem;
   border-top: 1px solid var(--border) !important; padding-top: 12px !important;
 }
+
+/* 13.2) កាតស្ថិតិ ១១៖ icon + ពណ៌ (ui-modern.js) · កាតទី ៥ ស្វាយ · ទី ១០ icon ពណ៌ស */
+#attendanceStats > .stat-card:nth-child(5) { --tone: #8b5cf6; }
+#attendanceStats > .stat-card:nth-child(10) { --tone: #ffffff; }
+#attendanceStats > .stat-card:nth-child(10) .ico-frame { background: rgba(255, 255, 255, .2); box-shadow: none; }
+#attendanceStats > .stat-card:nth-child(-n+3) .num { font-size: 1.5rem; }
+
+/* 13.3) កាត «បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់»៖ ២ ជួរ — [ប្រភេទ | ឈ្មោះធាតុ] · [ចំនួន | រូបិយប័ណ្ណ | បន្ថែម] */
+#attendanceExtras > div:nth-child(4) > div[style*="flex-wrap"] {
+  display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px !important;
+}
+#attendanceExtras #qaType, #attendanceExtras #qaName, #attendanceExtras #qaAmount, #attendanceExtras #qaCur {
+  width: 100% !important; min-width: 0; flex: none !important;
+}
+#attendanceExtras #qaType { grid-column: span 2; }
+#attendanceExtras #qaName { grid-column: span 4; }
+#attendanceExtras #qaAmount { grid-column: span 3; }
+#attendanceExtras #qaCur { grid-column: span 1; }
+#attendanceExtras > div:nth-child(4) button {
+  grid-column: span 2; background: var(--grad); color: #fff; border: 0; font-weight: 700;
+}
+@media (max-width: 720px) {
+  #attendanceExtras #qaType, #attendanceExtras #qaName, #attendanceExtras #qaAmount { grid-column: 1 / -1; }
+  #attendanceExtras #qaCur { grid-column: span 2; }
+  #attendanceExtras > div:nth-child(4) button { grid-column: span 4; }
+}

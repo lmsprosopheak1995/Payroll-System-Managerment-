@@ -29,6 +29,8 @@
     bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     circleMinus: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
+    utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    banknote: '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
   };
   const svg = name => `<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true">${P[name] || ''}</svg>`;
   const frame = (name, extra) => `<span class="ico-frame${extra ? ' ' + extra : ''}" aria-hidden="true">${svg(name)}</span>`;
@@ -85,6 +87,12 @@
     statsRow:       ['users', 'userCheck', 'building', 'wallet'],
     dashTodayStats: ['users', 'userCheck', 'clock', 'calendar', 'userX', 'circleMinus'],
     dashMonthStats: ['wallet', 'briefcase', 'timer', 'clock', 'calendar', 'userX'],
+    // ទំព័រ «តារាងវត្តមាន» ប្រចាំខែ (11 កាត)
+    attendanceStats: ['calendarCheck', 'clock', 'timer', 'briefcase', 'sun', 'timer', 'utensils', 'gift', 'circleMinus', 'wallet', 'banknote'],
+  };
+  // tone កំណត់ដោយផ្ទាល់ (បើមាន) ជំនួសការទាយពីពណ៌ inline
+  const STAT_TONES = {
+    attendanceStats: ['', 'warn', '', '', '', '', '', 'success', 'danger', '', ''],
   };
 
   function toneOf(card) {
@@ -104,7 +112,8 @@
     container.classList.toggle('grid-cols-3', container.children.length === 6);
     Array.from(container.children).forEach((card, i) => {
       if (!card.classList.contains('stat-card') || card.classList.contains('has-ico')) return;
-      const tone = toneOf(card);
+      const fixed = STAT_TONES[container.id];
+      const tone = fixed ? fixed[i] : toneOf(card);
       if (tone) card.dataset.tone = tone;
       if (icons[i]) {
         card.insertAdjacentHTML('afterbegin', frame(icons[i]));
