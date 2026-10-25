@@ -473,3 +473,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
   #attendanceStats > .stat-card, #attendanceStats > .stat-card:nth-child(-n+3) { grid-column: span 6; }
   #attendanceExtras > div { padding: 12px 14px !important; }
 }
+
+/* 13.1) តារាងគណនា៖ ចែកជួរឱ្យពេញកាត · «ប្រាក់ខែសុទ្ធ» ជាប់បាត (គ្មានចន្លោះទទេ) */
+#attendanceExtras > div:nth-child(1) { display: flex; flex-direction: column; gap: 9px; }
+#attendanceExtras > div:nth-child(1) > div:last-child {
+  margin-top: auto; font-size: 1.08rem;
+  border-top: 1px solid var(--border) !important; padding-top: 12px !important;
+}
