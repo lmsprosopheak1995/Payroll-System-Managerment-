@@ -41,7 +41,7 @@
     --bg: #0b1320;
     --card-bg: #121d2e;
     --text: #e6edf6;
-    --text-muted: #94a3b8;
+    --text-muted: #a7b5c9;
     --border: #22314a;
     --indigo: #2dd4bf;
     --violet: #38bdf8;
@@ -61,7 +61,7 @@
   --bg: #0b1320;
   --card-bg: #121d2e;
   --text: #e6edf6;
-  --text-muted: #94a3b8;
+  --text-muted: #a7b5c9;
   --border: #22314a;
   --indigo: #2dd4bf;
   --violet: #38bdf8;
@@ -329,3 +329,147 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
    Dialog Payslip (payslip-send.js) ប្រើ z-index 9972 / 9973 ហើយ .modal-overlay ក្នុង style.css មានតែ 100
    → ប្រអប់ customPrompt/customAlert/customConfirm លោតនៅក្រោយ។ លុប section នេះចេញ ទើបត្រលប់ទៅដើមវិញ។ */
 #customDialogOverlay { z-index: 10050; }
+
+/* ---------- 12) Polish: ប៊ូតុង · ប្រអប់បញ្ចូល · Modal · Finance ----------
+   បន្ថែមតែអ្វីដែលមិនប៉ះទំហំអក្សរ/កាតខាងលើ។ ប្រើ :where() ដើម្បីឱ្យ class ផ្សេងៗក្នុងកម្មវិធីនៅតែឈ្នះ។
+   លុប section នេះចេញ ទើបត្រលប់ទៅដើមវិញ។ */
+@media screen {
+  html { scroll-behavior: smooth; }
+  body { line-height: 1.5; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted) 45%, transparent) transparent; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+    border-radius: 99px; border: 2px solid transparent; background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-muted) 65%, transparent); background-clip: content-box; }
+
+  /* ប៊ូតុង */
+  button:where(:not(.nav-item)) { border-radius: 10px; padding: 7px 14px; line-height: 1.3; }
+  header button, .toolbar button, .attendance-controls button, .modal-actions button, .form-row button, .fin-row button { min-height: 36px; }
+  td button, .row-actions button { min-height: 30px; padding: 4px 10px; border-radius: 8px; }
+  button:where(:not(.nav-item)):focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none !important; box-shadow: none !important; filter: none !important; }
+  button.secondary:where(:not(.nav-item)) { background: var(--card-bg); }
+  button.secondary:where(:not(.nav-item)):hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+
+  /* ប្រអប់បញ្ចូល */
+  input:where(:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color])), select, textarea {
+    min-height: 34px; padding: 7px 11px; border-radius: 10px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  textarea { min-height: 72px; line-height: 1.5; }
+  td input:where(:not([type=checkbox], [type=radio])), td select { min-height: 30px; padding: 4px 8px; border-radius: 8px; }
+  input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  input:disabled, select:disabled, textarea:disabled { opacity: .6; cursor: not-allowed; }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--text-muted) 75%, transparent); }
+
+  /* កាត / តារាង / badge */
+  .scan-result-card { transition: border-color .2s ease; }
+  .scan-result-card:hover { border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
+  tbody tr { transition: background .12s ease; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .badge { padding: 3px 10px; line-height: 1.4; }
+  .empty-state { padding: 56px 20px; }
+
+  /* ប្តូរទំព័រ + Modal */
+  .tab-content.active { animation: uiFadeIn .18s ease; }
+  @keyframes uiFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .modal-overlay { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); background: rgba(8, 15, 28, .55); }
+  .modal-overlay.open .modal { animation: uiPop .18s ease; }
+  @keyframes uiPop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+  .modal { border-radius: 18px; padding: 22px; }
+  .modal h2 { font-weight: 700; margin-bottom: 14px; }
+
+  /* ផ្ទាំង Finance */
+  #financeTab .fin-tabs { gap: 8px; margin: 8px 0 16px; align-items: center; }
+  #financeTab .fin-tabs .fin-sep {
+    color: var(--text); opacity: .75; margin-left: 12px; padding: 3px 10px; border-radius: 99px;
+    background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  }
+  #financeTab .fin-tabs button { border-radius: 99px; padding: 6px 14px; }
+  #financeTab .fin-card { border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+  #financeTab .fin-card h3 { font-weight: 700; }
+  #financeTab .fin-muted { line-height: 1.55; }
+}
+@media (max-width: 640px) {
+  .modal { padding: 16px; border-radius: 16px; }
+  #financeTab .fin-card { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .tab-content.active, .modal-overlay.open .modal { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+/* ---------- 13) ទំព័រ «តារាងវត្តមាន» ប្រចាំខែ៖ ប្លង់ស្អាត មិនរញ៉េរញ៉ៃ ----------
+   កាតខាងក្នុងត្រូវបានបង្កើតដោយ JS (style ក្នុងបន្ទាត់) → ប្រើ !important ។
+   លុប section នេះចេញ ទើបត្រលប់ទៅដើមវិញ។ */
+/* ក្បាលទំព័រ៖ ស្វែងរក + ខែ នៅឆ្វេង · ប៊ូតុងនៅស្តាំ (រុំបានស្អាត) */
+#attendanceTab > .attendance-controls { gap: 12px 16px; }
+#attendanceTab > .attendance-controls > div:first-child { flex: 1 1 360px; display: flex; flex-wrap: nowrap !important; gap: 10px; align-items: center; }
+#attendanceTab > .attendance-controls .live-search { flex: 1 1 260px; min-width: 0; }
+#attendanceTab > .attendance-controls #attendanceMonth { flex: 0 0 170px; }
+#attendanceTab > .attendance-controls > div:last-child { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+
+/* កាតស្ថិតិ ១១ → ៣ ជួរស្មើគ្នា (៣ · ៤ · ៤) ហើយលេខប្រាក់ខែសុទ្ធជាចំណុចសំខាន់ */
+#attendanceStats { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+#attendanceStats > .stat-card { grid-column: span 3; }
+#attendanceStats > .stat-card:nth-child(-n+3) { grid-column: span 4; }
+#attendanceStats > .stat-card:nth-child(10) {
+  background: var(--grad); border-color: transparent; box-shadow: var(--shadow-hover);
+}
+#attendanceStats > .stat-card:nth-child(10) .num { color: #fff; font-size: 1.6rem; }
+#attendanceStats > .stat-card:nth-child(10) .label { color: rgba(255, 255, 255, .88); }
+#attendanceStats > .stat-card:nth-child(10):last-child { grid-column: span 6; }
+#attendanceStats > .stat-card:nth-child(11) {
+  background: var(--grad-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+#attendanceStats > .stat-card:nth-child(11) .num { font-size: 1.2rem; }
+
+/* តំបន់ក្រោមកាតស្ថិតិ៖ តារាងគណនា (ឆ្វេង) · ៣ កាត (ស្តាំ) កម្ពស់ស្មើគ្នា · ក្រាហ្វិកពេញទទឹង */
+#attendanceExtras {
+  display: grid !important; gap: 16px !important; align-items: stretch !important;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); margin: 4px 0 18px !important;
+}
+#attendanceExtras > div {
+  max-width: none !important; min-width: 0; flex: none !important;
+  font-size: 0.9rem !important; line-height: 1.6;
+  padding: 16px 18px !important;
+  border: 1px solid var(--border) !important; border-radius: var(--radius) !important;
+  background: var(--card-bg) !important; box-shadow: var(--shadow);
+}
+#attendanceExtras > div:nth-child(1) { grid-column: 1; grid-row: 1 / span 3; }
+#attendanceExtras > div:nth-child(2) { grid-column: 2; grid-row: 1; }
+#attendanceExtras > div:nth-child(3) { grid-column: 2; grid-row: 2; }
+#attendanceExtras > div:nth-child(4) { grid-column: 2; grid-row: 3; }
+#attendanceExtras > div:nth-child(5) { grid-column: 1 / -1; grid-row: 4; }
+#attendanceExtras > div > div:first-child { font-size: 0.98rem; }
+#attendanceExtras [style*="grid-template-columns"] { font-size: 0.84rem !important; row-gap: 8px !important; }
+#attendanceExtras [style*="border-top:1px solid"] { border-color: var(--border) !important; }
+#attendanceExtras [style*="color:#9ca3af"], #attendanceExtras [style*="color:#6b7280"] { color: var(--text-muted) !important; }
+#attendanceExtras [style*="background:#f3f4f6"] { background: color-mix(in srgb, var(--text-muted) 14%, transparent) !important; }
+#attendanceExtras input, #attendanceExtras select { padding: 7px 10px !important; border-color: var(--border) !important; border-radius: 10px !important; }
+/* ក្រាហ្វិក៖ កំពស់ធំជាង · លេខថ្ងៃអាចអានបាន */
+#attendanceExtras [style*="height:90px"] { height: 140px !important; gap: 4px !important; }
+#attendanceExtras [style*="font-size:9px"] { font-size: 0.72rem !important; gap: 4px !important; }
+
+@media (max-width: 1100px) {
+  #attendanceStats > .stat-card, #attendanceStats > .stat-card:nth-child(-n+3) { grid-column: span 6; }
+  #attendanceStats > .stat-card:nth-child(10) { grid-column: span 12; }
+  #attendanceExtras { grid-template-columns: minmax(0, 1fr); }
+  #attendanceExtras > div:nth-child(n) { grid-column: 1; grid-row: auto; }
+}
+@media (max-width: 720px) {
+  #attendanceTab > .attendance-controls > div:first-child { flex-wrap: wrap !important; }
+  #attendanceTab > .attendance-controls #attendanceMonth { flex: 1 1 140px; }
+  #attendanceStats { gap: 10px; }
+  #attendanceStats > .stat-card, #attendanceStats > .stat-card:nth-child(-n+3) { grid-column: span 6; }
+  #attendanceExtras > div { padding: 12px 14px !important; }
+}
