@@ -30,7 +30,7 @@
     const cSun = h('input', { type: 'checkbox', checked: '' }), cOt = h('input', { type: 'checkbox' }), cOut = h('input', { type: 'checkbox' });
     const xOt = h('input', { type: 'number', min: '0', step: '0.5', value: '2', style: 'width:70px;' });
     const tOut = h('input', { type: 'time', value: '19:00' });
-    const q = h('input', { type: 'text', placeholder: 'ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ...', style: 'min-width:200px;' });
+    const q = h('input', { type: 'search', name: 'att-find-q', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: '', placeholder: 'ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ... (ទទេ = បុគ្គលិកទាំងអស់)', style: 'min-width:240px;' });
     const info = h('div', { class: 'scan-hint', style: 'margin:10px 0;' });
     const tbody = h('tbody');
     const chip = (label, v) => h('button', { type: 'button', class: 'secondary', text: label, onclick: () => { tOut.value = v; cOut.checked = true; run(); } });
@@ -83,6 +83,7 @@
     ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
     q.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
     document.body.appendChild(ov);
+    setTimeout(() => { q.value = ''; run(); }, 150);   // លុប autofill របស់ browser ហើយស្វែងរកម្តងទៀត
     run();
   }
 
