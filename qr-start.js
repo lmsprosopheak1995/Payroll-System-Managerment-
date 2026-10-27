@@ -1,10 +1,20 @@
 // POST /api/auth/qr-start — បង្កើតសំណើ login ថ្មី (QR)
 const crypto = require('crypto');
-const { sb } = require('../_lib');
+const { sb, missingEnv } = require('../_lib');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   res.setHeader('Cache-Control', 'no-store');
+  try { return await handle(req, res); }
+  catch (e) {
+    console.error('qr-start error', e);
+    return res.status(500).json({ error: 'កំហុសក្នុង server៖ ' + (e && e.message ? e.message : e) });
+  }
+};
+
+async function handle(req, res) {
+  const miss = missingEnv(['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'BOT_USERNAME']);
+  if (miss.length) return res.status(500).json({ error: 'Vercel នៅខ្វះ Environment Variable៖ ' + miss.join(', ') + ' (ត្រូវ Redeploy ក្រោយបន្ថែម)' });
 
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || null;
   const ua = String(req.headers['user-agent'] || '').slice(0, 200);
@@ -34,4 +44,4 @@ module.exports = async (req, res) => {
     url: `https://t.me/${process.env.BOT_USERNAME}?start=login_${code}`,
     expires_in: 120,
   });
-};
+}

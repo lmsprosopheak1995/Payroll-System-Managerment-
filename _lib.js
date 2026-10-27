@@ -27,4 +27,7 @@ async function tg(method, payload) {
   return r.json().catch(() => null);
 }
 
-module.exports = { sb, rpc, tg };
+// បញ្ជីអថេរ Environment ដែលនៅខ្វះ (សម្រាប់ជួយរកបញ្ហា)
+const missingEnv = names => names.filter(n => !process.env[n]);
+
+module.exports = { sb, rpc, tg, missingEnv };

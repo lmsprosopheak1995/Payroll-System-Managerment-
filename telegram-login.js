@@ -31,13 +31,16 @@
   async function post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     const j = await r.json().catch(() => ({}));
+    if (!r.ok && !j.error) j.error = 'API ឆ្លើយកំហុស (HTTP ' + r.status + ')' + (r.status === 404 ? ' — រកមិនឃើញថត api/ លើ Vercel' : '');
     return { ok: r.ok, j };
   }
 
   async function start() {
     stop();
     $('tgQrBtn').disabled = true;
-    const { ok, j } = await post('/api/auth/qr-start');
+    let ok, j;
+    try { ({ ok, j } = await post('/api/auth/qr-start')); }
+    catch (e) { ok = false; j = { error: 'មិនអាចភ្ជាប់ទៅ API បាន៖ ' + e.message }; }
     if (!ok) { $('tgQrBtn').disabled = false; status(j.error || 'មិនអាចបង្កើត QR បាន', true); $('tgQrPanel').style.display = ''; return; }
 
     $('tgQrPanel').style.display = '';
