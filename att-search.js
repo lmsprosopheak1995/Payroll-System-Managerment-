@@ -42,10 +42,14 @@
     const sSun = stat('#0e7490'), sWh = stat('#0e7490'), sOt = stat('#b45309'), sPeople = stat('#475569');
     const summary = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;' }, sSun, sWh, sOt, sPeople);
     const tbody = h('tbody'), tfoot = h('tfoot');
+    const empBody = h('tbody');
+    const empTitle = h('div', { class: 'scan-hint', style: 'margin:0 0 4px;display:none;', text: '👥 សរុបតាមបុគ្គលិក (ចុចជួរដើម្បីចម្រាញ់តែអ្នកនោះ)' });
+    const empWrap = h('div', { class: 'table-wrap', style: 'max-height:22vh;overflow:auto;margin-bottom:10px;display:none;' }, h('table', null,
+      h('thead', null, h('tr', null, ['អត្តលេខ', 'ឈ្មោះ', 'ថ្ងៃអាទិត្យ', 'ម៉ោងធ្វើការ', 'OT (ម៉ោង)'].map(x => h('th', { text: x })))), empBody));
     const chip = (label, from, to) => h('button', { type: 'button', class: 'secondary', text: label, onclick: () => { tOut.value = from; tOut2.value = to || ''; cOut.checked = true; run(); } });
 
     function clearOut() {
-      tbody.textContent = ''; tfoot.textContent = '';
+      tbody.textContent = ''; tfoot.textContent = ''; empBody.textContent = ''; empWrap.style.display = 'none'; empTitle.style.display = 'none';
       sSun.textContent = ''; sWh.textContent = ''; sOt.textContent = ''; sPeople.textContent = '';
     }
 
@@ -54,7 +58,7 @@
       note.textContent = '';
       if (!cSun.checked && !cOt.checked && !cOut.checked) { info.textContent = 'សូមជ្រើសលក្ខខណ្ឌយ៉ាងតិចមួយ។'; clearOut(); return; }
       if (cSun.checked && cOt.checked) note.textContent = 'ℹ️ ថ្ងៃអាទិត្យគ្មាន OT — ពេលជ្រើសទាំងពីរ បង្ហាញ «ថ្ងៃអាទិត្យ ឬ ថ្ងៃដែលមាន OT»។';
-      const brkH = Math.max(0, Number(brk.value || 0));
+      const brkH = brk.value.trim() === '' ? 1 : Math.max(0, Number(brk.value) || 0);   // ទទេ = ១ ម៉ោង
       const brkMin = rec => {   // សម្រាកពិត = ចូលវិញ − ចេញបាយ · បើខ្វះស្កេន ប្រើម៉ោងសម្រាកដើម
         const bo = rec.breakOut || rec.break_out, bi = rec.breakIn || rec.break_in;
         if (bo && bi) { const d = toMin(bi) - toMin(bo); if (d >= 0) return { m: d, real: true }; }
@@ -102,6 +106,13 @@
           ? h('span', { text: 'អាទិត្យ', style: 'font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(14,116,144,.12);color:#0e7490;font-weight:700;' })
           : h('span', { text: r.ot ? fmtH(r.ot) : '—' })))));
 
+      if (people > 1) {
+        const by = {};
+        rows.forEach(r => { const e = by[r.id] || (by[r.id] = { code: r.code, name: r.name, sun: 0, wh: 0, ot: 0 }); if (r.sun) e.sun++; e.wh += r.wh; e.ot += r.ot; });
+        Object.keys(by).map(k => by[k]).sort((a, b) => String(a.code).localeCompare(String(b.code))).forEach(e => empBody.appendChild(h('tr', { style: 'cursor:pointer;', title: 'ចុចដើម្បីចម្រាញ់', onclick: () => { q.value = e.code; run(); } },
+          h('td', { text: e.code }), h('td', { text: e.name }), h('td', { text: String(e.sun) }), h('td', { text: fmtH(e.wh) }), h('td', { text: fmtH(e.ot) }))));
+        empWrap.style.display = ''; empTitle.style.display = '';
+      }
       tfoot.appendChild(h('tr', { style: 'font-weight:700;background:rgba(14,116,144,.08);' },
         h('td', { colspan: '6', text: 'សរុប · ' + rows.length + ' ជួរ · ' + sunDays + ' ថ្ងៃអាទិត្យ · ' + people + ' នាក់' }),
         h('td', { text: fmtH(whAll) }), h('td', { text: fmtH(otTotal) })));
@@ -120,6 +131,7 @@
       document.body.appendChild(a); a.click(); a.remove();
     }
 
+    const reset = () => { const [a, b] = monthRange(); dFrom.value = a; dTo.value = b; q.value = ''; cSun.checked = true; cOt.checked = false; cOut.checked = false; xOt.value = '2'; opSel.value = 'gt'; tOut.value = '19:00'; tOut2.value = ''; brk.value = '1'; run(); };
     const row = (...k) => h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;' }, ...k);
     const ov = h('div', { class: 'modal-overlay open' }, h('div', { class: 'modal', style: 'max-width:820px;width:96%;' },
       h('h2', { text: '🔎 ស្វែងរកអ្នកធ្វើការ ថ្ងៃអាទិត្យ / ថែមម៉ោង' }),
@@ -130,18 +142,27 @@
       row(h('span', { text: 'ម៉ោងសម្រាកដើម (ប្រើពេលគ្មានស្កេនចេញបាយ/ចូលវិញ)' }), brk, h('span', { text: 'ម៉ោង/ថ្ងៃ' })),
       row(h('span', { class: 'scan-hint', text: 'ជ្រើសរហ័ស៖' }), chip('ម៉ោង ៦ ល្ងាច', '18:00', '18:59'), chip('ម៉ោង ៧ យប់', '19:00', '19:59'), chip('ម៉ោង ៨ យប់', '20:00', '20:59'), chip('ក្រោយ ៧ យប់', '19:00', '')),
       row(h('button', { type: 'button', text: '🔎 ស្វែងរក', onclick: run }), h('button', { type: 'button', class: 'secondary', text: '⬇ នាំចេញ CSV', onclick: csv }),
+        h('button', { type: 'button', class: 'secondary', text: '↺ កំណត់ឡើងវិញ', onclick: reset }),
         h('button', { type: 'button', class: 'secondary', text: 'បិទ', onclick: () => ov.remove() })),
       info, note, summary,
       h('div', { class: 'scan-hint', style: 'margin:0 0 6px;', text: '* = គ្មានស្កេនចេញបាយ/ចូលវិញគ្រប់ ប្រើម៉ោងសម្រាកដើមជំនួស' }),
-      h('div', { class: 'table-wrap', style: 'max-height:50vh;overflow:auto;' }, h('table', null,
+      empTitle, empWrap,
+      h('div', { class: 'table-wrap', style: 'max-height:40vh;overflow:auto;' }, h('table', null,
         h('thead', null, h('tr', null, ['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'សម្រាក', 'ម៉ោងធ្វើការ', 'OT (ម៉ោង)'].map(x => h('th', { text: x })))), tbody, tfoot))));
     ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
     // LIVE SEARCH — ស្វែងរកភ្លាមៗពេលវាយ ឬប្តូរលក្ខខណ្ឌ (មិនបាច់ចុចប៊ូតុង)
+    brk.addEventListener('blur', () => { if (brk.value.trim() === '') { brk.value = '1'; run(); } });
     let liveT;
     const live = () => { clearTimeout(liveT); liveT = setTimeout(run, 200); };
     [q, xOt, brk].forEach(el => el.addEventListener('input', live));
     [dFrom, dTo, cSun, cOt, cOut, opSel, tOut, tOut2].forEach(el => el.addEventListener('change', run));
-    q.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+    // Enter → ស្វែងរកភ្លាម (បញ្ឈប់ event កុំឲ្យ script ផ្សេងរបស់ទំព័រចាប់យក)
+    q.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault(); e.stopPropagation();
+      clearTimeout(liveT); run();
+    }, true);
+    q.addEventListener('search', () => { clearTimeout(liveT); run(); });   // ប៊ូតុង × ក្នុងប្រអប់ស្វែងរក
     document.body.appendChild(ov);
     setTimeout(() => { q.value = ''; run(); }, 150);   // លុប autofill របស់ browser ហើយស្វែងរកម្តងទៀត
     run();
