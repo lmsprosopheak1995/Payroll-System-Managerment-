@@ -2,7 +2,7 @@
  * ប្រភពទិន្នន័យ៖ អថេរ holidays របស់ទំព័រ  { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }  (ដូចដែល scan-history.js ប្រើ)
  * ដំឡើង៖ ក្នុង index.html ក្រោម script.js  →  <script src="holiday-notice.js"></script>   (មិនកែ script.js / SQL)
  * · ប៊ូតុង 🎉 អណ្តែតនៅជ្រុងខាងស្តាំក្រោម (លាក់ពេលនៅទំព័រ login) បើក Pop-up បានគ្រប់ពេល
- * · Banner ស្លាយចុះពីលើ ១ ដង/ថ្ងៃ/ឧបករណ៍ ពេលមានថ្ងៃឈប់ក្នុងរយៈ ១៤ ថ្ងៃខាងមុខ (ចុច «មើលទាំងអស់» ដើម្បីបើក Pop-up ស្លាយតាមខែ)
+ * · Banner ស្លាយចុះពីលើ រាល់ពេលបើក/Refresh ទំព័រ ពេលមានថ្ងៃឈប់ក្នុងរយៈ ១៤ ថ្ងៃខាងមុខ (ចុច «មើលទាំងអស់» ដើម្បីបើក Pop-up ស្លាយតាមខែ)
  * · ប្រើក្តារចុច ← → Esc ឬអូសម្រាប់ទូរស័ព្ទ */
 (function () {
   'use strict';
@@ -216,11 +216,7 @@
       if (Object.keys(getHol()).length) {
         clearInterval(iv);
         ensureFab();
-        let seen = null; try { seen = localStorage.getItem(SEEN_KEY); } catch (_) { /* ignore */ }
-        if (seen !== todayStr() && upcoming().length && !overlay && !banner) {
-          try { localStorage.setItem(SEEN_KEY, todayStr()); } catch (_) { /* ignore */ }
-          showBanner();
-        }
+        if (upcoming().length && !overlay && !banner) showBanner();   // លោតរាល់ពេលបើក/Refresh ទំព័រ (ក្រោយ login)
       } else if (tries > 40) clearInterval(iv);   // ឈប់រង់ចាំក្រោយ ~២០ វិនាទី
     }, 500);
   }
