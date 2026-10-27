@@ -36,7 +36,7 @@ async function handle(req, res) {
     method: 'POST',
     body: { code, verify_number: verify, ip, user_agent: ua, expires_at: new Date(Date.now() + 120e3).toISOString() },
   });
-  if (!ins.ok) return res.status(500).json({ error: 'មិនអាចបង្កើតសំណើបាន (តើបានរត់ 01-telegram-login-requests.sql ហើយឬនៅ?)' });
+    if (!ins.ok) return res.status(500).json({ error: 'មិនអាចបង្កើតសំណើបាន (HTTP ' + ins.status + ': ' + JSON.stringify(ins.data) + ')' });
 
   return res.json({
     code,
