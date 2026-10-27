@@ -2,7 +2,7 @@
  * ប្រភពទិន្នន័យ៖ អថេរ holidays របស់ទំព័រ  { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }  (ដូចដែល scan-history.js ប្រើ)
  * ដំឡើង៖ ក្នុង index.html ក្រោម script.js  →  <script src="holiday-notice.js"></script>   (មិនកែ script.js / SQL)
  * · ប៊ូតុង 🎉 អណ្តែតនៅជ្រុងខាងស្តាំក្រោម (លាក់ពេលនៅទំព័រ login) បើក Pop-up បានគ្រប់ពេល
- * · លោតឡើងដោយស្វ័យប្រវត្តិ ១ ដង/ថ្ងៃ/ឧបករណ៍ ពេលមានថ្ងៃឈប់ក្នុងរយៈ ១៤ ថ្ងៃខាងមុខ
+ * · Banner ស្លាយចុះពីលើ ១ ដង/ថ្ងៃ/ឧបករណ៍ ពេលមានថ្ងៃឈប់ក្នុងរយៈ ១៤ ថ្ងៃខាងមុខ (ចុច «មើលទាំងអស់» ដើម្បីបើក Pop-up ស្លាយតាមខែ)
  * · ប្រើក្តារចុច ← → Esc ឬអូសម្រាប់ទូរស័ព្ទ */
 (function () {
   'use strict';
@@ -31,9 +31,20 @@
   function css() {
     if (document.getElementById('hn-style')) return;
     document.head.appendChild(h('style', { id: 'hn-style', text: `
-.hn-fab{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:900;width:44px;height:44px;border-radius:50%;border:0;cursor:pointer;font-size:22px;line-height:44px;padding:0;color:#fff;background:linear-gradient(135deg,#0e7490,#6366f1);box-shadow:0 6px 18px rgba(14,116,144,.35);}
+.hn-fab{position:fixed;right:14px;bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:900;width:44px;height:44px;border-radius:50%;border:0;cursor:pointer;font-size:22px;line-height:44px;padding:0;color:#fff;background:linear-gradient(135deg,#0e7490,#6366f1);box-shadow:0 6px 18px rgba(14,116,144,.35);}
 .hn-fab:hover{transform:scale(1.07);}
 .hn-fab .hn-dot{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;padding:0 4px;}
+.hn-banner{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2100;width:calc(100% - 24px);max-width:560px;box-sizing:border-box;display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:16px;color:#fff;background:linear-gradient(135deg,#0e7490,#6366f1);box-shadow:0 14px 40px rgba(15,23,42,.4);animation:hnslide .5s cubic-bezier(.2,.9,.3,1.2);}
+.hn-banner.hn-out{transform:translate(-50%,-160%);opacity:0;transition:all .35s ease;}
+@keyframes hnslide{from{transform:translate(-50%,-160%);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.hn-banner .hn-bi{font-size:28px;line-height:1;animation:hnwob 1.6s ease-in-out infinite;transform-origin:50% 80%;}
+@keyframes hnwob{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}}
+.hn-banner .hn-bt{flex:1;min-width:0;}
+.hn-banner .hn-bt b{display:block;font-size:.95rem;margin-bottom:2px;}
+.hn-banner .hn-bt div{font-size:.82rem;overflow-wrap:anywhere;}
+.hn-banner .hn-bt em{font-style:normal;font-weight:700;background:rgba(255,255,255,.22);padding:0 7px;border-radius:999px;margin-left:4px;font-size:.72rem;white-space:nowrap;}
+.hn-banner .hn-bb{border:0;cursor:pointer;border-radius:999px;padding:6px 12px;font-weight:700;font-size:.76rem;background:#fff;color:#0e7490;margin-top:2px;white-space:nowrap;}
+.hn-banner .hn-bx{border:0;cursor:pointer;background:rgba(255,255,255,.22);color:#fff;width:26px;height:26px;border-radius:50%;font-size:13px;flex:0 0 auto;}
 .hn-ov{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:14px;animation:hnfade .2s ease;}
 @keyframes hnfade{from{opacity:0}to{opacity:1}}
 .hn-box{width:100%;max-width:440px;max-height:92vh;display:flex;flex-direction:column;border-radius:20px;overflow:hidden;background:var(--card-bg,#fff);color:var(--text,#0f172a);box-shadow:0 24px 60px rgba(0,0,0,.35);animation:hnpop .25s ease;}
@@ -149,7 +160,35 @@
   }
 
   // ថ្ងៃឈប់ដែលនៅសល់ក្នុង ១៤ ថ្ងៃខាងមុខ (រួមទាំងថ្ងៃនេះ)
-  const upcoming = () => Object.keys(getHol()).filter(d => { const n = dayDiff(d); return n >= 0 && n <= 14; });
+  const upcoming = () => Object.keys(getHol()).filter(d => { const n = dayDiff(d); return n >= 0 && n <= 14; }).sort();
+
+  // ---- Banner ស្លាយចុះពីលើ ----
+  let banner = null, bannerT = null;
+  function closeBanner() {
+    clearTimeout(bannerT);
+    const b = banner; banner = null;
+    if (!b) return;
+    b.classList.add('hn-out');
+    setTimeout(() => b.remove(), 400);
+  }
+  function showBanner(force) {
+    closeBanner(); css();
+    const list = upcoming();
+    if (!list.length && !force) return;
+    const hol = getHol();
+    const todayIs = list.length && dayDiff(list[0]) === 0;
+    const lines = list.slice(0, 3).map(d => h('div', null,
+      KH_D[dow(d)] + ' ' + (+d.slice(8)) + ' ' + KH_M[+d.slice(5, 7) - 1] + ' · ' + String(hol[d] || 'ថ្ងៃបុណ្យ'), h('em', { text: chipText(d) })));
+    if (list.length > 3) lines.push(h('div', { text: '… និងមានថ្ងៃឈប់ ' + (list.length - 3) + ' ថ្ងៃទៀត' }));
+    if (!list.length) lines.push(h('div', { text: 'គ្មានថ្ងៃឈប់សម្រាកក្នុង ១៤ ថ្ងៃខាងមុខទេ។' }));
+    banner = h('div', { class: 'hn-banner', role: 'status' },
+      h('div', { class: 'hn-bi', text: '🎉' }),
+      h('div', { class: 'hn-bt' }, h('b', { text: todayIs ? 'ថ្ងៃនេះជាថ្ងៃឈប់សម្រាក!' : 'ដំណឹង៖ ថ្ងៃឈប់សម្រាកជិតមកដល់' }), lines),
+      h('button', { type: 'button', class: 'hn-bb', text: 'មើលទាំងអស់', onclick: () => { closeBanner(); open(); } }),
+      h('button', { type: 'button', class: 'hn-bx', text: '✕', title: 'បិទ', onclick: closeBanner }));
+    document.body.appendChild(banner);
+    bannerT = setTimeout(closeBanner, 30000);   // បិទខ្លួនឯងក្រោយ ៣០ វិនាទី
+  }
 
   function ensureFab() {
     css();
@@ -174,14 +213,15 @@
         clearInterval(iv);
         ensureFab();
         let seen = null; try { seen = localStorage.getItem(SEEN_KEY); } catch (_) { /* ignore */ }
-        if (seen !== todayStr() && upcoming().length && !overlay) {
+        if (seen !== todayStr() && upcoming().length && !overlay && !banner) {
           try { localStorage.setItem(SEEN_KEY, todayStr()); } catch (_) { /* ignore */ }
-          open();
+          showBanner();
         }
       } else if (tries > 40) clearInterval(iv);   // ឈប់រង់ចាំក្រោយ ~២០ វិនាទី
     }, 500);
   }
 
   window.openHolidayNotice = open;
+  window.showHolidayBanner = () => showBanner(true);   // សាកល្បង៖ វាយ showHolidayBanner() ក្នុង Console
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
