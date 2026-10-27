@@ -136,7 +136,11 @@
       h('div', { class: 'table-wrap', style: 'max-height:50vh;overflow:auto;' }, h('table', null,
         h('thead', null, h('tr', null, ['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'សម្រាក', 'ម៉ោងធ្វើការ', 'OT (ម៉ោង)'].map(x => h('th', { text: x })))), tbody, tfoot))));
     ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
-    brk.addEventListener('input', run);
+    // LIVE SEARCH — ស្វែងរកភ្លាមៗពេលវាយ ឬប្តូរលក្ខខណ្ឌ (មិនបាច់ចុចប៊ូតុង)
+    let liveT;
+    const live = () => { clearTimeout(liveT); liveT = setTimeout(run, 200); };
+    [q, xOt, brk].forEach(el => el.addEventListener('input', live));
+    [dFrom, dTo, cSun, cOt, cOut, opSel, tOut, tOut2].forEach(el => el.addEventListener('change', run));
     q.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
     document.body.appendChild(ov);
     setTimeout(() => { q.value = ''; run(); }, 150);   // លុប autofill របស់ browser ហើយស្វែងរកម្តងទៀត
