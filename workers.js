@@ -7,11 +7,12 @@
   const TYPES = { silo: 'កម្មករស៊ីឡូ', daily: 'កម្មករស៊ីថ្ងៃ', voucher: 'កម្មករប្រើបុង' };
   const FREQ = { daily: 'រាល់ថ្ងៃ', weekly: 'រាល់សប្តាហ៍', semimonthly: '២ ដង/ខែ', monthly: 'ខែម្តង' };
   const ERR = { forbidden: 'គ្មានសិទ្ធិ ឬ session ផុតកំណត់ — សូមចូលគណនីម្តងទៀត', invalid: 'ទិន្នន័យមិនត្រឹមត្រូវ', already_paid: 'ថ្ងៃនេះបានបើកប្រាក់រួចហើយ មិនអាចកែបានទេ',
-    nothing: 'គ្មានថ្ងៃដែលត្រូវបើកដល់កាលបរិច្ឆេទនេះទេ', unknown_qr: 'QR មិនស្គាល់ ឬកម្មករត្រូវបានបិទ', too_soon: 'ទើបស្កេនចូល — សូមរង់ចាំ ១ នាទីមុនស្កេនចេញ', already_done: 'បានស្កេនចូល-ចេញរួចហើយថ្ងៃនេះ' };
+    nothing: 'គ្មានថ្ងៃដែលត្រូវបើកដល់កាលបរិច្ឆេទនេះទេ', unknown_qr: 'QR មិនស្គាល់ ឬកម្មករត្រូវបានបិទ', bad_time: 'ម៉ោងចេញត្រូវក្រោយម៉ោងចូល', too_soon: 'ទើបស្កេនចូល — សូមរង់ចាំ ១ នាទីមុនស្កេនចេញ', already_done: 'បានស្កេនចូល-ចេញរួចហើយថ្ងៃនេះ' };
   const today = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);   // ម៉ោងភ្នំពេញ
   const addDays = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
   const tok = () => { try { return sessionStorage.getItem('app_session_token') || ''; } catch (_) { return ''; } };
   const money = (n, c) => c === 'KHR' ? Math.round(n).toLocaleString('en-US') + ' ៛' : '$' + Number(n).toFixed(2);
+  const pp = t => t ? new Date(new Date(t).getTime() + 7 * 3600e3).toISOString().slice(11, 16) : '';   // HH:MM ម៉ោងភ្នំពេញ
   const hm = t => t ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
   const say = m => (typeof customAlert === 'function' ? customAlert(m) : alert(m));
 
@@ -130,9 +131,14 @@
       const day = h('select', { disabled: paid ? '' : null }, [['1', 'មកពេញថ្ងៃ'], ['0.5', 'កន្លះថ្ងៃ'], ['0', 'អវត្តមាន']].map(o => h('option', { value: o[0], text: o[1] })));
       day.value = r.id ? String(Number(r.day_value)) : '0';
       const vo = w.type === 'voucher' ? h('input', { type: 'number', min: '0', step: '1', value: r.vouchers || 0, style: 'width:80px;', disabled: paid ? '' : null }) : null;
-      const sv = async () => { if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0 })) { day.style.outline = '2px solid var(--success)'; } };
-      day.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
-      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', { text: hm(r.check_in) }), h('td', { text: hm(r.check_out) }),
+      const inT = h('input', { type: 'time', value: pp(r.check_in), disabled: paid ? '' : null }), outT = h('input', { type: 'time', value: pp(r.check_out), disabled: paid ? '' : null });
+      const sv = async () => {
+        if (!r.id && day.value === '0' && (inT.value || outT.value)) day.value = '1';   // មានម៉ោង = មកធ្វើការ
+        if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0, p_in: inT.value, p_out: outT.value })) { day.style.outline = '2px solid var(--success)'; }
+        else render();
+      };
+      day.addEventListener('change', sv); inT.addEventListener('change', sv); outT.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
+      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', null, inT), h('td', null, outT),
         h('td', null, day), h('td', null, vo || '—'), h('td', { text: paid ? '✅ បានបើក' : '' }));
     });
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'ចូល', 'ចេញ', 'ថ្ងៃធ្វើការ', 'បុង', ''].map(t => h('th', { text: t })))),
