@@ -40,7 +40,7 @@
     dashboard: 'dashboard', employees: 'users', attendance: 'calendarCheck', scan: 'scan',
     requests: 'fileText', leavebalance: 'sun', notify: 'bell', feedback: 'message',
     shift: 'clock', monthly: 'wallet', payroll: 'wallet', deduct: 'wallet', bonus: 'gift',
-    ai: 'bot', setting: 'settings',
+    ai: 'bot', setting: 'settings', workers: 'users',
   };
   const PARENT_ICON = { Attendances: 'calendarCheck', Payrolls: 'wallet' };
 
