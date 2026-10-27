@@ -45,7 +45,7 @@
           employees.forEach(emp => {
             const rec = attendance[date][emp.id];
             if (!rec) return;
-            if (needle && !(String(emp.id).toLowerCase().includes(needle) || String(emp.name).toLowerCase().includes(needle))) return;
+            if (needle && !(typeof employeeMatchesSearch === 'function' ? employeeMatchesSearch(emp, needle) : (String(emp.username || '').toLowerCase().includes(needle) || String(emp.name).toLowerCase().includes(needle)))) return;
             const r = computeRow(emp, rec, date), worked = rec.status === 'present';
             if (cSun.checked && !(isSunday(date) && worked)) return;
             if (cOt.checked) {
@@ -53,21 +53,21 @@
               if (!(op === 'gt' ? o > minOt + 1e-9 : op === 'ge' ? o >= minOt - 1e-9 : Math.abs(o - minOt) <= 10 / 60 + 1e-9)) return;
             }
             if (cOut.checked && !(rec.checkout && hhmm(rec.checkout) >= tOut.value && (!tOut2.value || hhmm(rec.checkout) <= tOut2.value))) return;
-            rows.push({ date, id: emp.id, name: emp.name, ci: hhmm(rec.checkin), co: hhmm(rec.checkout), ot: r.otHours });
+            rows.push({ date, id: emp.id, code: emp.username || '-', name: emp.name, ci: hhmm(rec.checkin), co: hhmm(rec.checkout), ot: r.otHours });
           });
         });
       } catch (e) { info.textContent = 'មានបញ្ហា៖ ' + e.message; return; }
       const people = new Set(rows.map(r => r.id)).size, ot = rows.reduce((s, r) => s + r.ot, 0);
       info.textContent = rows.length ? 'រកឃើញ ' + rows.length + ' ជួរ · ' + people + ' នាក់ · OT សរុប ' + (typeof fmtHours === 'function' ? fmtHours(ot) : ot.toFixed(2)) + ' ម៉ោង' : 'មិនមានលទ្ធផលត្រូវនឹងលក្ខខណ្ឌទេ។';
       tbody.textContent = '';
-      rows.forEach(r => tbody.appendChild(h('tr', null, h('td', { text: r.date + (isSunday(r.date) ? ' (អាទិត្យ)' : '') }), h('td', { text: r.id }), h('td', { text: r.name }),
+      rows.forEach(r => tbody.appendChild(h('tr', null, h('td', { text: r.date + (isSunday(r.date) ? ' (អាទិត្យ)' : '') }), h('td', { text: r.code }), h('td', { text: r.name }),
         h('td', { text: r.ci || '—' }), h('td', { text: r.co || '—' }), h('td', { text: r.ot ? (typeof fmtHours === 'function' ? fmtHours(r.ot) : r.ot.toFixed(2)) : '—' }))));
     }
 
     function csv() {
       if (!rows.length) return;
       const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
-      const body = [['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'OT (ម៉ោង)']].concat(rows.map(r => [r.date, r.id, r.name, r.ci, r.co, r.ot.toFixed(2)])).map(r => r.map(esc).join(',')).join('\n');
+      const body = [['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'OT (ម៉ោង)']].concat(rows.map(r => [r.date, r.code, r.name, r.ci, r.co, r.ot.toFixed(2)])).map(r => r.map(esc).join(',')).join('\n');
       const a = h('a', { href: URL.createObjectURL(new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' })), download: 'attendance_search_' + dFrom.value + '_' + dTo.value + '.csv' });
       document.body.appendChild(a); a.click(); a.remove();
     }
