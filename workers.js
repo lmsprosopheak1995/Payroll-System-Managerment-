@@ -53,19 +53,22 @@
 
   // ---------------------------------------------------------------- បញ្ជីកម្មករ ----
   function viewList() {
-    const f = S.edit || { name: '', type: 'daily', rate: '', currency: 'USD', pay_freq: 'monthly', phone: '', active: true };
+    const f = S.edit || { name: '', type: 'daily', rate: '', currency: 'USD', pay_freq: 'monthly', phone: '', active: true, ot_rate: '', normal_hours: 8, ot_mult: 1.5 };
     const sel = (opts, val) => { const s = h('select'); Object.keys(opts).forEach(k => s.appendChild(h('option', { value: k, text: opts[k] }))); s.value = val; return s; };
     const inName = h('input', { type: 'text', placeholder: 'ឈ្មោះកម្មករ *', value: f.name }), inType = sel(TYPES, f.type),
       inRate = h('input', { type: 'number', min: '0', step: '0.01', placeholder: 'ថ្លៃឈ្នួល/ថ្ងៃ *', value: f.rate }), inCur = sel({ USD: '$ ដុល្លារ', KHR: '៛ រៀល' }, f.currency),
-      inFreq = sel(FREQ, f.pay_freq), inPhone = h('input', { type: 'text', placeholder: 'លេខទូរស័ព្ទ', value: f.phone });
+      inFreq = sel(FREQ, f.pay_freq), inPhone = h('input', { type: 'text', placeholder: 'លេខទូរស័ព្ទ', value: f.phone }),
+      inOt = h('input', { type: 'number', min: '0', step: '0.01', placeholder: 'អត្រា OT/ម៉ោង (ទទេ = គណនាស្វ័យប្រវត្តិ)', title: 'ទទេ = ថ្លៃថ្ងៃ ÷ ម៉ោងធម្មតា × មេគុណ', value: f.ot_rate }),
+      inNh = h('input', { type: 'number', min: '1', max: '24', step: '0.5', placeholder: 'ម៉ោងធម្មតា/ថ្ងៃ (8)', value: f.normal_hours }), inMult = h('input', { type: 'number', min: '0', step: '0.1', placeholder: 'មេគុណ OT (1.5)', value: f.ot_mult });
     const save = h('button', { type: 'button', text: S.edit ? '💾 រក្សាទុក' : '➕ បន្ថែមកម្មករ', onclick: async () => {
-      const r = await api('wk_save', { p_w: { id: f.id || null, name: inName.value, type: inType.value, rate: inRate.value, currency: inCur.value, pay_freq: inFreq.value, phone: inPhone.value, active: f.active } });
+      const r = await api('wk_save', { p_w: { id: f.id || null, name: inName.value, type: inType.value, rate: inRate.value, currency: inCur.value, pay_freq: inFreq.value, phone: inPhone.value, active: f.active, ot_rate: inOt.value, normal_hours: inNh.value, ot_mult: inMult.value } });
       if (r) { S.edit = null; render(); } } });
     body.appendChild(h('div', { class: 'scan-result-card' }, h('h3', { class: 'sec-title', text: S.edit ? '✏️ កែកម្មករ ' + f.code : '➕ បន្ថែមកម្មករថ្មី' }),
-      h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;' }, inName, inType, inRate, inCur, inFreq, inPhone),
+      h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;' }, inName, inType, inRate, inCur, inFreq, inPhone, inOt, inNh, inMult),
       h('div', { style: 'margin-top:12px;display:flex;gap:8px;' }, save, S.edit ? h('button', { class: 'secondary', type: 'button', text: 'បោះបង់', onclick: () => { S.edit = null; render(); } }) : null)));
     const rows = S.workers.map(w => h('tr', null,
       h('td', { text: w.code }), h('td', { text: w.name }), h('td', { text: TYPES[w.type] }), h('td', { text: money(w.rate, w.currency) + '/ថ្ងៃ' }),
+      h('td', { text: w.ot_rate != null ? money(w.ot_rate, w.currency) + '/ម៉ោង' : '÷' + w.normal_hours + ' × ' + w.ot_mult }),
       h('td', { text: FREQ[w.pay_freq] }), h('td', { text: w.active ? '✅ សកម្ម' : '⛔ បិទ' }),
       h('td', null, h('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;' },
         h('button', { class: 'secondary', type: 'button', text: '✏️ កែ', onclick: () => { S.edit = w; render(); } }),
@@ -73,8 +76,8 @@
         h('button', { class: 'secondary', type: 'button', text: w.active ? '⛔ បិទ' : '✅ បើក', onclick: async () => { if (await api('wk_save', { p_w: Object.assign({}, w, { active: !w.active }) })) render(); } })))));
     if (USE_QR) body.appendChild(h('div', { style: 'margin:12px 0;' }, h('button', { class: 'secondary', type: 'button', text: '🖨 បោះពុម្ពកាត QR (កម្មករសកម្មទាំងអស់)', onclick: () => printCards(S.workers.filter(w => w.active)) })));
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null,
-      h('thead', null, h('tr', null, ['លេខកូដ', 'ឈ្មោះ', 'ប្រភេទ', 'ថ្លៃឈ្នួល', 'បើកប្រាក់', 'ស្ថានភាព', ''].map(t => h('th', { text: t })))),
-      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានកម្មករទេ' }))))));
+      h('thead', null, h('tr', null, ['លេខកូដ', 'ឈ្មោះ', 'ប្រភេទ', 'ថ្លៃឈ្នួល', 'OT/ម៉ោង', 'បើកប្រាក់', 'ស្ថានភាព', ''].map(t => h('th', { text: t })))),
+      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '8', text: 'មិនទាន់មានកម្មករទេ' }))))));
   }
 
   function printCards(list) {
@@ -131,19 +134,20 @@
       const day = h('select', { disabled: paid ? '' : null }, [['1', 'មកពេញថ្ងៃ'], ['0.5', 'កន្លះថ្ងៃ'], ['0', 'អវត្តមាន']].map(o => h('option', { value: o[0], text: o[1] })));
       day.value = r.id ? String(Number(r.day_value)) : '0';
       const vo = w.type === 'voucher' ? h('input', { type: 'number', min: '0', step: '1', value: r.vouchers || 0, style: 'width:80px;', disabled: paid ? '' : null }) : null;
+      const ot = h('input', { type: 'number', min: '0', max: '24', step: '0.5', value: r.ot_hours || 0, style: 'width:70px;', disabled: paid ? '' : null });
       const inT = h('input', { type: 'time', value: pp(r.check_in), disabled: paid ? '' : null }), outT = h('input', { type: 'time', value: pp(r.check_out), disabled: paid ? '' : null });
       const sv = async () => {
         if (!r.id && day.value === '0' && (inT.value || outT.value)) day.value = '1';   // មានម៉ោង = មកធ្វើការ
-        if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0, p_in: inT.value, p_out: outT.value })) { day.style.outline = '2px solid var(--success)'; }
+        if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0, p_in: inT.value, p_out: outT.value, p_ot: Number(ot.value || 0) })) { day.style.outline = '2px solid var(--success)'; }
         else render();
       };
-      day.addEventListener('change', sv); inT.addEventListener('change', sv); outT.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
+      day.addEventListener('change', sv); inT.addEventListener('change', sv); outT.addEventListener('change', sv); ot.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
       return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', null, inT), h('td', null, outT),
-        h('td', null, day), h('td', null, vo || '—'), h('td', { text: paid ? '✅ បានបើក' : '' }));
+        h('td', null, day), h('td', null, vo || '—'), h('td', null, ot), h('td', { text: paid ? '✅ បានបើក' : '' }));
     });
-    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'ចូល', 'ចេញ', 'ថ្ងៃធ្វើការ', 'បុង', ''].map(t => h('th', { text: t })))),
-      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
-    body.appendChild(h('p', { class: 'scan-hint', text: 'កម្មករប្រើបុង៖ ត្រូវមានបុងយ៉ាងតិច ១ ទើបថ្ងៃនោះរាប់ជាថ្ងៃដែលត្រូវបើកប្រាក់។ ថ្ងៃដែលបានបើកប្រាក់រួចមិនអាចកែបានទេ។' }));
+    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'ចូល', 'ចេញ', 'ថ្ងៃធ្វើការ', 'បុង', 'OT (ម៉ោង)', ''].map(t => h('th', { text: t })))),
+      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '8', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
+    body.appendChild(h('p', { class: 'scan-hint', text: 'កម្មករប្រើបុង៖ ត្រូវមានបុងយ៉ាងតិច ១ ទើបថ្ងៃនោះរាប់ជាថ្ងៃដែលត្រូវបើកប្រាក់។ ថ្ងៃដែលបានបើកប្រាក់រួចមិនអាចកែបានទេ។ OT រាប់តែថ្ងៃដែលត្រូវបើកប្រាក់។' }));
   }
 
   // ---------------------------------------------------------------- បើកប្រាក់ ----
@@ -159,17 +163,17 @@
       h('button', { class: 'secondary', type: 'button', text: 'ម្សិលមិញ', onclick: () => setUp(addDays(t, -1)) }),
       h('button', { class: 'secondary', type: 'button', text: 'ថ្ងៃទី ១៥ / ចុងខែមុន', onclick: () => setUp(mid) })));
     const rows = S.workers.filter(w => w.active).map(w => { const r = due[w.id] || { days: 0, amount: 0 };
-      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', { text: FREQ[w.pay_freq] }), h('td', { text: String(r.days) }),
+      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', { text: FREQ[w.pay_freq] }), h('td', { text: String(r.days) }), h('td', { text: String(r.ot_hours || 0) }),
         h('td', null, h('b', { text: money(r.amount, w.currency) })),
         h('td', null, h('button', { type: 'button', text: '💵 បើកប្រាក់', disabled: r.days > 0 ? null : '', onclick: async () => {
-          if (!confirm('បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ · ' + money(r.amount, w.currency) + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
-          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { say('បានបើកប្រាក់ ' + money(p.amount, p.currency) + ' (' + p.days + ' ថ្ងៃ)'); render(); } } }))); });
-    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'បើកប្រាក់', 'ថ្ងៃមិនទាន់បើក', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
-      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '6', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
+          if (!confirm('បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ' + (r.ot_hours ? ' + OT ' + r.ot_hours + ' ម៉ោង' : '') + ' · ' + money(r.amount, w.currency) + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
+          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { say('បានបើកប្រាក់ ' + money(p.amount, p.currency) + ' (' + p.days + ' ថ្ងៃ' + (p.ot_hours ? ' + OT ' + p.ot_hours + ' ម៉ោង' : '') + ')'); render(); } } }))); });
+    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'បើកប្រាក់', 'ថ្ងៃមិនទាន់បើក', 'OT (ម៉ោង)', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
+      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
     body.appendChild(h('h3', { class: 'sec-title', style: 'margin-top:18px;', text: '🧾 ប្រវត្តិបើកប្រាក់ (៤០ ចុងក្រោយ)' }));
-    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កាលបរិច្ឆេទបើក', 'កម្មករ', 'ដល់ថ្ងៃ', 'ថ្ងៃ', 'ទឹកប្រាក់'].map(x => h('th', { text: x })))),
+    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កាលបរិច្ឆេទបើក', 'កម្មករ', 'ដល់ថ្ងៃ', 'ថ្ងៃ', 'OT (ម៉ោង)', 'ទឹកប្រាក់'].map(x => h('th', { text: x })))),
       h('tbody', null, hist.rows.length ? hist.rows.map(p => h('tr', null, h('td', { text: new Date(p.paid_at).toLocaleString('en-GB') }), h('td', { text: p.name + ' (' + p.code + ')' }),
-        h('td', { text: p.period_to }), h('td', { text: String(p.days) }), h('td', { text: money(p.amount, p.currency) }))) : h('tr', null, h('td', { colspan: '5', text: 'មិនទាន់មានការបើកប្រាក់ទេ' }))))));
+        h('td', { text: p.period_to }), h('td', { text: String(p.days) }), h('td', { text: String(p.ot_hours || 0) }), h('td', { text: money(p.amount, p.currency) }))) : h('tr', null, h('td', { colspan: '6', text: 'មិនទាន់មានការបើកប្រាក់ទេ' }))))));
   }
 
   // ---------------------------------------------------------------- ដំឡើងម៉ឺនុយ + ទំព័រ ----
