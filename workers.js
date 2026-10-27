@@ -38,6 +38,8 @@
   let scanner = null, lastScan = { t: '', at: 0 };
   let root, body;
 
+  // សារពេលគ្មានកម្មករសកម្ម៖ ប្រាប់ថាមានកម្មករបិទប៉ុន្មាននាក់ ដើម្បីងាយបើកឡើងវិញ
+  const noActive = () => { const n = S.workers.filter(w => !w.active).length; return 'មិនទាន់មានកម្មករសកម្មទេ' + (n ? ' — មានកម្មករបិទ ' + n + ' នាក់ សូមចូល «បញ្ជីកម្មករ» ហើយចុច ✅ បើក' : ' — សូមបន្ថែមក្នុង «បញ្ជីកម្មករ»'); };
   const SUBS = [['list', '👷 បញ្ជីកម្មករ'], ['scan', '📷 ស្កេន QR'], ['att', '🗓 វត្តមាន'], ['pay', '💵 បើកប្រាក់']].filter(s => USE_QR || s[0] !== 'scan');
 
   async function stopScan() { if (scanner) { try { await scanner.stop(); scanner.clear(); } catch (_) { /* ignore */ } scanner = null; } }
@@ -135,19 +137,26 @@
       day.value = r.id ? String(Number(r.day_value)) : '0';
       const vo = w.type === 'voucher' ? h('input', { type: 'number', min: '0', step: '1', value: r.vouchers || 0, style: 'width:80px;', disabled: paid ? '' : null }) : null;
       const ot = h('input', { type: 'number', min: '0', max: '24', step: '0.5', value: r.ot_hours || 0, style: 'width:70px;', disabled: paid ? '' : null });
+      // មេគុណ OT ប្រចាំថ្ងៃ (ទទេ = ប្រើមេគុណរបស់កម្មករ) · មិនប្រើ បើកម្មករមានអត្រា OT/ម៉ោង កំណត់ជាប់
+      let otm = null;
+      if (w.ot_rate == null) {
+        otm = h('select', { disabled: paid ? '' : null }, [['', 'លំនាំដើម ×' + w.ot_mult], ['1', '×1'], ['1.5', '×1.5'], ['2', '×2'], ['3', '×3']].map(o => h('option', { value: o[0], text: o[1] })));
+        if (r.ot_mult != null && !Array.from(otm.options).some(o => Number(o.value) === Number(r.ot_mult) && o.value !== '')) otm.appendChild(h('option', { value: String(r.ot_mult), text: '×' + r.ot_mult }));
+        otm.value = r.ot_mult != null ? String(Number(r.ot_mult)) : '';
+      }
       const inT = h('input', { type: 'time', value: pp(r.check_in), disabled: paid ? '' : null }), outT = h('input', { type: 'time', value: pp(r.check_out), disabled: paid ? '' : null });
       const sv = async () => {
         if (!r.id && day.value === '0' && (inT.value || outT.value)) day.value = '1';   // មានម៉ោង = មកធ្វើការ
-        if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0, p_in: inT.value, p_out: outT.value, p_ot: Number(ot.value || 0) })) { day.style.outline = '2px solid var(--success)'; }
+        if (await api('wk_att_set', { p_worker: w.id, p_date: S.date, p_day: Number(day.value), p_vouchers: vo ? Number(vo.value || 0) : 0, p_in: inT.value, p_out: outT.value, p_ot: Number(ot.value || 0), p_otm: otm ? otm.value : null })) { day.style.outline = '2px solid var(--success)'; }
         else render();
       };
-      day.addEventListener('change', sv); inT.addEventListener('change', sv); outT.addEventListener('change', sv); ot.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
+      day.addEventListener('change', sv); inT.addEventListener('change', sv); outT.addEventListener('change', sv); ot.addEventListener('change', sv); if (otm) otm.addEventListener('change', sv); if (vo) vo.addEventListener('change', sv);
       return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', null, inT), h('td', null, outT),
-        h('td', null, day), h('td', null, vo || '—'), h('td', null, ot), h('td', { text: paid ? '✅ បានបើក' : '' }));
+        h('td', null, day), h('td', null, vo || '—'), h('td', null, ot), h('td', null, otm || '—'), h('td', { text: paid ? '✅ បានបើក' : '' }));
     });
-    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'ចូល', 'ចេញ', 'ថ្ងៃធ្វើការ', 'បុង', 'OT (ម៉ោង)', ''].map(t => h('th', { text: t })))),
-      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '8', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
-    body.appendChild(h('p', { class: 'scan-hint', text: 'កម្មករប្រើបុង៖ ត្រូវមានបុងយ៉ាងតិច ១ ទើបថ្ងៃនោះរាប់ជាថ្ងៃដែលត្រូវបើកប្រាក់។ ថ្ងៃដែលបានបើកប្រាក់រួចមិនអាចកែបានទេ។ OT រាប់តែថ្ងៃដែលត្រូវបើកប្រាក់។' }));
+    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'ចូល', 'ចេញ', 'ថ្ងៃធ្វើការ', 'បុង', 'OT (ម៉ោង)', 'មេគុណ OT', ''].map(t => h('th', { text: t })))),
+      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '9', text: noActive() }))))));
+    body.appendChild(h('p', { class: 'scan-hint', text: 'កម្មករប្រើបុង៖ ត្រូវមានបុងយ៉ាងតិច ១ ទើបថ្ងៃនោះរាប់ជាថ្ងៃដែលត្រូវបើកប្រាក់។ ថ្ងៃដែលបានបើកប្រាក់រួចមិនអាចកែបានទេ។ OT រាប់តែថ្ងៃដែលត្រូវបើកប្រាក់។ មេគុណ OT «លំនាំដើម» = ប្រើមេគុណរបស់កម្មករ (កម្មករមានអត្រា OT/ម៉ោងកំណត់ជាប់ មិនប្រើមេគុណប្រចាំថ្ងៃ)។' }));
   }
 
   // ---------------------------------------------------------------- បើកប្រាក់ ----
@@ -167,11 +176,11 @@
         h('td', null, h('b', { text: money(r.amount, w.currency) })),
         h('td', null, h('button', { type: 'button', text: '💵 បើកប្រាក់', disabled: r.days > 0 ? null : '', onclick: async () => {
           if (!confirm('បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ' + (r.ot_hours ? ' + OT ' + r.ot_hours + ' ម៉ោង' : '') + ' · ' + money(r.amount, w.currency) + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
-          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { const done = { name: w.name, code: w.code, paid_at: new Date().toISOString(), period_to: S.upto, days: p.days, ot_hours: p.ot_hours, amount: p.amount, currency: p.currency };
+          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { const done = { name: w.name, code: w.code, paid_at: new Date().toISOString(), period_to: S.upto, days: p.days, ot_hours: p.ot_hours, amount: p.amount, currency: p.currency, day_rate: p.day_rate, ot_rate_used: p.ot_rate_used };
             if (confirm('បានបើកប្រាក់ ' + money(p.amount, p.currency) + ' (' + p.days + ' ថ្ងៃ' + (p.ot_hours ? ' + OT ' + p.ot_hours + ' ម៉ោង' : '') + ')។ បោះពុម្ពបង្កាន់ដៃឬទេ?')) printReceipt(done);
             render(); } } }))); });
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'បើកប្រាក់', 'ថ្ងៃមិនទាន់បើក', 'OT (ម៉ោង)', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
-      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
+      h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: noActive() }))))));
     body.appendChild(h('h3', { class: 'sec-title', style: 'margin-top:18px;', text: '🧾 ប្រវត្តិបើកប្រាក់ (៤០ ចុងក្រោយ)' }));
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កាលបរិច្ឆេទបើក', 'កម្មករ', 'ដល់ថ្ងៃ', 'ថ្ងៃ', 'OT (ម៉ោង)', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
       h('tbody', null, hist.rows.length ? hist.rows.map(p => h('tr', null, h('td', { text: new Date(p.paid_at).toLocaleString('en-GB') }), h('td', { text: p.name + ' (' + p.code + ')' }),
@@ -185,10 +194,14 @@
     const otr = w.ot_rate != null ? Number(w.ot_rate) : (w.rate && w.normal_hours ? w.rate / w.normal_hours * w.ot_mult : 0);
     const days = Number(p.days), ot = Number(p.ot_hours || 0);
     // បង្ហាញលម្អិតតែពេលអត្រាបច្ចុប្បន្នត្រូវនឹងទឹកប្រាក់ដែលបានបើក (អត្រាអាចបានប្តូរក្រោយ)
-    const detail = w.rate != null && Math.abs(days * w.rate + ot * otr - Number(p.amount)) < 0.01;
+    const dr = p.day_rate != null ? Number(p.day_rate) : w.rate, orr = p.ot_rate_used != null ? Number(p.ot_rate_used) : otr;   // អត្រាដែលបានរក្សាទុកពេលបើក (បើមាន)
+    const detail = dr != null && Math.abs(days * dr + ot * orr - Number(p.amount)) < 0.01;
     const row = (a, b) => '<tr><td>' + a + '</td><td class="r">' + b + '</td></tr>';
-    const lines = detail
-      ? row('ថ្ងៃធ្វើការ ' + days + ' × ' + money(w.rate, p.currency), money(days * w.rate, p.currency)) + (ot ? row('ថែមម៉ោង ' + ot + ' ម៉ោង × ' + money(otr, p.currency), money(ot * otr, p.currency)) : '')
+    const mixed = p.day_rate != null && p.ot_rate_used == null && ot > 0;   // OT មានមេគុណខុសគ្នាច្រើនថ្ងៃ
+    const lines = mixed
+      ? row('ថ្ងៃធ្វើការ ' + days + ' × ' + money(dr, p.currency), money(days * dr, p.currency)) + row('ថែមម៉ោង ' + ot + ' ម៉ោង (មេគុណខុសគ្នា)', money(Number(p.amount) - days * dr, p.currency))
+      : detail
+      ? row('ថ្ងៃធ្វើការ ' + days + ' × ' + money(dr, p.currency), money(days * dr, p.currency)) + (ot ? row('ថែមម៉ោង ' + ot + ' ម៉ោង × ' + money(orr, p.currency), money(ot * orr, p.currency)) : '')
       : row('ថ្ងៃធ្វើការ', days + ' ថ្ងៃ') + (ot ? row('ថែមម៉ោង', ot + ' ម៉ោង') : '');
     const win = window.open('', '_blank');
     if (!win) { say('សូមអនុញ្ញាត pop-up ដើម្បីបោះពុម្ព'); return; }
