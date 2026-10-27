@@ -29,11 +29,12 @@
     const dFrom = h('input', { type: 'date', value: from0 }), dTo = h('input', { type: 'date', value: to0 });
     const cSun = h('input', { type: 'checkbox', checked: '' }), cOt = h('input', { type: 'checkbox' }), cOut = h('input', { type: 'checkbox' });
     const xOt = h('input', { type: 'number', min: '0', step: '0.5', value: '2', style: 'width:70px;' });
-    const tOut = h('input', { type: 'time', value: '19:00' });
+    const tOut = h('input', { type: 'time', value: '19:00' }), tOut2 = h('input', { type: 'time', value: '' });   // ម៉ោងចេញ ចាប់ពី · ដល់ (ទទេ = មិនកំណត់ដែនកំណត់លើ)
+    const opSel = h('select', null, [['gt', 'លើសពី (>)'], ['ge', 'ចាប់ពី (≥)'], ['eq', 'ប្រហែលស្មើ (±១០ នាទី)']].map(o => h('option', { value: o[0], text: o[1] })));
     const q = h('input', { type: 'search', name: 'att-find-q', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: '', placeholder: 'ស្វែងរកតាមអត្តលេខ ឬ ឈ្មោះ... (ទទេ = បុគ្គលិកទាំងអស់)', style: 'min-width:240px;' });
     const info = h('div', { class: 'scan-hint', style: 'margin:10px 0;' });
     const tbody = h('tbody');
-    const chip = (label, v) => h('button', { type: 'button', class: 'secondary', text: label, onclick: () => { tOut.value = v; cOut.checked = true; run(); } });
+    const chip = (label, from, to) => h('button', { type: 'button', class: 'secondary', text: label, onclick: () => { tOut.value = from; tOut2.value = to || ''; cOut.checked = true; run(); } });
 
     function run() {
       rows = [];
@@ -47,8 +48,11 @@
             if (needle && !(String(emp.id).toLowerCase().includes(needle) || String(emp.name).toLowerCase().includes(needle))) return;
             const r = computeRow(emp, rec, date), worked = rec.status === 'present';
             if (cSun.checked && !(isSunday(date) && worked)) return;
-            if (cOt.checked && !(r.otHours > minOt + 1e-9)) return;
-            if (cOut.checked && !(rec.checkout && hhmm(rec.checkout) >= tOut.value)) return;
+            if (cOt.checked) {
+              const o = r.otHours, op = opSel.value;
+              if (!(op === 'gt' ? o > minOt + 1e-9 : op === 'ge' ? o >= minOt - 1e-9 : Math.abs(o - minOt) <= 10 / 60 + 1e-9)) return;
+            }
+            if (cOut.checked && !(rec.checkout && hhmm(rec.checkout) >= tOut.value && (!tOut2.value || hhmm(rec.checkout) <= tOut2.value))) return;
             rows.push({ date, id: emp.id, name: emp.name, ci: hhmm(rec.checkin), co: hhmm(rec.checkout), ot: r.otHours });
           });
         });
@@ -73,8 +77,9 @@
       h('h2', { text: '🔎 ស្វែងរកអ្នកធ្វើការ ថ្ងៃអាទិត្យ / ថែមម៉ោង' }),
       row(h('span', { text: 'ពីថ្ងៃ' }), dFrom, h('span', { text: 'ដល់' }), dTo, q),
       row(h('label', null, cSun, ' ធ្វើការថ្ងៃអាទិត្យ')),
-      row(h('label', null, cOt, ' ថែមម៉ោង (OT) លើសពី '), xOt, h('span', { text: 'ម៉ោង' })),
-      row(h('label', null, cOut, ' ម៉ោងចេញ ចាប់ពី '), tOut, chip('១៩:០០', '19:00'), chip('២០:០០', '20:00')),
+      row(h('label', null, cOt, ' ថែមម៉ោង (OT) '), opSel, xOt, h('span', { text: 'ម៉ោង' })),
+      row(h('label', null, cOut, ' ម៉ោងចេញ ចាប់ពី '), tOut, h('span', { text: 'ដល់' }), tOut2),
+      row(h('span', { class: 'scan-hint', text: 'ជ្រើសរហ័ស៖' }), chip('ម៉ោង ៦ ល្ងាច', '18:00', '18:59'), chip('ម៉ោង ៧ យប់', '19:00', '19:59'), chip('ម៉ោង ៨ យប់', '20:00', '20:59'), chip('ក្រោយ ៧ យប់', '19:00', '')),
       row(h('button', { type: 'button', text: '🔎 ស្វែងរក', onclick: run }), h('button', { type: 'button', class: 'secondary', text: '⬇ នាំចេញ CSV', onclick: csv }),
         h('button', { type: 'button', class: 'secondary', text: 'បិទ', onclick: () => ov.remove() })),
       info,
