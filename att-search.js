@@ -30,7 +30,7 @@
     const [from0, to0] = monthRange();
     let rows = [];
     const dFrom = h('input', { type: 'date', value: from0 }), dTo = h('input', { type: 'date', value: to0 });
-    const cSun = h('input', { type: 'checkbox', checked: '' }), cOt = h('input', { type: 'checkbox' }), cOut = h('input', { type: 'checkbox' }), cMiss = h('input', { type: 'checkbox' });
+    const cSun = h('input', { type: 'checkbox', checked: '' }), cOt = h('input', { type: 'checkbox' }), cOut = h('input', { type: 'checkbox' }), cMiss = h('input', { type: 'checkbox' }), cLate = h('input', { type: 'checkbox' });
     const xOt = h('input', { type: 'number', min: '0', step: '0.5', value: '2', style: 'width:70px;' });
     const tOut = h('input', { type: 'time', value: '19:00' }), tOut2 = h('input', { type: 'time', value: '' });   // ម៉ោងចេញ ចាប់ពី · ដល់ (ទទេ = មិនកំណត់ដែនកំណត់លើ)
     const opSel = h('select', null, [['gt', 'លើសពី (>)'], ['ge', 'ចាប់ពី (≥)'], ['eq', 'ប្រហែលស្មើ (±១០ នាទី)']].map(o => h('option', { value: o[0], text: o[1] })));
@@ -39,8 +39,8 @@
     const info = h('div', { class: 'scan-hint', style: 'margin:10px 0 4px;' });
     const note = h('div', { class: 'scan-hint', style: 'margin:0 0 8px;color:#b45309;' });
     const stat = (color) => h('span', { style: 'padding:4px 10px;border-radius:999px;font-weight:700;background:rgba(0,0,0,.05);color:' + color + ';' });
-    const sSun = stat('#0e7490'), sWh = stat('#0e7490'), sOt = stat('#b45309'), sPeople = stat('#475569');
-    const summary = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;' }, sSun, sWh, sOt, sPeople);
+    const sSun = stat('#0e7490'), sWh = stat('#0e7490'), sOt = stat('#b45309'), sPeople = stat('#475569'), sLate = stat('#b91c1c');
+    const summary = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;' }, sSun, sWh, sOt, sLate, sPeople);
     const tbody = h('tbody'), tfoot = h('tfoot');
     const empBody = h('tbody');
     const empTitle = h('div', { class: 'scan-hint', style: 'margin:0 0 4px;display:none;', text: '👥 សរុបតាមបុគ្គលិក (ចុចជួរដើម្បីចម្រាញ់តែអ្នកនោះ)' });
@@ -70,13 +70,13 @@
 
     function clearOut() {
       tbody.textContent = ''; tfoot.textContent = ''; empBody.textContent = ''; empWrap.style.display = 'none'; empTitle.style.display = 'none';
-      sSun.textContent = ''; sWh.textContent = ''; sOt.textContent = ''; sPeople.textContent = '';
+      sSun.textContent = ''; sWh.textContent = ''; sOt.textContent = ''; sLate.textContent = ''; sPeople.textContent = '';
     }
 
     function run() {
       rows = [];
       note.textContent = '';
-      if (!cSun.checked && !cOt.checked && !cOut.checked && !cMiss.checked) { info.textContent = 'សូមជ្រើសលក្ខខណ្ឌយ៉ាងតិចមួយ។'; clearOut(); return; }
+      if (!cSun.checked && !cOt.checked && !cOut.checked && !cMiss.checked && !cLate.checked) { info.textContent = 'សូមជ្រើសលក្ខខណ្ឌយ៉ាងតិចមួយ។'; clearOut(); return; }
       if (cSun.checked && cOt.checked) note.textContent = 'ℹ️ ថ្ងៃអាទិត្យគ្មាន OT — ពេលជ្រើសទាំងពីរ បង្ហាញ «ថ្ងៃអាទិត្យ ឬ ថ្ងៃដែលមាន OT»។';
       const brkH = brk.value.trim() === '' ? 1 : Math.max(0, Number(brk.value) || 0);   // ទទេ = ១ ម៉ោង
       const brkMin = rec => {   // សម្រាកពិត = ចូលវិញ − ចេញបាយ · បើខ្វះស្កេន ប្រើម៉ោងសម្រាកដើម
@@ -85,6 +85,11 @@
         return { m: brkH * 60, real: false };
       };
       const workH = rec => { if (!rec.checkin || !rec.checkout) return 0; let m = toMin(rec.checkout) - toMin(rec.checkin); if (m < 0) m += 1440; return Math.max(0, (m - brkMin(rec).m) / 60); };
+      const lateOf = (emp, rec) => {   // នាទីយឺត ដូច scan-history.js (ប្រើម៉ោងវេនរបស់បុគ្គលិក)
+        try { const st = lateStartMinutes(getEmpShift(emp.id)); if (st != null && rec.checkin) { const m = toMin(rec.checkin); if (m > st) return m - st; } } catch (_) { /* គ្មានវេន */ }
+        return 0;
+      };
+      if (cLate.checked && (typeof lateStartMinutes !== 'function' || typeof getEmpShift !== 'function')) note.textContent = '⚠️ រកមិនឃើញមុខងារវេនការងារ — មិនអាចគណនាម៉ោងយឺតបានទេ។';
       const f = dFrom.value, t = dTo.value, needle = q.value.trim().toLowerCase(), minOt = Number(xOt.value || 0), op = opSel.value;
       try {
         Object.keys(attendance).filter(d => d >= f && d <= t).sort().forEach(date => {
@@ -100,7 +105,8 @@
             if ((cSun.checked || cOt.checked) && !(mSun || mOt)) return;   // «ឬ» រវាងអាទិត្យ និង OT
             if (cOut.checked && !(rec.checkout && hhmm(rec.checkout) >= tOut.value && (!tOut2.value || hhmm(rec.checkout) <= tOut2.value))) return;   // «និង»
             if (cMiss.checked && !(worked && (!rec.checkin || !(rec.breakOut || rec.break_out) || !(rec.breakIn || rec.break_in) || !rec.checkout))) return;   // «និង» ខ្វះស្កេន
-            rows.push({ date, sun, id: emp.id, code: emp.username || '-', name: emp.name, ci: hhmm(rec.checkin), co: hhmm(rec.checkout), wh: workH(rec), br: brkMin(rec), ot: otVal });
+            if (cLate.checked && !lateOf(emp, rec)) return;   // «និង» ចូលយឺត
+            rows.push({ date, sun, id: emp.id, code: emp.username || '-', name: emp.name, ci: hhmm(rec.checkin), co: hhmm(rec.checkout), wh: workH(rec), br: brkMin(rec), ot: otVal, late: lateOf(emp, rec) });
           });
         });
       } catch (e) { info.textContent = 'មានបញ្ហា៖ ' + e.message; return; }
@@ -116,11 +122,13 @@
       sSun.textContent = '📅 ធ្វើការអាទិត្យ៖ ' + sunDays + ' ថ្ងៃ';
       sWh.textContent = '🕒 ម៉ោងធ្វើការអាទិត្យ៖ ' + fmtH(whSun) + ' ម៉ោង (ដកសម្រាក)';
       sOt.textContent = '⏱ ថែមម៉ោងសរុប៖ ' + fmtH(otTotal) + ' ម៉ោង';
+      const lateN = rows.filter(r => r.late).length;
+      sLate.textContent = lateN ? '⏰ ចូលយឺត៖ ' + lateN + ' ដង' : '';
       sPeople.textContent = '👥 ' + people + ' នាក់';
 
       paint = () => { tbody.textContent = ''; sortRows(); rows.forEach(r => tbody.appendChild(h('tr', null,
         h('td', { text: r.date + (r.sun ? ' (អាទិត្យ)' : '') }), h('td', { text: r.code }), h('td', { text: r.name }),
-        h('td', { text: r.ci || '—' }), h('td', { text: r.co || '—' }),
+        h('td', null, r.ci || '—', r.late ? h('span', { text: ' យឺត ' + r.late + ' នាទី', style: 'font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(185,28,28,.12);color:#b91c1c;font-weight:700;white-space:nowrap;' }) : null), h('td', { text: r.co || '—' }),
         h('td', { text: (r.br.m ? Math.round(r.br.m) + ' នាទី' : '—') + (r.br.real ? '' : ' *'), title: r.br.real ? 'ពីការស្កេន ចេញបាយ → ចូលវិញ' : 'គ្មានស្កេនគ្រប់ — ប្រើម៉ោងសម្រាកដើម' }),
         h('td', { text: r.wh ? fmtH(r.wh) : '—' }),
         h('td', null, r.sun
@@ -140,20 +148,32 @@
         h('td', { text: fmtH(whAll) }), h('td', { text: fmtH(otTotal) })));
     }
 
+    function tableLines() {
+      const total = rows.reduce((s, r) => s + r.ot, 0);
+      const sunDays = rows.filter(r => r.sun).length;
+      return [['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'សម្រាក (នាទី)', 'ម៉ោងធ្វើការ (ដកសម្រាក)', 'OT (ម៉ោង)', 'យឺត (នាទី)']]
+        .concat(rows.map(r => [r.date + (r.sun ? ' (អាទិត្យ)' : ''), r.code, r.name, r.ci, r.co, Math.round(r.br.m) + (r.br.real ? '' : '*'), r.wh.toFixed(2), r.ot.toFixed(2), r.late || '']))
+        .concat([['សរុប · ' + sunDays + ' ថ្ងៃអាទិត្យ', '', '', '', '', '', rows.reduce((s, r) => s + r.wh, 0).toFixed(2), total.toFixed(2), rows.filter(r => r.late).length || '']]);
+    }
+
     function csv() {
       if (!rows.length) return;
       const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
-      const total = rows.reduce((s, r) => s + r.ot, 0);
-      const sunDays = rows.filter(r => r.sun).length;
-      const lines = [['កាលបរិច្ឆេទ', 'អត្តលេខ', 'ឈ្មោះ', 'ចូល', 'ចេញ', 'សម្រាក (នាទី)', 'ម៉ោងធ្វើការ (ដកសម្រាក)', 'OT (ម៉ោង)']]
-        .concat(rows.map(r => [r.date + (r.sun ? ' (អាទិត្យ)' : ''), r.code, r.name, r.ci, r.co, Math.round(r.br.m) + (r.br.real ? '' : '*'), r.wh.toFixed(2), r.ot.toFixed(2)]))
-        .concat([['សរុប · ' + sunDays + ' ថ្ងៃអាទិត្យ', '', '', '', '', '', rows.reduce((s, r) => s + r.wh, 0).toFixed(2), total.toFixed(2)]]);
-      const body = lines.map(r => r.map(esc).join(',')).join('\n');
+      const body = tableLines().map(r => r.map(esc).join(',')).join('\n');
       const a = h('a', { href: URL.createObjectURL(new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' })), download: 'attendance_search_' + dFrom.value + '_' + dTo.value + '.csv' });
       document.body.appendChild(a); a.click(); a.remove();
     }
 
-    const reset = () => { const [a, b] = monthRange(); dFrom.value = a; dTo.value = b; q.value = ''; cSun.checked = true; cOt.checked = false; cOut.checked = false; cMiss.checked = false; xOt.value = '2'; opSel.value = 'gt'; tOut.value = '19:00'; tOut2.value = ''; brk.value = '1'; run(); };
+    // ចម្លងតារាង (Tab-separated) → paste ក្នុង Excel / Google Sheets / Telegram
+    function copyTable() {
+      if (!rows.length) return;
+      const text = tableLines().map(r => r.join('\t')).join('\n');
+      const done = ok => { const old = info.textContent; info.textContent = ok ? '✅ បានចម្លង ' + rows.length + ' ជួរ' : '❌ ចម្លងមិនបាន'; setTimeout(() => { if (info.textContent.startsWith('✅') || info.textContent.startsWith('❌')) info.textContent = old; }, 1800); };
+      const fallback = () => { const ta = h('textarea', { style: 'position:fixed;opacity:0;' }); ta.value = text; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) { /* ignore */ } ta.remove(); done(ok); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), fallback); else fallback();
+    }
+
+    const reset = () => { const [a, b] = monthRange(); dFrom.value = a; dTo.value = b; q.value = ''; cSun.checked = true; cOt.checked = false; cOut.checked = false; cMiss.checked = false; cLate.checked = false; xOt.value = '2'; opSel.value = 'gt'; tOut.value = '19:00'; tOut2.value = ''; brk.value = '1'; run(); };
     const row = (...k) => h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;' }, ...k);
     const ov = h('div', { class: 'modal-overlay open' }, h('div', { class: 'modal', style: 'max-width:820px;width:96%;' },
       h('h2', { text: '🔎 ស្វែងរកអ្នកធ្វើការ ថ្ងៃអាទិត្យ / ថែមម៉ោង' }),
@@ -162,10 +182,10 @@
       row(h('label', null, cSun, ' ធ្វើការថ្ងៃអាទិត្យ')),
       row(h('label', null, cOt, ' ថែមម៉ោង (OT) '), opSel, xOt, h('span', { text: 'ម៉ោង' })),
       row(h('label', null, cOut, ' ម៉ោងចេញ ចាប់ពី '), tOut, h('span', { text: 'ដល់' }), tOut2),
-      row(h('label', null, cMiss, ' ខ្វះស្កេន (ចូល / ចេញបាយ / ចូលវិញ / ចេញ)')),
+      row(h('label', null, cLate, ' ចូលយឺត (ជាងម៉ោងវេនការងារ)'), h('label', null, cMiss, ' ខ្វះស្កេន (ចូល / ចេញបាយ / ចូលវិញ / ចេញ)')),
       row(h('span', { text: 'ម៉ោងសម្រាកដើម (ប្រើពេលគ្មានស្កេនចេញបាយ/ចូលវិញ)' }), brk, h('span', { text: 'ម៉ោង/ថ្ងៃ' })),
       row(h('span', { class: 'scan-hint', text: 'ជ្រើសរហ័ស៖' }), chip('ម៉ោង ៦ ល្ងាច', '18:00', '18:59'), chip('ម៉ោង ៧ យប់', '19:00', '19:59'), chip('ម៉ោង ៨ យប់', '20:00', '20:59'), chip('ក្រោយ ៧ យប់', '19:00', '')),
-      row(h('button', { type: 'button', text: '🔎 ស្វែងរក', onclick: run }), h('button', { type: 'button', class: 'secondary', text: '⬇ នាំចេញ CSV', onclick: csv }),
+      row(h('button', { type: 'button', text: '🔎 ស្វែងរក', onclick: run }), h('button', { type: 'button', class: 'secondary', text: '⬇ នាំចេញ CSV', onclick: csv }), h('button', { type: 'button', class: 'secondary', text: '📋 ចម្លងតារាង', onclick: copyTable }),
         h('button', { type: 'button', class: 'secondary', text: '↺ កំណត់ឡើងវិញ', onclick: reset }),
         h('button', { type: 'button', class: 'secondary', text: 'បិទ', onclick: () => ov.remove() })),
       info, note, summary,
@@ -179,7 +199,7 @@
     let liveT;
     const live = () => { clearTimeout(liveT); liveT = setTimeout(run, 200); };
     [q, xOt, brk].forEach(el => el.addEventListener('input', live));
-    [dFrom, dTo, cSun, cOt, cOut, cMiss, opSel, tOut, tOut2].forEach(el => el.addEventListener('change', run));
+    [dFrom, dTo, cSun, cOt, cOut, cMiss, cLate, opSel, tOut, tOut2].forEach(el => el.addEventListener('change', run));
     // Enter → ស្វែងរកភ្លាម (បញ្ឈប់ event កុំឲ្យ script ផ្សេងរបស់ទំព័រចាប់យក)
     q.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
