@@ -167,13 +167,42 @@
         h('td', null, h('b', { text: money(r.amount, w.currency) })),
         h('td', null, h('button', { type: 'button', text: '💵 បើកប្រាក់', disabled: r.days > 0 ? null : '', onclick: async () => {
           if (!confirm('បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ' + (r.ot_hours ? ' + OT ' + r.ot_hours + ' ម៉ោង' : '') + ' · ' + money(r.amount, w.currency) + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
-          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { say('បានបើកប្រាក់ ' + money(p.amount, p.currency) + ' (' + p.days + ' ថ្ងៃ' + (p.ot_hours ? ' + OT ' + p.ot_hours + ' ម៉ោង' : '') + ')'); render(); } } }))); });
+          const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) { const done = { name: w.name, code: w.code, paid_at: new Date().toISOString(), period_to: S.upto, days: p.days, ot_hours: p.ot_hours, amount: p.amount, currency: p.currency };
+            if (confirm('បានបើកប្រាក់ ' + money(p.amount, p.currency) + ' (' + p.days + ' ថ្ងៃ' + (p.ot_hours ? ' + OT ' + p.ot_hours + ' ម៉ោង' : '') + ')។ បោះពុម្ពបង្កាន់ដៃឬទេ?')) printReceipt(done);
+            render(); } } }))); });
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កម្មករ', 'ប្រភេទ', 'បើកប្រាក់', 'ថ្ងៃមិនទាន់បើក', 'OT (ម៉ោង)', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
       h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានកម្មករសកម្មទេ' }))))));
     body.appendChild(h('h3', { class: 'sec-title', style: 'margin-top:18px;', text: '🧾 ប្រវត្តិបើកប្រាក់ (៤០ ចុងក្រោយ)' }));
-    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កាលបរិច្ឆេទបើក', 'កម្មករ', 'ដល់ថ្ងៃ', 'ថ្ងៃ', 'OT (ម៉ោង)', 'ទឹកប្រាក់'].map(x => h('th', { text: x })))),
+    body.appendChild(h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['កាលបរិច្ឆេទបើក', 'កម្មករ', 'ដល់ថ្ងៃ', 'ថ្ងៃ', 'OT (ម៉ោង)', 'ទឹកប្រាក់', ''].map(x => h('th', { text: x })))),
       h('tbody', null, hist.rows.length ? hist.rows.map(p => h('tr', null, h('td', { text: new Date(p.paid_at).toLocaleString('en-GB') }), h('td', { text: p.name + ' (' + p.code + ')' }),
-        h('td', { text: p.period_to }), h('td', { text: String(p.days) }), h('td', { text: String(p.ot_hours || 0) }), h('td', { text: money(p.amount, p.currency) }))) : h('tr', null, h('td', { colspan: '6', text: 'មិនទាន់មានការបើកប្រាក់ទេ' }))))));
+        h('td', { text: p.period_to }), h('td', { text: String(p.days) }), h('td', { text: String(p.ot_hours || 0) }), h('td', { text: money(p.amount, p.currency) }), h('td', null, h('button', { class: 'secondary', type: 'button', text: '🖨 បោះពុម្ព', onclick: () => printReceipt(p) })))) : h('tr', null, h('td', { colspan: '7', text: 'មិនទាន់មានការបើកប្រាក់ទេ' }))))));
+  }
+
+  // ---------------------------------------------------------------- បង្កាន់ដៃបើកប្រាក់ (បោះពុម្ព) ----
+  function printReceipt(p) {
+    const w = S.workers.find(x => x.code === p.code) || {};
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const otr = w.ot_rate != null ? Number(w.ot_rate) : (w.rate && w.normal_hours ? w.rate / w.normal_hours * w.ot_mult : 0);
+    const days = Number(p.days), ot = Number(p.ot_hours || 0);
+    // បង្ហាញលម្អិតតែពេលអត្រាបច្ចុប្បន្នត្រូវនឹងទឹកប្រាក់ដែលបានបើក (អត្រាអាចបានប្តូរក្រោយ)
+    const detail = w.rate != null && Math.abs(days * w.rate + ot * otr - Number(p.amount)) < 0.01;
+    const row = (a, b) => '<tr><td>' + a + '</td><td class="r">' + b + '</td></tr>';
+    const lines = detail
+      ? row('ថ្ងៃធ្វើការ ' + days + ' × ' + money(w.rate, p.currency), money(days * w.rate, p.currency)) + (ot ? row('ថែមម៉ោង ' + ot + ' ម៉ោង × ' + money(otr, p.currency), money(ot * otr, p.currency)) : '')
+      : row('ថ្ងៃធ្វើការ', days + ' ថ្ងៃ') + (ot ? row('ថែមម៉ោង', ot + ' ម៉ោង') : '');
+    const win = window.open('', '_blank');
+    if (!win) { say('សូមអនុញ្ញាត pop-up ដើម្បីបោះពុម្ព'); return; }
+    win.document.write('<!doctype html><meta charset="utf-8"><title>បង្កាន់ដៃបើកប្រាក់</title>'
+      + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;700&display=swap">'
+      + '<style>body{font-family:"Kantumruy Pro",sans-serif;max-width:380px;margin:20px auto;color:#111;font-size:14px}h1{font-size:18px;text-align:center;margin:0 0 4px}'
+      + '.s{text-align:center;color:#555;font-size:12px;margin-bottom:14px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dashed #bbb}.r{text-align:right}'
+      + '.t td{font-weight:700;font-size:16px;border-bottom:2px solid #111;padding-top:10px}.sg{display:flex;justify-content:space-between;margin-top:46px;font-size:12px;text-align:center}'
+      + '.sg div{width:44%;border-top:1px solid #111;padding-top:4px}</style>'
+      + '<h1>បង្កាន់ដៃបើកប្រាក់កម្មករ</h1><div class="s">' + esc(new Date(p.paid_at).toLocaleString('en-GB')) + '</div><table>'
+      + row('ឈ្មោះ', esc(p.name) + ' (' + esc(p.code) + ')') + row('ប្រភេទ', esc(TYPES[w.type] || '')) + row('បើកប្រាក់ដល់ថ្ងៃទី', esc(p.period_to)) + lines
+      + '<tr class="t"><td>សរុបទទួលបាន</td><td class="r">' + money(p.amount, p.currency) + '</td></tr></table>'
+      + '<div class="sg"><div>អ្នកបើកប្រាក់</div><div>អ្នកទទួល</div></div><script>onload=()=>setTimeout(print,400)<\/script>');
+    win.document.close();
   }
 
   // ---------------------------------------------------------------- ដំឡើងម៉ឺនុយ + ទំព័រ ----
