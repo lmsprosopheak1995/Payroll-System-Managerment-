@@ -87,8 +87,13 @@ async function onCallback(cq) {
 }
 
 module.exports = async (req, res) => {
-  const secret = process.env.TG_WEBHOOK_SECRET;
-  if (!secret || req.headers['x-telegram-bot-api-secret-token'] !== secret) return res.status(401).end();
+  const secret = (process.env.TG_WEBHOOK_SECRET || '').trim();
+  const got = String(req.headers['x-telegram-bot-api-secret-token'] || '').trim();
+  if (!secret || got !== secret) {
+    console.log('401 secret check', { envSet: !!secret, envLen: secret.length, headerLen: got.length });
+    return res.status(401).end();
+  }
+  console.log('webhook ok', { hasBotToken: !!process.env.BOT_TOKEN });
   try {
     const u = req.body || {};
     if (u.message) await onMessage(u.message);
