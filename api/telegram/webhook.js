@@ -90,10 +90,14 @@ module.exports = async (req, res) => {
   const secret = (process.env.TG_SECRET_V2 || '').trim();
   const got = String(req.headers['x-telegram-bot-api-secret-token'] || '').trim();
   if (!secret || got !== secret) {
-    console.log('401 secret check', { envSet: !!secret, envLen: secret.length, headerLen: got.length });
+    // បង្ហាញតែឈ្មោះ env និងប្រវែង (គ្មានតម្លៃសម្ងាត់)
+    const tgEnv = Object.keys(process.env)
+      .filter(k => k.startsWith('TG') || k.startsWith('BOT'))
+      .map(k => k + ':' + (process.env[k] || '').length);
+    console.log('401 secret check v3', { envSet: !!secret, envLen: secret.length, headerLen: got.length, tgEnv });
     return res.status(401).end();
   }
-  console.log('webhook ok', { hasBotToken: !!process.env.BOT_TOKEN });
+  console.log('webhook ok v3', { hasBotToken: !!process.env.BOT_TOKEN });
   try {
     const u = req.body || {};
     if (u.message) await onMessage(u.message);
