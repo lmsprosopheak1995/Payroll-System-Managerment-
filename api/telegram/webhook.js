@@ -5,6 +5,11 @@ const { sb, rpc, tg } = require('../_lib');
 const nowIso = () => encodeURIComponent(new Date().toISOString());
 const phnom = d => new Date(d).toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' });
 
+const safeEqual = (a, b) => {
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
+
 async function onMessage(msg) {
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
   const from = String(msg.from.id);
@@ -89,15 +94,7 @@ async function onCallback(cq) {
 module.exports = async (req, res) => {
   const secret = (process.env.TG_SECRET_V2 || '').trim();
   const got = String(req.headers['x-telegram-bot-api-secret-token'] || '').trim();
-  if (!secret || got !== secret) {
-    // បង្ហាញតែឈ្មោះ env និងប្រវែង (គ្មានតម្លៃសម្ងាត់)
-    const tgEnv = Object.keys(process.env)
-      .filter(k => k.startsWith('TG') || k.startsWith('BOT'))
-      .map(k => k + ':' + (process.env[k] || '').length);
-    console.log('401 secret check v3', { envSet: !!secret, envLen: secret.length, headerLen: got.length, tgEnv });
-    return res.status(401).end();
-  }
-  console.log('webhook ok v3', { hasBotToken: !!process.env.BOT_TOKEN });
+  if (!secret || !safeEqual(got, secret)) return res.status(401).end();
   try {
     const u = req.body || {};
     if (u.message) await onMessage(u.message);
