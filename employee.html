@@ -2141,7 +2141,6 @@ async function renderPayrollSummary() {
     <div class="payroll-line"><span>ម៉ោងថែម</span><span>${fmtHours(t.otHours)} ម៉ោង — $${fmtUSD(t.otPay)}</span></div>
     <div class="payroll-line"><span>ប្រាក់បាយ</span><span>${fmtRiel((t.foodPay + t.foodOtPay) * (t.exchangeRate || settings.exchangeRate))} ៛</span></div>
     ${t.doubleDays ? `<div class="payroll-line"><span>ធ្វើការថ្ងៃអាទិត្យ/បុណ្យ (ឈ្នូល ×${HOLIDAY_MULTIPLIER})</span><span>${t.doubleDays} ថ្ងៃ</span></div>` : ''}
-    <div class="payroll-line total" style="padding-bottom:8px;"><span>សរុបតាមវត្តមាន</span><span>$${fmtUSD(t.total)} (${fmtRiel(t.riel)} ៛)</span></div>
     <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--success);">🟢 អត្ថប្រយោជន៍</div>
     ${t.benefitItems.length ? t.benefitItems.map(p => `<div class="payroll-line"><span>${escapeHtml(p.name)}</span><span style="color:var(--success);">+ ${fmtItemAmountEmp(p)}</span></div>`).join('') : '<div class="payroll-line"><span style="color:var(--text-muted);">មិនមាន</span><span>-</span></div>'}
     <div style="font-weight:700;font-size:0.82rem;margin:10px 0 2px;color:var(--danger);">🔴 ប្រាក់កាត់</div>
