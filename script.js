@@ -63,20 +63,7 @@ async function validateAppSession() {
 }
 
 // ត្រឡប់ true បើជោគជ័យ · false បើពាក្យសម្ងាត់ខុស · throw បើកំហុសផ្សេង
-// មាន username → ចូលតាមគណនី admin ផ្ទាល់ខ្លួន (admin-users.sql) · គ្មាន username → របៀបចាស់ (ពាក្យសម្ងាត់តែមួយ)
-let adminUsersMode = false;   // true = admin-users.sql ត្រូវបានរត់ → ទាមទារ Username + Password
-let legacyPwSet = false;      // មានពាក្យសម្ងាត់ admin ចាស់ ដែលត្រូវផ្ទេរទៅគណនីដំបូង
-async function createAdminSessionFor(pw, username) {
-  if (username) {
-    const r = await supabaseClient.rpc('create_admin_user_session', { p_username: username, p_password: pw });
-    if (r.error) {
-      if (/too_many_attempts/.test(r.error.message || '')) throw new Error('ព្យាយាមច្រើនពេក — សូមរង់ចាំ ១ នាទី');
-      throw r.error;
-    }
-    if (!r.data || !r.data.ok) return false;
-    setSessionToken(r.data.token);
-    return true;
-  }
+async function createAdminSessionFor(pw) {
   const { data, error } = await supabaseClient.rpc('create_admin_session', { p_admin_password: pw });
   if (error) {
     if (!isMissingFn(error)) throw error;
@@ -116,13 +103,6 @@ function showAdminGate(view, errorMsg) {
   const loginErr = document.getElementById('adminLoginError');
   setupErr.style.display = 'none';
   loginErr.style.display = 'none';
-  document.querySelectorAll('.admin-username-group').forEach(el => { el.style.display = adminUsersMode ? '' : 'none'; });
-  const setupNote = document.getElementById('adminSetupNote');
-  if (setupNote) {
-    setupNote.textContent = !adminUsersMode ? 'នេះជាការចូលប្រើលើកដំបូង សូមកំណត់ពាក្យសម្ងាត់ការគ្រប់គ្រង'
-      : legacyPwSet ? 'ប្រព័ន្ធថ្មីប្រើ Username + Password។ សូមជ្រើស Username ហើយបញ្ចូលពាក្យសម្ងាត់ admin ចាស់ដដែល (ពីរដង) ដើម្បីបង្កើតគណនីអ្នកគ្រប់គ្រងដំបូង'
-      : 'នេះជាការចូលប្រើលើកដំបូង សូមបង្កើតគណនីអ្នកគ្រប់គ្រងដំបូង (Username + ពាក្យសម្ងាត់)';
-  }
   if (view === 'setup' && errorMsg) { setupErr.textContent = errorMsg; setupErr.style.display = 'block'; }
   if (view === 'login' && errorMsg) { loginErr.textContent = errorMsg; loginErr.style.display = 'block'; }
 }
@@ -152,21 +132,6 @@ async function checkAdminAuthAndInit() {
     startSessionWatch();
     return;
   }
-  // គាំទ្រគណនី admin ច្រើននាក់ (admin-users.sql)៖ បើ function មិនទាន់មាន → ប្រើរបៀបចាស់
-  const ux = await supabaseClient.rpc('admin_users_exist');
-  if (ux.error && !isMissingFn(ux.error)) {
-    console.error('admin_users_exist failed', ux.error);
-    showAdminGate('login', 'មិនអាចភ្ជាប់ទៅ Supabase បានទេ៖ ' + ux.error.message);
-    return;
-  }
-  adminUsersMode = !ux.error;
-  if (adminUsersMode) {
-    if (ux.data) { showAdminGate('login'); return; }
-    const pwSet = await supabaseClient.rpc('admin_password_is_set');
-    legacyPwSet = !pwSet.error && !!pwSet.data;
-    showAdminGate('setup');
-    return;
-  }
   const { data: isSet, error } = await supabaseClient.rpc('admin_password_is_set');
   if (error) {
     console.error('admin_password_is_set failed', error);
@@ -176,38 +141,7 @@ async function checkAdminAuthAndInit() {
   showAdminGate(isSet ? 'login' : 'setup');
 }
 
-const ADMIN_ERR_KM = {
-  invalid_username: 'Username ត្រូវមាន ៣–៣២ តួ (a-z, 0-9, . _ -)',
-  weak_password: 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ',
-  bad_legacy_password: 'ពាក្យសម្ងាត់ admin ចាស់មិនត្រឹមត្រូវ',
-  already_initialized: 'មានគណនី admin រួចហើយ — សូមចូលគណនី',
-  username_taken: 'Username នេះមានរួចហើយ',
-  forbidden: 'គ្មានសិទ្ធិ ឬ session ផុតកំណត់ — សូមចូលគណនីម្តងទៀត',
-  last_admin: 'មិនអាចធ្វើបានទេ — ត្រូវមានអ្នកគ្រប់គ្រងសកម្មយ៉ាងតិចម្នាក់',
-  cannot_self: 'មិនអាចធ្វើលើគណនីខ្លួនឯងបានទេ',
-  use_change_password: 'សូមប្រើ «ប្តូរពាក្យសម្ងាត់» សម្រាប់គណនីខ្លួនឯង',
-  bad_password: 'ពាក្យសម្ងាត់បច្ចុប្បន្នមិនត្រឹមត្រូវ',
-  no_user: 'session នេះមិនមែនជាគណនីផ្ទាល់ខ្លួនទេ — សូមចាកចេញ ហើយចូលម្តងទៀត'
-};
-window.adminErrKm = e => ADMIN_ERR_KM[e] || ('កំហុស៖ ' + e);
-
 async function doAdminSetup() {
-  if (adminUsersMode) {
-    const un = document.getElementById('adminSetupUsername').value.trim().toLowerCase();
-    const q1 = document.getElementById('adminSetupPassword').value;
-    const q2 = document.getElementById('adminSetupPassword2').value;
-    if (!/^[a-z0-9._-]{3,32}$/.test(un)) { showAdminGate('setup', ADMIN_ERR_KM.invalid_username); return; }
-    if (!q1 || q1.length < 6) { showAdminGate('setup', ADMIN_ERR_KM.weak_password); return; }
-    if (q1 !== q2) { showAdminGate('setup', 'ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ'); return; }
-    const r = await supabaseClient.rpc('bootstrap_admin_user', { p_username: un, p_password: q1, p_full_name: '' });
-    if (r.error) { showAdminGate('setup', 'បង្កើតគណនីមិនជោគជ័យ៖ ' + r.error.message); return; }
-    if (!r.data || !r.data.ok) { showAdminGate('setup', ADMIN_ERR_KM[r.data && r.data.error] || 'បង្កើតគណនីមិនជោគជ័យ'); return; }
-    try {
-      if (!(await createAdminSessionFor(q1, un))) { showAdminGate('login', 'សូមចូលគណនីដោយ Username និងពាក្យសម្ងាត់ដែលទើបបង្កើត'); return; }
-    } catch (e) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + e.message); return; }
-    await checkAdminAuthAndInit();
-    return;
-  }
   const p1 = document.getElementById('adminSetupPassword').value;
   const p2 = document.getElementById('adminSetupPassword2').value;
   if (!p1 || p1.length < 6) { showAdminGate('setup', 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
@@ -222,13 +156,11 @@ async function doAdminSetup() {
 
 async function doAdminLogin() {
   const pw = document.getElementById('adminLoginPassword').value;
-  const un = adminUsersMode ? document.getElementById('adminLoginUsername').value.trim().toLowerCase() : '';
-  if (adminUsersMode && !un) { showAdminGate('login', 'សូមបំពេញ Username'); return; }
   if (!pw) { showAdminGate('login', 'សូមបំពេញពាក្យសម្ងាត់'); return; }
   let ok = false;
-  try { ok = await createAdminSessionFor(pw, un); }
+  try { ok = await createAdminSessionFor(pw); }
   catch (error) { showAdminGate('login', 'មានបញ្ហាក្នុងការចូលគណនី៖ ' + error.message); return; }
-  if (!ok) { showAdminGate('login', adminUsersMode ? 'Username ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ (ឬគណនីត្រូវបានបិទ)' : 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
+  if (!ok) { showAdminGate('login', 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ'); return; }
   document.getElementById('adminLoginPassword').value = '';
   await checkAdminAuthAndInit();
 }
@@ -249,14 +181,6 @@ async function changeAdminPassword() {
   if (newPw.length < 6) { customAlert('ពាក្យសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ'); return; }
   const confirmPw = await customPrompt('បញ្ជាក់ពាក្យសម្ងាត់ថ្មីម្ដងទៀត៖', true);
   if (newPw !== confirmPw) { customAlert('ពាក្យសម្ងាត់ថ្មីមិនដូចគ្នាទេ'); return; }
-  const me = window.appSession && window.appSession.user;
-  if (me && me.username) { // គណនី admin ផ្ទាល់ខ្លួន (admin-users.sql)
-    const r = await supabaseClient.rpc('change_my_admin_password', { p_token: getSessionToken(), p_old: oldPw, p_new: newPw });
-    if (r.error) { customAlert(/too_many_attempts/.test(r.error.message || '') ? 'ព្យាយាមច្រើនពេក — សូមរង់ចាំ ១ នាទី' : 'ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + r.error.message); return; }
-    if (!r.data || !r.data.ok) { customAlert('ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ' + ADMIN_ERR_KM[r.data && r.data.error]); return; }
-    customAlert('ប្តូរពាក្យសម្ងាត់ជោគជ័យ');
-    return;
-  }
   const { data, error } = await supabaseClient.rpc('set_admin_password', { p_old_password: oldPw, p_new_password: newPw });
   if (error || !data) { customAlert('ប្តូរពាក្យសម្ងាត់មិនជោគជ័យ៖ ពាក្យសម្ងាត់បច្ចុប្បន្នប្រហែលមិនត្រឹមត្រូវ'); return; }
   customAlert('ប្តូរពាក្យសម្ងាត់ជោគជ័យ');
@@ -626,11 +550,15 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
 
 // ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
 const HOLIDAY_MULTIPLIER = 2;
+// ថ្ងៃបុណ្យដែល "ដោះដូរ" (បុគ្គលិកដោះដូរថ្ងៃឈប់ → ថ្ងៃនេះធ្វើការធម្មតា ×១) — ដាក់ស្លាកនេះនៅដើមឈ្មោះថ្ងៃបុណ្យ
+const HOLIDAY_SWAP_TAG = '[ដោះដូរ]';
 let holidays = {}; // { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }
 let holidaysAvailable = true;
+function isSwapHoliday(date) { return typeof holidays[date] === 'string' && holidays[date].startsWith(HOLIDAY_SWAP_TAG); }
 
 function dayMultiplier(date) {
   if (!date) return 1;
+  if (isSwapHoliday(date)) return 1;   // ថ្ងៃបុណ្យដែលដោះដូរ → ឈ្នួលធម្មតា
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
 }
@@ -670,17 +598,20 @@ function renderHolidayBox() {
   const dates = Object.keys(holidays).sort();
   list.innerHTML = dates.length === 0
     ? '<span class="scan-hint">មិនទាន់មានថ្ងៃបុណ្យទេ</span>'
-    : dates.map(d => `<span class="badge active" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
+    : dates.map(d => `<span class="badge ${isSwapHoliday(d) ? 'pending' : 'active'}" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
 }
 
 async function addHoliday() {
   const date = document.getElementById('holidayDate').value;
-  const name = document.getElementById('holidayName').value.trim();
+  let name = document.getElementById('holidayName').value.trim();
   if (!date) { customAlert('សូមជ្រើសរើសថ្ងៃបុណ្យ'); return; }
+  const swapEl = document.getElementById('holidaySwap');
+  if (swapEl && swapEl.checked && !name.startsWith(HOLIDAY_SWAP_TAG)) name = (HOLIDAY_SWAP_TAG + ' ' + name).trim();   // ថ្ងៃដោះដូរ → ធ្វើការធម្មតា ×១
   const { error } = await supabaseClient.from('holidays').upsert({ date, name }, { onConflict: 'date' });
   if (error) { customAlert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
   holidays[date] = name; holidaysAvailable = true;
   document.getElementById('holidayName').value = '';
+  if (swapEl) swapEl.checked = false;
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
 
@@ -913,7 +844,7 @@ function renderAttendanceTab() {
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
       ${itemsHtml}
-      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}${netSplit ? `<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span>` : ''}</span></div>
     </div>`;
 
   // (1) ប្រៀបធៀបខែមុន
@@ -1480,8 +1411,7 @@ function renderPayrollTab() {
 
   const empId = currentPayrollEmployeeId();
   const month = currentPayrollMonth();
-  // បង្ហាញតែធាតុថេរ + ធាតុនៃខែដែលបានជ្រើស (ដូចការគណនាប្រាក់ខែ) — ធាតុខែផ្សេងមិនលេចចូលបញ្ជី
-  const items = payrollItems.filter(p => p.employeeId === empId && (p.recurrence === 'fixed' || p.month === month));
+  const items = payrollItems.filter(p => p.employeeId === empId);
 
   const renderRows = (list) => list.map(p => `
     <tr>
@@ -1534,16 +1464,6 @@ function netRielRounded(t) {
   return Math.round((Math.round((t.net || 0) * 100) / 100) * rate);
 }
 
-// ខែដំបូងបំផុត (YYYY-MM) ដែលបុគ្គលិកមានកំណត់ត្រាវត្តមាន ឬម៉ោងស្កេន · គ្មាន → ''
-function firstAttendanceMonth(empId) {
-  let first = '';
-  Object.keys(attendance).forEach(date => {
-    const r = attendance[date] && attendance[date][empId];
-    if (r && (r.status || r.checkin) && (!first || date < first)) first = date;
-  });
-  return first ? first.slice(0, 7) : '';
-}
-
 function renderPayrollHistory() {
   const body = document.getElementById('payHistoryBody');
   const empty = document.getElementById('payHistoryEmpty');
@@ -1569,10 +1489,6 @@ function renderPayrollHistory() {
   } else {
     months = monthsBack(endMonth, parseInt(rangeVal, 10) || 12);
   }
-
-  // បង្ហាញតែខែចាប់ពីខែដែលមានវត្តមាន/ការស្កេនដំបូងរបស់បុគ្គលិកនេះ (មិនបង្ហាញខែទទេមុនចាប់ផ្តើមប្រើប្រព័ន្ធ)
-  const firstAttMonth = firstAttendanceMonth(emp.id);
-  months = firstAttMonth ? months.filter(m => m >= firstAttMonth) : months.filter(m => m === endMonth);
 
   if (months.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
@@ -2786,7 +2702,7 @@ function calcDeductionRow(emp, month) {
       leaveDays++;
       const isSubst = !!(req && (req.reason || '').includes(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
       if (type === 'maternity') { maternityDays++; maternityDeductDays += matFrac(date); }
-      else if (deductRules.leaveTypes.includes(type) && !isSubst && holidays[date] === undefined) deductibleLeaveDays++; // ថ្ងៃបុណ្យជាតិ → មិនកាត់
+      else if (deductRules.leaveTypes.includes(type) && !isSubst) deductibleLeaveDays++;
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }
   });
@@ -3215,7 +3131,7 @@ function readAdvControls() {
 function advanceDateOf(month) {
   const [y, m] = month.split('-').map(Number);
   const ymd = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || (typeof holidays !== 'undefined' && holidays[ymd(dt)] !== undefined);
+  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || (typeof holidays !== 'undefined' && holidays[ymd(dt)] !== undefined && !isSwapHoliday(ymd(dt)));
   const d = new Date(y, m - 1, 25, 12); // 12:00 ដើម្បីជៀសវាងបញ្ហា DST
   for (let i = 0; i < 14 && isOff(d); i++) d.setDate(d.getDate() - 1);
   return ymd(d);
@@ -3429,7 +3345,6 @@ document.getElementById('payrollMonth').value = todayStr().slice(0, 7);
 document.getElementById('adminSetupBtn').addEventListener('click', doAdminSetup);
 document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
 document.getElementById('adminLoginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doAdminLogin(); });
-document.getElementById('adminLoginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('adminLoginPassword').focus(); });
 document.getElementById('logoutBtn').addEventListener('click', doAdminLogout);
 document.getElementById('changeAdminPwBtn').addEventListener('click', changeAdminPassword);
 

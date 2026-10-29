@@ -22,12 +22,8 @@
 
   <div class="portal-card" id="adminSetupCard" style="display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:22px;">
     <h1 style="font-size:1.05rem; text-align:center; margin:0 0 4px;">🔐 កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រង</h1>
-    <p id="adminSetupNote" style="text-align:center; color:var(--text-muted); font-size:0.75rem; margin:0 0 18px;">នេះជាការចូលប្រើលើកដំបូង សូមកំណត់ពាក្យសម្ងាត់ការគ្រប់គ្រង</p>
+    <p style="text-align:center; color:var(--text-muted); font-size:0.75rem; margin:0 0 18px;">នេះជាការចូលប្រើលើកដំបូង សូមកំណត់ពាក្យសម្ងាត់ការគ្រប់គ្រង</p>
     <p id="adminSetupError" style="color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none;"></p>
-    <div class="form-group admin-username-group" style="display:none;">
-      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">Username</label>
-      <input type="text" id="adminSetupUsername" autocomplete="username" autocapitalize="off" spellcheck="false" style="width:100%;padding:10px 12px;font-size:0.9rem;">
-    </div>
     <div class="form-group">
       <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់ថ្មី</label>
       <input type="password" id="adminSetupPassword" style="width:100%;padding:10px 12px;font-size:0.9rem;">
@@ -42,13 +38,9 @@
   <div class="portal-card" id="adminLoginCard" style="display:none; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:22px;">
     <h1 style="font-size:1.05rem; text-align:center; margin:0 0 4px;">🔐 ចូលគណនីអ្នកគ្រប់គ្រង</h1>
     <p id="adminLoginError" style="color:var(--danger); font-size:0.75rem; text-align:center; margin:0 0 12px; display:none;"></p>
-    <div class="form-group admin-username-group" style="display:none;">
-      <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">Username</label>
-      <input type="text" id="adminLoginUsername" autocomplete="username" autocapitalize="off" spellcheck="false" style="width:100%;padding:10px 12px;font-size:0.9rem;">
-    </div>
     <div class="form-group">
       <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពាក្យសម្ងាត់</label>
-      <input type="password" id="adminLoginPassword" autocomplete="current-password" style="width:100%;padding:10px 12px;font-size:0.9rem;">
+      <input type="password" id="adminLoginPassword" style="width:100%;padding:10px 12px;font-size:0.9rem;">
     </div>
     <button id="adminLoginBtn" style="width:100%;padding:11px;font-size:0.9rem;">ចូលគណនី</button>
   </div>
@@ -80,9 +72,9 @@
         <button class="nav-item" data-tab="monthly"><span class="dot"></span><span class="lbl">⭐ ប្រាក់ខែប្រចាំខែ (ទាំងអស់)</span></button>
         <button class="nav-item" data-tab="payroll"><span class="dot"></span><span class="lbl">អត្ថប្រយោជន៍ & ប្រាក់កាត់</span></button>
         <button class="nav-item" data-tab="deduct"><span class="dot"></span><span class="lbl">យឺត/ច្បាប់ → កាត់លុយ</span></button>
+          <button class="nav-item" data-tab="fdc"><span class="dot"></span><span class="lbl">ប្រាក់ចុងកិច្ចសន្យា FDC (5%)</span></button>
         <button class="nav-item" data-tab="bonus"><span class="dot"></span><span class="lbl">បំណាច់ឆ្នាំ</span></button>
         <button class="nav-item" data-tab="nssf"><span class="dot"></span><span class="lbl">ប.ស.ស (NSSF)</span></button>
-        <button class="nav-item" data-tab="fdc"><span class="dot"></span><span class="lbl">💼 ប្រាក់ចុងកិច្ចសន្យា (FDC)</span></button>
       </div>
     </div>
     <button class="nav-item" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI ជំនួយការ</span></button>
@@ -246,6 +238,8 @@
       </div>
     </div>
   </div>
+
+  <div id="fdcTab" class="tab-content"></div>
 
   <div id="todayTab" class="tab-content">
     <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -755,10 +749,6 @@
     </div>
   </div>
 
-  <div id="fdcTab" class="tab-content">
-    <div class="attendance-controls"><h2 class="page-title">💼 ប្រាក់ទូទាត់ចុងកិច្ចសន្យា (FDC)</h2></div>
-  </div>
-
   <div id="settingTab" class="tab-content">
     <div class="attendance-controls"><h2 class="page-title">⚙️ Setting — ការកំណត់រួម</h2></div>
     <div class="scan-result-card" style="margin-bottom:14px;">
@@ -767,10 +757,11 @@
       <div style="margin-top:12px;"><button id="settingEditBtn">✏️ កែប្រែការកំណត់</button></div>
     </div>
     <details class="scan-result-card" id="holidayBox" open style="margin-bottom:14px;">
-      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
+      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ) · ជម្រើស «ដោះដូរ» = ធ្វើការធម្មតា ×១</summary>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
         <input type="date" id="holidayDate">
         <input type="text" id="holidayName" placeholder="ឈ្មោះថ្ងៃបុណ្យ" style="min-width:200px;">
+        <label style="display:inline-flex;gap:6px;align-items:center;font-size:0.8rem;" title="បុគ្គលិកដោះដូរថ្ងៃឈប់ → ថ្ងៃបុណ្យនេះធ្វើការធម្មតា ឈ្នួល ×១"><input type="checkbox" id="holidaySwap"> ថ្ងៃដោះដូរ (ធ្វើការធម្មតា ×១)</label>
         <button id="holidayAddBtn">➕ បន្ថែមថ្ងៃបុណ្យ</button>
       </div>
       <p id="holidayWarn" class="scan-hint" style="color:var(--danger);display:none;"></p>
@@ -1083,9 +1074,7 @@
 <script src="advance-sync.js"></script>
 <script src="bank-pay.js"></script>
 <script src="full-month.js"></script>
-<script src="salary-topup.js"></script>
 <script src="script.js"></script>
-<script src="telegram-login.js"></script>
 <script src="pdf-export.js"></script>
 <script src="rules-sync.js"></script>
 <script src="month-end.js"></script>
@@ -1094,17 +1083,12 @@
 <script src="kv-store.js"></script>
 <script src="work-card.js"></script>
 <script src="hr-tools.js"></script>
-<script src="leave-extra.js"></script>
 <script src="finance.js"></script>
 <script src="finance-auth.js"></script>
-<script src="admin-users.js"></script>
-<script src="workers.js"></script>
-<script src="att-search.js"></script>
 <script src="salary-tax.js"></script>
 <script src="nssf.js"></script>
 <script src="dash-insights.js"></script>
 <script src="scan-extras.js"></script>
-<script src="scan-history.js"></script>
 <script src="fdc-pay.js"></script>
 <script src="ui-modern.js"></script>
 <script src="about-contact.js"></script>
