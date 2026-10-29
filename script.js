@@ -626,11 +626,15 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
 
 // ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
 const HOLIDAY_MULTIPLIER = 2;
+// ថ្ងៃបុណ្យដែល "ដោះដូរ" (បុគ្គលិកដោះដូរថ្ងៃឈប់ → ថ្ងៃនេះធ្វើការធម្មតា ×១) — ដាក់ស្លាកនេះនៅដើមឈ្មោះថ្ងៃបុណ្យ
+const HOLIDAY_SWAP_TAG = '[ដោះដូរ]';
 let holidays = {}; // { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }
 let holidaysAvailable = true;
+function isSwapHoliday(date) { return typeof holidays[date] === 'string' && holidays[date].startsWith(HOLIDAY_SWAP_TAG); }
 
 function dayMultiplier(date) {
   if (!date) return 1;
+  if (isSwapHoliday(date)) return 1;   // ថ្ងៃបុណ្យដែលដោះដូរ → ឈ្នួលធម្មតា
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
 }
@@ -670,17 +674,20 @@ function renderHolidayBox() {
   const dates = Object.keys(holidays).sort();
   list.innerHTML = dates.length === 0
     ? '<span class="scan-hint">មិនទាន់មានថ្ងៃបុណ្យទេ</span>'
-    : dates.map(d => `<span class="badge active" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
+    : dates.map(d => `<span class="badge ${isSwapHoliday(d) ? 'pending' : 'active'}" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
 }
 
 async function addHoliday() {
   const date = document.getElementById('holidayDate').value;
-  const name = document.getElementById('holidayName').value.trim();
+  let name = document.getElementById('holidayName').value.trim();
   if (!date) { customAlert('សូមជ្រើសរើសថ្ងៃបុណ្យ'); return; }
+  const swapEl = document.getElementById('holidaySwap');
+  if (swapEl && swapEl.checked && !name.startsWith(HOLIDAY_SWAP_TAG)) name = (HOLIDAY_SWAP_TAG + ' ' + name).trim();   // ថ្ងៃដោះដូរ → ធ្វើការធម្មតា ×១
   const { error } = await supabaseClient.from('holidays').upsert({ date, name }, { onConflict: 'date' });
   if (error) { customAlert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
   holidays[date] = name; holidaysAvailable = true;
   document.getElementById('holidayName').value = '';
+  if (swapEl) swapEl.checked = false;
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
 }
 
@@ -2786,7 +2793,7 @@ function calcDeductionRow(emp, month) {
       leaveDays++;
       const isSubst = !!(req && (req.reason || '').includes(SUBST_TAG)); // ជំនួសថ្ងៃឈប់ដោយបំណាច់ → មិនកាត់លុយ
       if (type === 'maternity') { maternityDays++; maternityDeductDays += matFrac(date); }
-      else if (deductRules.leaveTypes.includes(type) && !isSubst && holidays[date] === undefined) deductibleLeaveDays++; // ថ្ងៃបុណ្យជាតិ → មិនកាត់
+      else if (deductRules.leaveTypes.includes(type) && !isSubst && (holidays[date] === undefined || isSwapHoliday(date))) deductibleLeaveDays++; // ថ្ងៃបុណ្យជាតិ → មិនកាត់
       leaveDates.push(`${date.slice(8)} (${LEAVE_TYPE_LABELS[type]})`);
     }
   });
@@ -3215,7 +3222,7 @@ function readAdvControls() {
 function advanceDateOf(month) {
   const [y, m] = month.split('-').map(Number);
   const ymd = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || (typeof holidays !== 'undefined' && holidays[ymd(dt)] !== undefined);
+  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || (typeof holidays !== 'undefined' && holidays[ymd(dt)] !== undefined && !isSwapHoliday(ymd(dt)));
   const d = new Date(y, m - 1, 25, 12); // 12:00 ដើម្បីជៀសវាងបញ្ហា DST
   for (let i = 0; i < 14 && isOff(d); i++) d.setDate(d.getDate() - 1);
   return ymd(d);
