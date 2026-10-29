@@ -650,10 +650,14 @@ function computeWorkMinutes(checkin, checkout, breakOut, breakIn, shift) {
 // ---- ថ្ងៃអាទិត្យ / ថ្ងៃបុណ្យ៖ ធ្វើការទទួលបានប្រាក់ឈ្នូល គុណ 2 ----
 const HOLIDAY_MULTIPLIER = 2;
 let holidays = {}; // { 'YYYY-MM-DD': 'ឈ្មោះថ្ងៃបុណ្យ' }
+// ថ្ងៃបុណ្យដែល "ដោះដូរ" (បុគ្គលិកដោះដូរថ្ងៃឈប់ → ថ្ងៃនេះធ្វើការធម្មតា ×១) — ដាក់ស្លាកនេះនៅដើមឈ្មោះថ្ងៃបុណ្យ
+const HOLIDAY_SWAP_TAG = '[ដោះដូរ]';
 let holidaysAvailable = true;
+function isSwapHoliday(date) { return typeof holidays[date] === 'string' && holidays[date].startsWith(HOLIDAY_SWAP_TAG); }
 
 function dayMultiplier(date) {
   if (!date) return 1;
+  if (isSwapHoliday(date)) return 1;   // ថ្ងៃបុណ្យដែលដោះដូរ → ឈ្នួលធម្មតា
   const isSunday = new Date(date + 'T00:00:00').getDay() === 0;
   return (isSunday || holidays[date] !== undefined) ? HOLIDAY_MULTIPLIER : 1;
 }
@@ -1697,12 +1701,12 @@ async function renderHistory() {
       right = parts.join(' · ');
     } else {
       if (!r.status) { // គ្មានស្ថានភាព/ស្កេន (ឧ. ថ្ងៃអាទិត្យ) → មិនបង្ហាញជួរទទេ "-"
-        if (holidays[r.date] === undefined) return '';
+        if (holidays[r.date] === undefined || isSwapHoliday(r.date)) return '';
         right = 'សម្រាកបុណ្យជាតិ' + (holidays[r.date] ? ' · ' + escapeHtml(holidays[r.date]) : '');
         return `<div class="hist-row"><span class="d">${r.date} (${dayLabelHl(r.date)})</span><span>${right}</span></div>`;
       }
       right = empStatusLabel(r.date, r.status); // សម្រាកបំណាច់ឆ្នាំ / សម្រាកមានប្រាក់ឈ្នួល ... តាមប្រភេទច្បាប់ ដូច Admin
-      if (r.status === 'leave' && holidays[r.date] !== undefined) {
+      if (r.status === 'leave' && holidays[r.date] !== undefined && !isSwapHoliday(r.date)) {
         if (right === STATUS_LABELS.leave) right = 'សម្រាកបុណ្យជាតិ';
         if (holidays[r.date] && holidays[r.date].trim() !== right) right += ' · ' + escapeHtml(holidays[r.date]); // មិនបង្ហាញឈ្មោះជាន់គ្នា
       }
