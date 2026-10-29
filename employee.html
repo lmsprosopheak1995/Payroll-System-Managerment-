@@ -918,7 +918,7 @@ async function renderProfileExtras() {
       <div class="stat-card"><div class="num">${t.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
       <div class="stat-card"><div class="num">${t.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
       <div class="stat-card"><div class="num">${t.otHours ? fmtHours(t.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
-      <div class="stat-card"><div class="num">$${fmtUSD(t.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>`;
+      <div class="stat-card"><div class="num">$${t.net != null ? fmtUSD2(t.net) : fmtUSD(t.total)}</div><div class="label">${t.net != null ? 'ប្រាក់ខែសុទ្ធ' : 'ប្រាក់ខែប៉ាន់ស្មាន'}</div></div>`;
   } catch (e) {
     console.warn('Profile stats failed', e);
     document.getElementById('pfStats').innerHTML = '<div class="hist-empty" style="grid-column:1/-1;">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>';
@@ -1765,12 +1765,15 @@ async function renderAttendanceTabEmp() {
     </tr>`;
   }).join('');
 
+  // ប្រាក់ខែសុទ្ធ ដូច Admin (បូកអត្ថប្រយោជន៍ ដកប្រាក់កាត់) — បើផ្ទុកមិនបាន ប្រើប្រាក់ប៉ាន់ស្មាន
+  let net = null;
+  try { net = await summarizeMonth(month); } catch (e) { console.warn('summarizeMonth failed', e); }
   document.getElementById('empAttStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.leaveDays}</div><div class="label">ថ្ងៃច្បាប់</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.total)}</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន</div></div>
-    <div class="stat-card"><div class="num">${fmtRiel(totals.riel)} ៛</div><div class="label">ប្រាក់ខែប៉ាន់ស្មាន (៛)</div></div>
+    <div class="stat-card"><div class="num">${net ? '$' + fmtUSD2(net.net) : '$' + fmtUSD(totals.total)}</div><div class="label">${net ? 'ប្រាក់ខែសុទ្ធ ($)' : 'ប្រាក់ខែប៉ាន់ស្មាន'}</div></div>
+    <div class="stat-card"><div class="num">${net ? fmtUSDplusRiel(net.net) : fmtRiel(totals.riel) + ' ៛'}</div><div class="label">${net ? 'ប្រាក់ខែសុទ្ធ (ដុល្លារ + រៀល)' : 'ប្រាក់ខែប៉ាន់ស្មាន (៛)'}</div></div>
     <div class="stat-card"><div class="num">${totals.otHours ? fmtHours(totals.otHours) : 0}</div><div class="label">ម៉ោងថែម (OT)</div></div>
   `;
 }
