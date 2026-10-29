@@ -154,6 +154,7 @@
           <button class="secondary" id="stCsv" title="ទាញយកតារាងជា CSV">⬇ CSV</button>
           <label style="display:flex;gap:5px;align-items:center;font-size:.78rem"><input type="checkbox" id="stTest"> 🧪 របៀបសាកល្បង (មិនរក្សាទុក)</label>
           <label style="display:flex;gap:5px;align-items:center;font-size:.78rem"><input type="checkbox" id="stDetail"> 🔍 បង្ហាញការគណនាលម្អិត</label>
+          <label style="display:flex;gap:5px;align-items:center;font-size:.78rem" title="ពេលខែចប់ និងមិនទាន់បិទ ប្រព័ន្ធតម្រឹមឱ្យដោយស្វ័យប្រវត្តិ"><input type="checkbox" id="stAuto"> ⚙️ តម្រឹមស្វ័យប្រវត្តិ ពេលចប់ខែ</label>
           <span class="st-sum" id="stSum"></span>
         </div>
         <div id="stStatus"></div>
@@ -179,6 +180,8 @@
     $('stCsv').addEventListener('click', exportCsv);
     $('stTest').addEventListener('change', e => { testMode = e.target.checked; render(); });
     $('stDetail').addEventListener('change', e => { showDetail = e.target.checked; render(); });
+    $('stAuto').checked = autoOn();
+    $('stAuto').addEventListener('change', e => { setAuto(e.target.checked); if (e.target.checked) scheduleAuto(); });
     $('stBody').addEventListener('click', async ev => {
       const btn = ev.target.closest('button[data-act]'); if (!btn) return;
       const id = btn.closest('tr').dataset.id, act = btn.dataset.act;
@@ -343,6 +346,53 @@
     await customAlert(`បានតម្រឹម ${ok}/${targets.length} នាក់${stale.length ? ` · ដកធាតុចាស់ ${stale.length}` : ''}`);
   }
 
+  // ------------------------------------------------------- តម្រឹមស្វ័យប្រវត្តិ ----
+  // ពេលខែចប់ + មិនទាន់បិទ → បំពេញ/កាត់តម្រឹមឱ្យអ្នកត្រូវតម្រឹម (id ថេរ មិនស្ទួន)។ បើកដោយធីក ⚙️ ក្នុងប្រអប់នេះ (លំនាំដើម៖ បិទ)
+  // សុវត្ថិភាព៖ មិនដកធាតុចាស់ចេញដោយស្វ័យប្រវត្តិ · មិនធ្វើបើទិន្នន័យផ្ទុកមិនពេញ ឬមិនមានវត្តមានក្នុងខែ
+  const AUTO_KEY = 'topup_auto';
+  const autoOn = () => { try { return !!(window.appKV && window.appKV.get(AUTO_KEY, '') === '1'); } catch (e) { return false; } };
+  const setAuto = v => { try { if (window.appKV) window.appKV.set(AUTO_KEY, v ? '1' : '0'); } catch (e) { /* ignore */ } };
+  let autoBusy = false, autoTimer = null;
+
+  async function autoApplyMonth(month) {
+    if (!MONTH_RE.test(month) || isMonthLocked(month) || !monthEnded(month)) return 0;
+    if (typeof loadFailures !== 'undefined' && loadFailures && Object.keys(loadFailures).length) return 0;
+    if (!Object.keys(attendance || {}).some(d => d.slice(0, 7) === month)) return 0; // វត្តមានមិនទាន់ផ្ទុក
+    const saved = curMonth; curMonth = month; let n = 0;
+    try {
+      const targets = payrollEmployeesForMonth(month)
+        .map(e => ({ e, c: calc(e, month), cur: curItem(e.id, month) }))
+        .filter(({ c, cur }) => c.eligible && c.adj !== 0 && mismatch(c, cur));
+      for (const t of targets) { if (await applyItem(t.e.id, true)) n++; }
+    } finally { curMonth = saved; }
+    return n;
+  }
+
+  async function autoApply() {
+    if (autoBusy || !autoOn()) return;
+    autoBusy = true;
+    try {
+      const months = new Set([shiftMonth(todayStr().slice(0, 7), -1)]);
+      if (typeof currentMonthlyMonth === 'function') { const m = currentMonthlyMonth(); if (m) months.add(m); }
+      let changed = 0;
+      for (const m of months) changed += await autoApplyMonth(m);
+      if (changed) {
+        if (typeof renderMonthlyTab === 'function') { try { renderMonthlyTab(); } catch (e) { /* ignore */ } }
+        if (typeof renderPayrollTab === 'function') { try { renderPayrollTab(); } catch (e) { /* ignore */ } }
+        if (overlay && overlay.classList.contains('open')) render();
+      }
+    } catch (e) { console.warn('salary-topup auto', e); }
+    finally { autoBusy = false; }
+  }
+  function scheduleAuto() { clearTimeout(autoTimer); autoTimer = setTimeout(autoApply, 1200); }
+
+  function hookMonthly() {
+    if (typeof window.renderMonthlyTab !== 'function' || window.renderMonthlyTab.__tu) return;
+    const orig = window.renderMonthlyTab;
+    const wrapped = function () { const r = orig.apply(this, arguments); if (!autoBusy) scheduleAuto(); return r; };
+    wrapped.__tu = true; window.renderMonthlyTab = wrapped;
+  }
+
   // ---------------------------------------------------------------- init ----
   function init() {
     if (document.getElementById('monthlyTopupBtn')) return;
@@ -354,7 +404,7 @@
     btn.addEventListener('click', open);
     anchor.insertAdjacentElement('afterend', btn);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { init(); hookMonthly(); }); else { init(); hookMonthly(); }
   window.openSalaryTopup = open;
   window.salaryTopupCalc = calc; // សម្រាប់សាកល្បង/ពិនិត្យ
 })();
