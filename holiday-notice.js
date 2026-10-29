@@ -14,6 +14,9 @@
   const todayStr = () => ict().toISOString().slice(0, 10);
   const dayDiff = ds => Math.round((new Date(ds + 'T00:00:00Z') - new Date(todayStr() + 'T00:00:00Z')) / 86400e3);
   const dow = ds => new Date(ds + 'T00:00:00Z').getUTCDay();
+  const SWAP_TAG = '[ដោះដូរ]';   // ដូចក្នុង script.js (HOLIDAY_SWAP_TAG)
+  const isSwap = n => String(n).startsWith(SWAP_TAG);
+  const nm = n => isSwap(n) ? String(n).slice(SWAP_TAG.length).trim() + ' (ដោះដូរ — ធ្វើការធម្មតា ×១)' : String(n);
   const getHol = () => { try { return (typeof holidays !== 'undefined' && holidays) || {}; } catch (_) { return {}; } };
 
   const h = (tag, p, ...kids) => {
@@ -123,7 +126,7 @@
         const d = dayDiff(it.date);
         return h('div', { class: 'hn-item' + (d === 0 ? ' hn-today' : d < 0 ? ' hn-past' : '') },
           h('div', { class: 'hn-day' }, h('b', { text: String(+it.date.slice(8)) }), h('span', { text: KH_D[dow(it.date)] })),
-          h('div', { class: 'hn-info' }, h('strong', { text: it.name }), h('span', { class: 'hn-chip', text: chipText(it.date) })));
+          h('div', { class: 'hn-info' }, h('strong', { text: nm(it.name) }), h('span', { class: 'hn-chip', text: chipText(it.date) })));
       })
       : h('div', { class: 'hn-empty' }, h('div', { text: '📅' }), h('div', { text: 'គ្មានថ្ងៃឈប់សម្រាកក្នុងខែនេះ' }))));
 
@@ -181,7 +184,7 @@
     const hol = getHol();
     const todayIs = list.length && dayDiff(list[0]) === 0;
     const lines = list.slice(0, 3).map(d => h('div', null,
-      KH_D[dow(d)] + ' ' + (+d.slice(8)) + ' ' + KH_M[+d.slice(5, 7) - 1] + ' · ' + String(hol[d] || 'ថ្ងៃបុណ្យ'), h('em', { text: chipText(d) })));
+      KH_D[dow(d)] + ' ' + (+d.slice(8)) + ' ' + KH_M[+d.slice(5, 7) - 1] + ' · ' + nm(hol[d] || 'ថ្ងៃបុណ្យ'), h('em', { text: chipText(d) })));
     if (list.length > 3) lines.push(h('div', { text: '… និងមានថ្ងៃឈប់ ' + (list.length - 3) + ' ថ្ងៃទៀត' }));
     if (!list.length) lines.push(h('div', { text: 'គ្មានថ្ងៃឈប់សម្រាកក្នុង ១៤ ថ្ងៃខាងមុខទេ។' }));
     banner = h('div', { class: 'hn-banner', role: 'status' },
