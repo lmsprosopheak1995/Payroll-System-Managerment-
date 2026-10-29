@@ -767,11 +767,10 @@
       <div style="margin-top:12px;"><button id="settingEditBtn">✏️ កែប្រែការកំណត់</button></div>
     </div>
     <details class="scan-result-card" id="holidayBox" open style="margin-bottom:14px;">
-      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ) · ជម្រើស «ដោះដូរ» = ធ្វើការធម្មតា ×១</summary>
+      <summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">🎌 ថ្ងៃបុណ្យ — ធ្វើការទទួលបានប្រាក់ឈ្នូល ×២ (ថ្ងៃអាទិត្យ ×២ ដោយស្វ័យប្រវត្តិ)</summary>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
         <input type="date" id="holidayDate">
         <input type="text" id="holidayName" placeholder="ឈ្មោះថ្ងៃបុណ្យ" style="min-width:200px;">
-        <label style="display:inline-flex;gap:6px;align-items:center;font-size:0.8rem;" title="បុគ្គលិកដោះដូរថ្ងៃឈប់ → ថ្ងៃបុណ្យនេះធ្វើការធម្មតា ឈ្នួល ×១"><input type="checkbox" id="holidaySwap"> ថ្ងៃដោះដូរ (ធ្វើការធម្មតា ×១)</label>
         <button id="holidayAddBtn">➕ បន្ថែមថ្ងៃបុណ្យ</button>
       </div>
       <p id="holidayWarn" class="scan-hint" style="color:var(--danger);display:none;"></p>
@@ -1086,6 +1085,7 @@
 <script src="full-month.js"></script>
 <script src="salary-topup.js"></script>
 <script src="script.js"></script>
+<script src="telegram-login.js"></script>
 <script src="pdf-export.js"></script>
 <script src="rules-sync.js"></script>
 <script src="month-end.js"></script>
@@ -1108,6 +1108,5 @@
 <script src="fdc-pay.js"></script>
 <script src="ui-modern.js"></script>
 <script src="about-contact.js"></script>
-<script src="holiday-notice.js"></script>
 </body>
 </html>
