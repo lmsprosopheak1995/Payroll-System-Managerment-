@@ -1040,7 +1040,7 @@ function renderAttendanceTab() {
     const old = document.getElementById('attendanceBreakdown'); if (old) old.remove();
     document.getElementById('attendanceStats').insertAdjacentElement('afterend', wrap);
   }
-  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:10px 0 14px;';
+  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:10px 0 14px;width:100%;max-width:100%;box-sizing:border-box;flex:1 1 100%;align-self:stretch;grid-column:1 / -1;';   // ពេញទទឹង (ទោះ parent ជា flex/grid)
   wrap.innerHTML = boxHtml + projHtml + cmpHtml + daysHtml + quickHtml + chartHtml;
 }
 
