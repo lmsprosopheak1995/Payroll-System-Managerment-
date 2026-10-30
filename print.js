@@ -148,9 +148,11 @@ function summarizeEmpMonth(emp, month) {
   if (snap) return snap;
   const t = { workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, doubleDays: 0,
     normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, workPay: 0, leavePay: 0, leaveHours: 0, foodRiel: 0, foodOtRiel: 0, total: 0, riel: 0 };
+  const rowsAdj = [];
   daysInMonth(month).forEach(date => {
     const rec = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, rec, date);
+    rowsAdj.push({ date, r });
     if (r.status === 'present') t.workDays++;
     if (r.status === 'present' && r.mult > 1) t.doubleDays++;
     if (r.status === 'leave') t.leaveDays++;
@@ -162,6 +164,10 @@ function summarizeEmpMonth(emp, month) {
     t.foodRiel += r.foodPayRiel; t.foodOtRiel += r.foodOtPayRiel;
     t.total += r.total; t.riel += r.riel;
   });
+  // ប្រាក់ខែថេរ៖ ពិដាន + ខែ ២៥/២៧ ថ្ងៃ (monthRegularAdjust នៅក្នុង script.js)
+  const baseAdj = (typeof monthRegularAdjust === 'function') ? monthRegularAdjust(emp.salary, emp.startDate, month, rowsAdj) : 0;
+  if (baseAdj) { t.normalPay += baseAdj; t.workPay += baseAdj; t.total += baseAdj; t.riel += Math.round(baseAdj * (settings.exchangeRate || 0)); }
+  t.baseAdjust = baseAdj;
   const items = getPayrollItemsForEmpMonth(emp.id, month);
   t.benefitItems = items.filter(p => p.type === 'benefit');
   t.deductionItems = items.filter(p => p.type === 'deduction');

@@ -729,6 +729,31 @@ function computeRow(salary, record, date) {
   return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leaveHours, leavePay, workPay };
 }
 
+
+// ===== ប្រាក់ខែថេរ (ពិដាន + ខែ ២៥/២៧ ថ្ងៃ) =====
+// ថ្ងៃធម្មតា (មិនមែនអាទិត្យ) ត្រូវបើកពេញប្រាក់ខែគោល ($salary) បើមកគ្រប់ ទោះខែមាន ២៥ ឬ ២៧ ថ្ងៃ។
+//  · តែងតែកាត់ពិដាន៖ ប្រាក់ឈ្នួលធម្មតា + ច្បាប់ ≤ ប្រាក់ខែគោល
+//  · ពេលខែបានចប់ហើយ (និងបុគ្គលិកនៅពេញខែ)៖ បន្ថែម/ដក (salary − ថ្ងៃធម្មតាក្នុងខែ × ប្រាក់ថ្ងៃ) ដើម្បីឲ្យអវត្តមាន ១ ថ្ងៃ = ដក ១ ថ្ងៃ ពិតប្រាកដ
+//  · ថ្ងៃអាទិត្យ មិនប៉ះ (បើកបន្ថែមដូចដើម); OT និងប្រាក់បាយ មិនប៉ះ; ផ្នែកបន្ថែម ×២ នៃថ្ងៃបុណ្យ មិនប៉ះ
+// rows = [{ date, r }]  (r = ចម្លើយពី computeRow) · ត្រឡប់ចំនួនត្រូវបូក/ដក ចូល workPay (+ normalPay + total)
+function monthRegularAdjust(salary, startDate, month, rows) {
+  salary = parseFloat(salary) || 0;
+  const wd = settings.workDaysPerMonth;
+  if (!(salary > 0 && wd > 0) || !rows || !rows.length) return 0;
+  const d = salary / wd;
+  let regular = 0, sched = 0;
+  rows.forEach(({ date, r }) => {
+    if (new Date(date + 'T00:00:00').getDay() === 0) return;        // ថ្ងៃអាទិត្យ = ក្រៅ
+    sched++;
+    regular += (r.workPay || 0) / (r.mult || 1) + (r.leavePay || 0); // ផ្នែក ×១ នៃថ្ងៃធម្មតា/ថ្ងៃបុណ្យ + ច្បាប់
+  });
+  const ended = todayStr() > rows[rows.length - 1].date;             // ខែចប់ហើយ
+  const fullMonth = !!startDate && startDate <= month + '-01';      // បុគ្គលិកនៅពេញខែ (គ្មានថ្ងៃចូលធ្វើការ = មិនបន្ថែម/ដក ក្រៅពីពិដាន)
+  const offset = (ended && fullMonth) ? salary - sched * d : 0;
+  const base = Math.min(salary, regular + offset);
+  return Math.round((base - regular) * 10000) / 10000;
+}
+
 function todayStr() {
   const d = new Date();
   const offset = d.getTimezoneOffset();
@@ -1734,9 +1759,11 @@ async function renderAttendanceTabEmp() {
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
   let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, leaveDays: 0, otHours: 0 };
+  const rowsAdj = [];
 
   tbody.innerHTML = dates.map(date => {
     const r = computeRow(salary, dayMap[date], date);
+    rowsAdj.push({ date, r });
     totals.total += r.total;
     totals.riel += r.riel;
     totals.otHours += r.otHours;
@@ -1764,6 +1791,8 @@ async function renderAttendanceTabEmp() {
       <td class="c-tt">${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
+  const baseAdjEmp = monthRegularAdjust(salary, currentEmployee && currentEmployee.startDate, month, rowsAdj);
+  if (baseAdjEmp) { totals.total += baseAdjEmp; totals.riel += Math.round(baseAdjEmp * (settings.exchangeRate || 0)); }
 
   // ប្រាក់ខែសុទ្ធ ដូច Admin (បូកអត្ថប្រយោជន៍ ដកប្រាក់កាត់) — បើផ្ទុកមិនបាន ប្រើប្រាក់ប៉ាន់ស្មាន
   let net = null;
@@ -1915,8 +1944,10 @@ async function summarizeMonth(month) {
   const dates = daysInMonth(month);
   const salary = currentEmployee ? currentEmployee.salary : 0;
   let t = { doubleDays: 0, workDays: 0, leaveDays: 0, absentDays: 0, lateDays: 0, normalHours: 0, otHours: 0, normalPay: 0, otPay: 0, workPay: 0, leavePay: 0, foodPay: 0, foodOtPay: 0, total: 0, riel: 0 };
+  const rowsAdj = [];
   dates.forEach(date => {
     const r = computeRow(salary, dayMap[date], date);
+    rowsAdj.push({ date, r });
     if (r.status === 'present') t.workDays++;
     if (r.status === 'present' && r.mult > 1) t.doubleDays++;
     if (r.status === 'leave') t.leaveDays++;
@@ -1928,6 +1959,10 @@ async function summarizeMonth(month) {
     t.foodPay += r.foodPay; t.foodOtPay += r.foodOtPay;
     t.total += r.total; t.riel += r.riel;
   });
+  // ប្រាក់ខែថេរ៖ ពិដាន + ខែ ២៥/២៧ ថ្ងៃ (ដូច admin)
+  const baseAdj = monthRegularAdjust(salary, currentEmployee && currentEmployee.startDate, month, rowsAdj);
+  if (baseAdj) { t.normalPay += baseAdj; t.workPay += baseAdj; t.total += baseAdj; t.riel += Math.round(baseAdj * (settings.exchangeRate || 0)); }
+  t.baseAdjust = baseAdj;
   const items = (await loadMyPayrollItems()).filter(p => p.recurrence === 'fixed' || p.month === month);
   t.benefitItems = items.filter(p => p.type === 'benefit');
   t.deductionItems = items.filter(p => p.type === 'deduction');

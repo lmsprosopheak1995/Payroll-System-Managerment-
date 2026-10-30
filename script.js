@@ -749,6 +749,31 @@ const workPay = status === 'leave' ? 0 : round4(hourlyRate * mult * normalHours)
   return { status, checkin, checkout, breakOut, breakIn, late, normalHours, otHours, normalPay, otPay, foodPay, foodOtPay, foodPayRiel, foodOtPayRiel, total, riel, mult, leavePayHours, leaveHours, leavePay, workPay };
 }
 
+
+// ===== ប្រាក់ខែថេរ (ពិដាន + ខែ ២៥/២៧ ថ្ងៃ) =====
+// ថ្ងៃធម្មតា (មិនមែនអាទិត្យ) ត្រូវបើកពេញប្រាក់ខែគោល ($salary) បើមកគ្រប់ ទោះខែមាន ២៥ ឬ ២៧ ថ្ងៃ។
+//  · តែងតែកាត់ពិដាន៖ ប្រាក់ឈ្នួលធម្មតា + ច្បាប់ ≤ ប្រាក់ខែគោល
+//  · ពេលខែបានចប់ហើយ (និងបុគ្គលិកនៅពេញខែ)៖ បន្ថែម/ដក (salary − ថ្ងៃធម្មតាក្នុងខែ × ប្រាក់ថ្ងៃ) ដើម្បីឲ្យអវត្តមាន ១ ថ្ងៃ = ដក ១ ថ្ងៃ ពិតប្រាកដ
+//  · ថ្ងៃអាទិត្យ មិនប៉ះ (បើកបន្ថែមដូចដើម); OT និងប្រាក់បាយ មិនប៉ះ; ផ្នែកបន្ថែម ×២ នៃថ្ងៃបុណ្យ មិនប៉ះ
+// rows = [{ date, r }]  (r = ចម្លើយពី computeRow) · ត្រឡប់ចំនួនត្រូវបូក/ដក ចូល workPay (+ normalPay + total)
+function monthRegularAdjust(salary, startDate, month, rows) {
+  salary = parseFloat(salary) || 0;
+  const wd = settings.workDaysPerMonth;
+  if (!(salary > 0 && wd > 0) || !rows || !rows.length) return 0;
+  const d = salary / wd;
+  let regular = 0, sched = 0;
+  rows.forEach(({ date, r }) => {
+    if (new Date(date + 'T00:00:00').getDay() === 0) return;        // ថ្ងៃអាទិត្យ = ក្រៅ
+    sched++;
+    regular += (r.workPay || 0) / (r.mult || 1) + (r.leavePay || 0); // ផ្នែក ×១ នៃថ្ងៃធម្មតា/ថ្ងៃបុណ្យ + ច្បាប់
+  });
+  const ended = todayStr() > rows[rows.length - 1].date;             // ខែចប់ហើយ
+  const fullMonth = !!startDate && startDate <= month + '-01';      // បុគ្គលិកនៅពេញខែ (គ្មានថ្ងៃចូលធ្វើការ = មិនបន្ថែម/ដក ក្រៅពីពិដាន)
+  const offset = (ended && fullMonth) ? salary - sched * d : 0;
+  const base = Math.min(salary, regular + offset);
+  return Math.round((base - regular) * 10000) / 10000;
+}
+
 const STATUS_LABELS = { present: 'មកធ្វើការ', absent: 'អវត្តមាន', leave: 'ច្បាប់', '': '-' };
 
 function fmt(n) {
@@ -831,11 +856,13 @@ function renderAttendanceTab() {
   const dates = daysInMonth(month);
 
   const daily = [];
+  const rowsAdj = [];   // សម្រាប់ monthRegularAdjust
   let totals = { total: 0, riel: 0, workDays: 0, lateDays: 0, otHours: 0, normalPay: 0, otPay: 0, foodPay: 0, foodRiel: 0, normalHours: 0, workPay: 0, leavePay: 0, leaveHours: 0, leaveDays: 0 };
 
   tbody.innerHTML = dates.map(date => {
     const record = (attendance[date] && attendance[date][emp.id]) || {};
     const r = computeRow(emp, record, date);
+    rowsAdj.push({ date, r });
     totals.total += r.total;
     totals.riel += r.riel;
     totals.normalPay += r.normalPay; totals.otPay += r.otPay; totals.foodPay += r.foodPay + r.foodOtPay;
@@ -845,7 +872,7 @@ function renderAttendanceTab() {
     if (r.status === 'present') totals.workDays++;
     if (r.late) totals.lateDays++;
     totals.otHours += r.otHours;
-    daily.push({ date, normal: r.normalHours, ot: r.otHours, status: r.status, late: r.late });
+    daily.push({ date, normal: r.normalHours, ot: r.otHours, status: r.status, late: r.late, total: r.total, mult: r.mult });
     const selVal = attStatusSelectValue(date, emp.id, r.status);
     const statusOptions = ['', 'present', 'absent', 'leave', 'leave_annual', 'leave_paid', 'leave_custom'].map(s =>
       `<option value="${s}" ${selVal === s ? 'selected' : ''}>${ATT_OPTION_LABELS[s]}</option>`
@@ -871,6 +898,10 @@ function renderAttendanceTab() {
       <td class="c-tt">${fmtRiel(r.riel)} ៛</td>
     </tr>`;
   }).join('');
+  // ប្រាក់ខែថេរ៖ ពិដាន $salary និងខែ ២៥/២៧ ថ្ងៃ (មើល monthRegularAdjust)
+  const baseAdj = monthRegularAdjust(emp.salary, emp.startDate, month, rowsAdj);
+  if (baseAdj) { totals.total += baseAdj; totals.normalPay += baseAdj; totals.workPay += baseAdj; totals.riel += Math.round(baseAdj * (settings.exchangeRate || 0)); }
+
 
   const adj = getPayrollAdjustmentUSD(emp.id, month);
   const netUSD = totals.total + adj.net;
@@ -942,6 +973,31 @@ function renderAttendanceTab() {
     ${cmpRow('ប្រាក់ខែសុទ្ធ ($)', prevT.net, sumT.net, v => '$' + net2(v), true)}
     </div></div>`;
 
+
+  // (1.5) ប៉ាន់ស្មានប្រាក់ខែពេញខែ (រហូតដល់ថ្ងៃចុងខែ) — តែខែបច្ចុប្បន្ន ហើយមិនទាន់បិទបញ្ជី
+  let projHtml = '';
+  try {
+    const todayP = todayStr();
+    if (!monthLocked && todayP.slice(0, 7) === month) {
+      const recOf = d => ((attendance[d] || {})[emp.id]) || {};
+      const sample = daily.filter(d => d.status === 'present' && d.normal > 0 && (d.mult || 1) <= 1);      // ថ្ងៃធម្មតាដែលធ្វើការពេញ
+      const avgDay = sample.length ? sample.reduce((a, d) => a + d.total, 0) / sample.length : 0;           // ជាមធ្យមក្នុង ១ ថ្ងៃ (រួម OT + ប្រាក់បាយ)
+      const remain = dates.filter(d => (d > todayP || (d === todayP && !recOf(d).checkout))
+        && d >= (emp.startDate || '0000-00-00') && dayMultiplier(d) <= 1 && !recOf(d).status);              // មិនរាប់ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ/ថ្ងៃដែលបានកត់ច្បាប់រួច
+      const extra = remain.length * avgDay;
+      const projNet = netUSD + extra;
+      const lastD = dates[dates.length - 1];
+      const projSplit = fmtNetByMode(Math.round(projNet * 100) / 100);
+      projHtml = `<div style="${cardCss}">${cardTitle('🔮 ប៉ាន់ស្មានប្រាក់ខែពេញខែ <small style="font-weight:400;color:var(--text-muted);">(ដល់ថ្ងៃទី ' + lastD.slice(8) + ')</small>')}
+        ${row('ប្រាក់ខែសុទ្ធបច្ចុប្បន្ន', '$' + net2(netUSD))}
+        ${row('ថ្ងៃធ្វើការនៅសល់ (ប៉ាន់ស្មាន)', remain.length + ' ថ្ងៃ')}
+        ${row('ជាមធ្យម/ថ្ងៃ (' + sample.length + ' ថ្ងៃគំរូ)', '$' + fmtUSD(avgDay))}
+        ${row('+ ប៉ាន់ស្មានបន្ថែម', '+$' + fmtUSD(extra), '#16a34a')}
+        <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ពេញខែ (ប៉ាន់ស្មាន)</span><span style="text-align:right;">$${net2(projNet)}${projSplit ? '<div style="font-size:0.72rem;font-weight:500;color:var(--text-muted);">' + projSplit + '</div>' : ''}</span></div>
+        <div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">* ជាការប៉ាន់ស្មានតាមជាមធ្យមថ្ងៃធម្មតា (មិនរាប់ថ្ងៃអាទិត្យ/ថ្ងៃបុណ្យ/ថ្ងៃឈប់ដែលបានកត់) ហើយអាចប្រែប្រួលតាមវត្តមានពិត</div></div>`;
+    }
+  } catch (e) { console.warn('projection failed', e); }
+
   // (2) សង្ខេបថ្ងៃ
   const cnt = { present: 0, leave: 0, absent: 0, late: 0 };
   daily.forEach(d => { if (d.status === 'present') cnt.present++; else if (d.status === 'leave') cnt.leave++; else if (d.status === 'absent') cnt.absent++; if (d.late) cnt.late++; });
@@ -981,7 +1037,7 @@ function renderAttendanceTab() {
     document.getElementById('attendanceStats').insertAdjacentElement('afterend', wrap);
   }
   wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:10px 0 14px;';
-  wrap.innerHTML = boxHtml + cmpHtml + daysHtml + quickHtml + chartHtml;
+  wrap.innerHTML = boxHtml + projHtml + cmpHtml + daysHtml + quickHtml + chartHtml;
 }
 
 // បន្ថែមធាតុ (ប្រែប្រួល) លឿនពីផ្ទាំងតារាងវត្តមាន — ប្រើដំណើរការដូច savePayrollItem
