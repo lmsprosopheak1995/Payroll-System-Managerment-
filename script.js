@@ -1011,10 +1011,14 @@ function renderAttendanceTab() {
 
   // (3) ក្រាហ្វម៉ោងធ្វើការ/OT ប្រចាំថ្ងៃ
   const maxH = Math.max(settings.standardHours || 8, ...daily.map(d => d.normal + d.ot), 1);
-  const chartHtml = `<div style="${cardCss}flex:1 1 100%;max-width:none;">${cardTitle('📊 ម៉ោងធ្វើការ / OT ប្រចាំថ្ងៃ <small style="font-weight:400;color:var(--text-muted);"><span style="color:#6366f1;">■</span> ធម្មតា &nbsp;<span style="color:#f59e0b;">■</span> OT</small>')}
-    <div style="display:flex;align-items:flex-end;gap:3px;height:90px;">${daily.map(d => `<div title="${d.date} · ធម្មតា ${fmtHours(d.normal)} ម៉ោង · OT ${fmtHours(d.ot)} ម៉ោង" style="flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column-reverse;">
-      <div style="height:${d.normal / maxH * 100}%;background:#6366f1;border-radius:0 0 2px 2px;"></div><div style="height:${d.ot / maxH * 100}%;background:#f59e0b;border-radius:2px 2px 0 0;"></div></div>`).join('')}</div>
-    <div style="display:flex;gap:3px;font-size:9px;color:var(--text-muted);">${daily.map(d => `<div style="flex:1 1 0;min-width:0;text-align:center;">${d.date.slice(8)}</div>`).join('')}</div></div>`;
+  const chartHtml = `<div style="${cardCss}flex:1 1 100% !important;width:100%;max-width:none !important;box-sizing:border-box;font-size:0.95rem;padding:16px 20px;">${cardTitle('📊 ម៉ោងធ្វើការ / OT ប្រចាំថ្ងៃ <small style="font-weight:400;color:var(--text-muted);"><span style="color:#6366f1;">■</span> ធម្មតា &nbsp;<span style="color:#f59e0b;">■</span> OT</small>')}
+    <div style="display:flex;align-items:flex-end;gap:6px;height:240px;margin-top:8px;">${daily.map(d => {
+      const tot = d.normal + d.ot;
+      return `<div title="${d.date} · ធម្មតា ${fmtHours(d.normal)} ម៉ោង · OT ${fmtHours(d.ot)} ម៉ោង" style="flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;">
+        <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);min-height:16px;">${tot ? fmtHours(tot) : ''}</div>
+        <div style="height:${d.ot / maxH * 100}%;background:#f59e0b;border-radius:4px 4px 0 0;"></div><div style="height:${d.normal / maxH * 100}%;background:#6366f1;border-radius:${d.ot ? '0' : '4px 4px'} 0 0;"></div></div>`;
+    }).join('')}</div>
+    <div style="display:flex;gap:6px;font-size:12px;font-weight:600;color:var(--text-muted);margin-top:4px;">${daily.map(d => `<div style="flex:1 1 0;min-width:0;text-align:center;">${d.date.slice(8)}</div>`).join('')}</div></div>`;
 
   // (4) បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់ លឿន (ធាតុប្រែប្រួល ក្នុងខែនេះ)
   const qaIn = 'padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:0.8rem;';
