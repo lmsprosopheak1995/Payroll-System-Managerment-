@@ -1011,7 +1011,7 @@ function renderAttendanceTab() {
 
   // (3) ក្រាហ្វម៉ោងធ្វើការ/OT ប្រចាំថ្ងៃ
   const maxH = Math.max(settings.standardHours || 8, ...daily.map(d => d.normal + d.ot), 1);
-  const chartHtml = `<div style="${cardCss}flex:1 1 100% !important;width:100%;max-width:none !important;box-sizing:border-box;font-size:0.95rem;padding:16px 20px;">${cardTitle('📊 ម៉ោងធ្វើការ / OT ប្រចាំថ្ងៃ <small style="font-weight:400;color:var(--text-muted);"><span style="color:#6366f1;">■</span> ធម្មតា &nbsp;<span style="color:#f59e0b;">■</span> OT</small>')}
+  const chartHtml = `<div style="display:block;width:100%;max-width:none;box-sizing:border-box;background:var(--card-bg,#fff);border:1px solid #e5e7eb;border-radius:10px;font-size:0.95rem;padding:16px 20px;">${cardTitle('📊 ម៉ោងធ្វើការ / OT ប្រចាំថ្ងៃ <small style="font-weight:400;color:var(--text-muted);"><span style="color:#6366f1;">■</span> ធម្មតា &nbsp;<span style="color:#f59e0b;">■</span> OT</small>')}
     <div style="display:flex;align-items:flex-end;gap:6px;height:240px;margin-top:8px;">${daily.map(d => {
       const tot = d.normal + d.ot;
       return `<div title="${d.date} · ធម្មតា ${fmtHours(d.normal)} ម៉ោង · OT ${fmtHours(d.ot)} ម៉ោង" style="flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;">
@@ -1041,7 +1041,17 @@ function renderAttendanceTab() {
     document.getElementById('attendanceStats').insertAdjacentElement('afterend', wrap);
   }
   wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:10px 0 14px;width:100%;max-width:100%;box-sizing:border-box;flex:1 1 100%;align-self:stretch;grid-column:1 / -1;';   // ពេញទទឹង (ទោះ parent ជា flex/grid)
-  wrap.innerHTML = boxHtml + projHtml + cmpHtml + daysHtml + quickHtml + chartHtml;
+  wrap.innerHTML = boxHtml + projHtml + cmpHtml + daysHtml + quickHtml;
+
+  // ក្រាហ្វ៖ ដាក់ក្នុងប្រអប់ដាច់ដោយឡែក (block) ក្រោម wrap ដើម្បីឱ្យពេញទទឹងជានិច្ច មិនរងឥទ្ធិពលពី flex/grid របស់ wrap
+  let chartWrap = document.getElementById('attendanceChartWrap');
+  if (!chartWrap) {
+    chartWrap = document.createElement('div');
+    chartWrap.id = 'attendanceChartWrap';
+    wrap.insertAdjacentElement('afterend', chartWrap);
+  }
+  chartWrap.style.cssText = 'display:block;width:100%;max-width:100%;box-sizing:border-box;margin:0 0 14px;grid-column:1 / -1;';
+  chartWrap.innerHTML = chartHtml;
 }
 
 // បន្ថែមធាតុ (ប្រែប្រួល) លឿនពីផ្ទាំងតារាងវត្តមាន — ប្រើដំណើរការដូច savePayrollItem
