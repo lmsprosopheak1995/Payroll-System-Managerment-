@@ -661,6 +661,8 @@ async function loadHolidays() {
 }
 
 // ---- គ្រប់គ្រងថ្ងៃបុណ្យ (Admin) ----
+let holidayViewMonth = '';   // ខែដែលកំពុងបង្ហាញក្នុងបញ្ជីថ្ងៃបុណ្យ
+function setHolidayMonth(m) { holidayViewMonth = m; renderHolidayBox(); }
 function renderHolidayBox() {
   const list = document.getElementById('holidayList');
   if (!list) return;
@@ -672,9 +674,21 @@ function renderHolidayBox() {
     warn.style.display = 'none';
   }
   const dates = Object.keys(holidays).sort();
+  const months = [...new Set(dates.map(d => d.slice(0, 7)))];
+  let bar = document.getElementById('holidayMonths');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'holidayMonths'; bar.style.cssText = 'margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;'; list.parentNode.insertBefore(bar, list); }
+  if (!months.includes(holidayViewMonth)) {   // លំនាំដើម៖ ខែនេះ បើមាន; បើគ្មាន → ខែបន្ទាប់ដែលមានបុណ្យ; បើគ្មាន → ខែចុងក្រោយ
+    const cur = todayStr().slice(0, 7);
+    holidayViewMonth = months.includes(cur) ? cur : (months.find(m => m >= cur) || months[months.length - 1] || '');
+  }
+  bar.innerHTML = months.map(m => {
+    const n = dates.filter(d => d.startsWith(m)).length;
+    return `<button type="button" class="${m === holidayViewMonth ? '' : 'secondary'}" style="padding:4px 10px;font-size:0.8rem;" onclick="setHolidayMonth('${m}')">${m} (${n})</button>`;
+  }).join('');
+  const shown = dates.filter(d => d.startsWith(holidayViewMonth));
   list.innerHTML = dates.length === 0
     ? '<span class="scan-hint">មិនទាន់មានថ្ងៃបុណ្យទេ</span>'
-    : dates.map(d => `<span class="badge ${isSwapHoliday(d) ? 'pending' : 'active'}" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
+    : shown.map(d => `<span class="badge ${isSwapHoliday(d) ? 'pending' : 'active'}" style="display:inline-flex;gap:6px;align-items:center;">${d} ${escapeHtml(holidays[d] || '')} <a href="#" onclick="removeHoliday('${d}');return false;" style="color:var(--danger);text-decoration:none;">✕</a></span>`).join('');
 }
 
 async function addHoliday() {
@@ -686,6 +700,7 @@ async function addHoliday() {
   const { error } = await supabaseClient.from('holidays').upsert({ date, name }, { onConflict: 'date' });
   if (error) { customAlert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
   holidays[date] = name; holidaysAvailable = true;
+  holidayViewMonth = date.slice(0, 7);
   document.getElementById('holidayName').value = '';
   if (swapEl) swapEl.checked = false;
   renderHolidayBox(); renderAttendanceTab(); renderDeductTab();
