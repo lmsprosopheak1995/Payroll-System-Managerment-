@@ -1,4 +1,4 @@
-/* month-end-review.js — 📋 ពិនិត្យចុងខែ (ណែនាំរង្វាន់ / កាត់ប្រាក់តាមវត្តមាន)
+/* month-end-review.js — 📋 រង្វាន់/កាត់វត្តមាន (ណែនាំតាមវត្តមានចុងខែ)
  * ដាក់បន្ទាប់ពី script.js ក្នុង index.html:  <script src="month-end-review.js"></script>
  * ត្រូវដំណើរការ month-end-review.sql ម្តងក្នុង Supabase (បន្ថែមជួរ month_end_rules ក្នុង app_settings)
  *
@@ -169,7 +169,7 @@
     el.innerHTML = `
       <div style="background:#0b1623;color:#e8eef5;border:1px solid #243447;border-radius:14px;width:min(1150px,100%);max-height:92vh;overflow:auto;padding:18px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-          <h3 style="margin:0">📋 ពិនិត្យចុងខែ</h3>
+          <h3 style="margin:0">📋 រង្វាន់ / កាត់ វត្តមានចុងខែ</h3>
           <div style="display:flex;gap:8px;align-items:center">
             <input id="mer-month" type="month" value="${month}" style="padding:6px;border-radius:6px;border:1px solid #334;background:#0d1b2a;color:#fff">
             <button id="mer-x" style="background:none;border:0;color:#fff;font-size:22px;cursor:pointer">✕</button>
@@ -222,13 +222,14 @@
 
   function mount() {
     if ($('#mer-open')) return;
-    const anchor = [...document.querySelectorAll('button')].find(b => /ព្រីមពេញខែ/.test(b.textContent));
+    const btns = [...document.querySelectorAll('button')].filter(b => b.id !== 'mer-open');
+    const anchor = btns.find(b => /ព្រីម/.test(b.textContent)) || btns.find(b => /Backup/.test(b.textContent));
     if (!anchor && !document.body) return;
     const btn = document.createElement('button');
     btn.id = 'mer-open'; btn.type = 'button';
     if (anchor) { btn.className = anchor.className; anchor.insertAdjacentElement('afterend', btn); }
     else { btn.style.cssText = 'position:fixed;bottom:16px;left:16px;z-index:9000;padding:8px 14px;border-radius:10px;border:0;background:#14b8a6;color:#04121a;font-weight:700;cursor:pointer'; document.body.appendChild(btn); }
-    btn.textContent = '📋 ពិនិត្យចុងខែ';
+    btn.textContent = '📋 រង្វាន់/កាត់វត្តមាន';
     btn.onclick = open;
   }
   new MutationObserver(mount).observe(document.documentElement, { childList: true, subtree: true });
