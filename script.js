@@ -937,13 +937,23 @@ function renderAttendanceTab() {
 
   const net2 = v => (Math.round((v || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // ប្រាក់ខែសុទ្ធ បង្ហាញត្រឹម 2 ខ្ទង់
   // ប្រាក់ខែសុទ្ធ បំបែកជា ដុល្លារពេញ + រៀលសល់ (ពី $ ដែលបានបង្គត់ 2 ខ្ទង់ × អត្រា) ឧ. $281.06 → $281 + 240 ៛
+  // ថ្ងៃសមមូលនៃប្រាក់ឈ្នួលថ្ងៃធម្មតា (ដូច Payslip៖ ប្រាក់ ÷ ប្រាក់ឈ្នួល/ថ្ងៃ) ឧ. $165.58 ÷ $8.0769 = 20.5 ថ្ងៃ
+  const empDailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
+  const normalDaysLabel = empDailyRate > 0 ? String(Math.round((totals.workPay / empDailyRate) * 100) / 100) : '0';
+  // ប្រាក់សរុប ដូច Payslip៖ Total before Tax = មិនរួមប្រាក់បាយ; TotalPay = រួមប្រាក់បាយ
+  const totalPayUSD = totals.total + adj.benefits;
+  const beforeTaxUSD = totalPayUSD - totals.foodPay;
+  const totalsRowsHtml = `<div style="margin:4px 0;padding:4px 0;border-top:1px dashed #e5e7eb;border-bottom:1px dashed #e5e7eb;">
+      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុបមុនកាត់ (Total before Tax)</span><span>$${net2(beforeTaxUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុប (TotalPay · រួមប្រាក់បាយ)</span><span>$${net2(totalPayUSD)}</span></div>
+    </div>`;
   const netR = Math.round((netUSD || 0) * 100) / 100;
   const netSplit = fmtNetByMode(netR);
   document.getElementById('attendanceStats').innerHTML = `
     <div class="stat-card"><div class="num">${totals.workDays}</div><div class="label">ថ្ងៃធ្វើការ</div></div>
     <div class="stat-card"><div class="num">${totals.lateDays}</div><div class="label">ថ្ងៃមកយឺត</div></div>
     <div class="stat-card"><div class="num">${fmtHours(totals.otHours)}</div><div class="label">ម៉ោងថែមសរុប (OT)</div></div>
-    <div class="stat-card"><div class="num">$${fmtUSD(totals.workPay)}</div><div class="label">ប្រាក់ឈ្នួលថ្ងៃធម្មតា ($)<br>(${fmtHours(totals.normalHours)} ម៉ោង)</div></div>
+    <div class="stat-card"><div class="num">$${fmtUSD(totals.workPay)}</div><div class="label">ប្រាក់ឈ្នួលថ្ងៃធម្មតា ($)<br>(${normalDaysLabel} ថ្ងៃ)</div></div>
     <div class="stat-card"><div class="num" style="color:#8b5cf6;">$${fmtUSD(totals.leavePay)}</div><div class="label">សម្រាកមានប្រាក់ឈ្នួល (LeavePay)<br>(${totals.leaveDays} ថ្ងៃ${totals.leaveHours ? ' + ' + fmtHours(totals.leaveHours) + ' ម៉ោង' : ''})</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.otPay)}</div><div class="label">ប្រាក់ថែមម៉ោង ($)<br>(${fmtHours(totals.otHours)} ម៉ោង)</div></div>
     <div class="stat-card"><div class="num">$${fmtUSD(totals.foodPay)}</div><div class="label">ប្រាក់បាយ ($)<br>(${fmtRiel(totals.foodRiel)} ៛)</div></div>
@@ -965,7 +975,7 @@ function renderAttendanceTab() {
       ${row('សម្រាកមានប្រាក់ឈ្នួល (LeavePay)', '$' + fmtUSD(totals.leavePay), '#8b5cf6')}
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
-      ${itemsHtml}
+      ${itemLines(sumT.benefitItems, '+', '#16a34a')}${totalsRowsHtml}${itemLines(sumT.deductionItems, '−', '#dc2626')}
       <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:700;"><span>ប្រាក់ខែសុទ្ធ</span><span style="text-align:right;">$${net2(netUSD)}${netSplit ? `<br><span style="font-size:0.74rem;font-weight:500;color:var(--text-muted);">${netSplit}</span>` : ''}</span></div>
     </div>`;
 
