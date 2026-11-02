@@ -8,7 +8,7 @@
      • index.html ដាក់ក្រោម payslip-send.js៖  <script src="work-card.js"></script>
      • លុបបន្ទាត់ script នោះ → ត្រលប់ទៅដើមវិញ (មិនកែ script.js ទេ)
    ត្រូវការ៖ employees (script.js), supabaseClient, qrcode (qrcode-generator), html2canvas, customAlert, customConfirm
-   QR ក្នុងកាត = employee.id ដូចដែលផ្ទាំង «ស្កេន» (handleScanResult ក្នុង script.js) រំពឹង
+   QR ក្នុងកាត = តំណ employee.html?u=<អត្តលេខ> (handleScanResult ក្នុង script.js អាចអានតំណនេះដែរ)
    ========================================================================== */
 (function () {
   'use strict';
@@ -203,9 +203,15 @@
 `;
 
   // ---------------------------------------------------------------- កាត ----
-  function qrDataUrl(text) {
+  function qrDataUrl(text, ecc) {
     if (typeof qrcode === 'undefined') return '';
-    try { const q = qrcode(0, 'M'); q.addData(String(text)); q.make(); return q.createDataURL(5, 0); } catch (_) { return ''; }
+    try { const q = qrcode(0, ecc || 'M'); q.addData(String(text)); q.make(); return q.createDataURL(5, 0); } catch (_) { return ''; }
+  }
+  // តំណទំព័រចូលបុគ្គលិក (employee.html) — QR ក្រោយកាតបើកទំព័រនេះ ហើយបំពេញអត្តលេខឱ្យ; បុគ្គលិកបញ្ចូលតែពាក្យសម្ងាត់
+  const PORTAL_FALLBACK = 'https://payroll-system-managerment.vercel.app/employee.html';
+  function portalUrl(e) {
+    const base = /^https?:$/.test(location.protocol) ? location.origin + '/employee.html' : PORTAL_FALLBACK;
+    return base + '?u=' + encodeURIComponent(String(e.username || e.id));
   }
 
   // ជួរព័ត៌មានទ្វេភាសា ដូចកាតការងារពិត (ស្លាក / Label : តម្លៃ)
@@ -236,16 +242,16 @@
 
   function backHtml(e, company, note) {
     const T = theme(e);
-    const qr = qrDataUrl(e.id);
+    const qr = qrDataUrl(portalUrl(e), 'L');   // ECC ទាប → QR តូចជាង ស្កេនបានងាយលើកាតតូច
     const qrBox = qr
-      ? `<img src="${qr}" alt="QR" style="width:76px;height:76px;display:block;image-rendering:pixelated">`
+      ? `<img src="${qr}" alt="QR" style="width:84px;height:84px;display:block;image-rendering:pixelated">`
       : `<div style="width:76px;height:76px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#be123c;text-align:center">មិនអាចបង្កើត QR</div>`;
     return `<div style="width:${CARD_W}px;height:${CARD_H}px;background:#fff;border:1px solid #e1e8ef;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;font-family:${FONT};color:#0f1b2d;box-sizing:border-box">
       <div style="height:28px;flex:0 0 28px;background:${T.grad};color:#fff;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:11px;line-height:1.5">${logoHtml(18)}<span>${esc(company)}</span></div>
       <div style="flex:1;display:flex;gap:10px;padding:8px 10px;align-items:flex-start;min-height:0">
         <div style="flex:0 0 auto;text-align:center">
           <div style="padding:4px;border:1px solid #e1e8ef;border-radius:8px;background:#fff">${qrBox}</div>
-          <div style="font-size:7.5px;color:#5b6b80;line-height:1.5;margin-top:3px;width:84px">ស្កេន QR ដើម្បីកត់វត្តមាន</div>
+          <div style="font-size:7.5px;color:#5b6b80;line-height:1.5;margin-top:3px;width:84px">ស្កេន QR ដើម្បីមើលព័ត៌មានផ្ទាល់ខ្លួន</div>
           ${(getOpts().showPhone && e.phone) ? `<div style="font-size:7.5px;line-height:1.5;margin-top:2px;width:84px;word-break:break-all"><b>ទូរស័ព្ទ៖</b> ${esc(e.phone)}</div>` : ''}
         </div>
         <div style="flex:1;min-width:0;font-size:7.5px;line-height:1.5">

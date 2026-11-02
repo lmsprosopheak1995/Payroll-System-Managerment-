@@ -2394,6 +2394,19 @@ if (LOGO_URL) {
 }
 
 (function init() {
+  // ស្កេន QR លើកាត → ?u=<អត្តលេខ>៖ បង្ខំចូលម្តងទៀត (កុំបង្ហាញទិន្នន័យអ្នកផ្សេងលើទូរស័ព្ទដែលបានចូលរួចហើយ) បំពេញអត្តលេខ ហើយឱ្យវាយតែពាក្យសម្ងាត់
+  let qrUser = '';
+  try { qrUser = (new URLSearchParams(location.search).get('u') || '').trim().slice(0, 64); } catch (e) { /* ignore */ }
+  if (qrUser) {
+    try { sessionStorage.removeItem(EMP_TOKEN_KEY); } catch (e) { /* ignore */ }
+    clearSession();
+    showLogin();
+    const un = document.getElementById('loginUsername'), pw = document.getElementById('loginPassword');
+    un.value = qrUser;
+    setTimeout(() => pw.focus(), 50);
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+    return;
+  }
   const session = getSession();
   if (session) showMain(); else showLogin();
 })();

@@ -2726,7 +2726,13 @@ async function performScanDelete(empId, field) {
 }
 
 function handleScanResult(decodedText) {
-  const empId = (decodedText || '').trim();
+  let rawId = (decodedText || '').trim();
+  // QR ថ្មីលើកាត = តំណ employee.html?u=<អត្តលេខ> → ដកយកអត្តលេខ (QR ចាស់ = id ត្រង់ៗ នៅតែប្រើបាន)
+  if (/^https?:\/\//i.test(rawId)) {
+    try { const u = new URL(rawId); rawId = (u.searchParams.get('u') || u.searchParams.get('id') || rawId).trim(); } catch (e) { /* ignore */ }
+  }
+  const empByQr = employees.find(x => x.id === rawId) || employees.find(x => x.username && x.username === rawId);
+  const empId = empByQr ? empByQr.id : rawId;
   const now = Date.now();
   if (lastScanByEmp[empId] && now - lastScanByEmp[empId] < 4000) return; // ignore duplicate reads within 4s
   lastScanByEmp[empId] = now;
