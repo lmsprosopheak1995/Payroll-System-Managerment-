@@ -937,6 +937,12 @@ function renderAttendanceTab() {
 
   const net2 = v => (Math.round((v || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // ប្រាក់ខែសុទ្ធ បង្ហាញត្រឹម 2 ខ្ទង់
   // ប្រាក់ខែសុទ្ធ បំបែកជា ដុល្លារពេញ + រៀលសល់ (ពី $ ដែលបានបង្គត់ 2 ខ្ទង់ × អត្រា) ឧ. $281.06 → $281 + 240 ៛
+  // កំណត់សម្គាល់៖ ប្រាក់ឈ្នួលធម្មតាក្រោយតម្រឹម/កាត់ពិដានប្រាក់ខែថេរ (ខុសពីតារាងស្កេនវត្តមានដែលជាទិន្នន័យដើមមុនកាត់ពិដាន)
+  const capNoteHtml = (Math.abs(baseAdj) >= 0.005)
+    ? `<div style="font-size:0.74rem;color:var(--text-muted);margin:-1px 0 3px;">${baseAdj < 0
+        ? 'ក្រោយកាត់ពិដានប្រាក់ខែ $' + fmtUSD(parseFloat(emp.salary) || 0) + ' (កាត់ចេញ $' + fmtUSD(-baseAdj) + ' ពីតារាងស្កេនវត្តមាន)'
+        : 'ក្រោយតម្រឹមប្រាក់ខែថេរ (បូកបន្ថែម $' + fmtUSD(baseAdj) + ')'}</div>`
+    : '';
   // ថ្ងៃសមមូលនៃប្រាក់ឈ្នួលថ្ងៃធម្មតា (ដូច Payslip៖ ប្រាក់ ÷ ប្រាក់ឈ្នួល/ថ្ងៃ) ឧ. $165.58 ÷ $8.0769 = 20.5 ថ្ងៃ
   const empDailyRate = settings.workDaysPerMonth > 0 ? (parseFloat(emp.salary) || 0) / settings.workDaysPerMonth : 0;
   const normalDaysLabel = empDailyRate > 0 ? String(Math.round((totals.workPay / empDailyRate) * 100) / 100) : '0';
@@ -972,6 +978,7 @@ function renderAttendanceTab() {
   const boxHtml = `<div style="${cardCss}">
       ${lockHtml}
       ${row('ប្រាក់ឈ្នួលថ្ងៃធម្មតា', '$' + fmtUSD(totals.workPay))}
+      ${capNoteHtml}
       ${row('សម្រាកមានប្រាក់ឈ្នួល (LeavePay)', '$' + fmtUSD(totals.leavePay), '#8b5cf6')}
       ${row('ប្រាក់ថែមម៉ោង', '$' + fmtUSD(totals.otPay))}
       ${row('ប្រាក់បាយ', '$' + fmtUSD(totals.foodPay))}
