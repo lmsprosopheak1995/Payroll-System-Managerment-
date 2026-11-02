@@ -940,7 +940,8 @@ function renderAttendanceTab() {
   // កំណត់សម្គាល់៖ ប្រាក់ឈ្នួលធម្មតាក្រោយតម្រឹម/កាត់ពិដានប្រាក់ខែថេរ (ខុសពីតារាងស្កេនវត្តមានដែលជាទិន្នន័យដើមមុនកាត់ពិដាន)
   const capNoteHtml = (Math.abs(baseAdj) >= 0.005)
     ? `<div style="font-size:0.74rem;color:var(--text-muted);margin:-1px 0 3px;">${baseAdj < 0
-        ? 'ក្រោយកាត់ពិដានប្រាក់ខែ $' + fmtUSD(parseFloat(emp.salary) || 0) + ' (កាត់ចេញ $' + fmtUSD(-baseAdj) + ' ពីតារាងស្កេនវត្តមាន)'
+        ? (() => { const r2 = v => Math.round(v * 100) / 100; const cut = r2(-baseAdj); const scan = r2(r2(totals.workPay) + cut);
+            return 'តារាងស្កេនវត្តមាន $' + fmtUSD(scan) + ' ប៉ុន្តែក្រោយកាត់ពិដានប្រាក់ខែ $' + fmtUSD(parseFloat(emp.salary) || 0) + ' (កាត់ចេញ $' + fmtUSD(cut) + ' ពីតារាងស្កេនវត្តមាន)'; })()
         : 'ក្រោយតម្រឹមប្រាក់ខែថេរ (បូកបន្ថែម $' + fmtUSD(baseAdj) + ')'}</div>`
     : '';
   // ថ្ងៃសមមូលនៃប្រាក់ឈ្នួលថ្ងៃធម្មតា (ដូច Payslip៖ ប្រាក់ ÷ ប្រាក់ឈ្នួល/ថ្ងៃ) ឧ. $165.58 ÷ $8.0769 = 20.5 ថ្ងៃ
