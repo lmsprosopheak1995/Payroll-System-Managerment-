@@ -951,8 +951,9 @@ function renderAttendanceTab() {
   const totalPayUSD = totals.total + adj.benefits;
   const beforeTaxUSD = totalPayUSD - totals.foodPay;
   const totalsRowsHtml = `<div style="margin:4px 0;padding:4px 0;border-top:1px dashed #e5e7eb;border-bottom:1px dashed #e5e7eb;">
-      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុប (TotalPay · រួមប្រាក់បាយ)</span><span>$${net2(totalPayUSD)}</span></div>
-      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុបមុនកាត់ (Total before Tax)</span><span>$${net2(beforeTaxUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុប TotalPay</span><span>$${net2(totalPayUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ប្រាក់សរុប TotalPay before Tax</span><span>$${net2(beforeTaxUSD)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;font-weight:600;"><span>ឬ</span><span>${fmtRiel(Math.round(Math.round(totalPayUSD * 100) / 100 * (settings.exchangeRate || 0)))} ៛</span></div>
     </div>`;
   const netR = Math.round((netUSD || 0) * 100) / 100;
   const netSplit = fmtNetByMode(netR);
