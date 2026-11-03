@@ -2017,6 +2017,24 @@ function monthsBackEmp(endMonth, n) {
   return arr;
 }
 
+// ខែដំបូងដែលបុគ្គលិកនេះមានវត្តមាន/ស្កេន (ដូច firstAttendanceMonth ក្នុង Admin)
+let firstAttMonthEmpCache = { id: null, month: null };
+async function firstAttendanceMonthEmp() {
+  if (!currentEmployee) return '';
+  if (firstAttMonthEmpCache.id === currentEmployee.id && firstAttMonthEmpCache.month !== null) return firstAttMonthEmpCache.month;
+  let month = '';
+  try {
+    const { data, error } = await supabaseClient.from('attendance').select('date,status,checkin')
+      .eq('employee_id', currentEmployee.id).order('date', { ascending: true }).limit(60);
+    if (!error && data) {
+      const hit = data.find(r => r.status || r.checkin);
+      month = hit ? String(hit.date).slice(0, 7) : '';
+    }
+  } catch (e) { console.warn(e); }
+  firstAttMonthEmpCache = { id: currentEmployee.id, month };
+  return month;
+}
+
 async function renderPayrollHistoryEmp() {
   const box = document.getElementById('payHistoryListEmp');
   if (!box || !currentEmployee) return;
@@ -2024,12 +2042,16 @@ async function renderPayrollHistoryEmp() {
   const rangeSel = document.getElementById('payHistoryRangeEmp');
   const n = parseInt((rangeSel && rangeSel.value) || '6', 10);
   const endMonth = document.getElementById('payrollMonthInput').value || todayStr().slice(0, 7);
-  const months = monthsBackEmp(endMonth, n);
+  let months = monthsBackEmp(endMonth, n);
+  // ដូច Admin៖ យកតែខែចាប់ពីខែដែលមានវត្តមាន/ការស្កេនដំបូងរបស់បុគ្គលិកនេះ (មិនបង្ហាញខែមុនចាប់ផ្តើមប្រើប្រព័ន្ធ)
+  const firstAttMonth = await firstAttendanceMonthEmp();
+  months = firstAttMonth ? months.filter(m => m >= firstAttMonth) : months.filter(m => m === endMonth);
   const rows = [];
   for (const month of months) {
     const t = await summarizeMonth(month);
-    rows.push({ month, t });
+    if (t.workDays > 0) rows.push({ month, t });   // លាក់ខែដែលគ្មានថ្ងៃធ្វើការ (មានតែធាតុថេរ)
   }
+  if (!rows.length) { box.innerHTML = '<div class="hist-empty">មិនទាន់មានប្រវត្តិបើកប្រាក់ខែ</div>'; return; }
   box.innerHTML = rows.map(({ month, t }) => `
     <div class="req-row">
       <div>

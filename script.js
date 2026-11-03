@@ -1742,11 +1742,12 @@ function renderPayrollHistory() {
   const firstAttMonth = firstAttendanceMonth(emp.id);
   months = firstAttMonth ? months.filter(m => m >= firstAttMonth) : months.filter(m => m === endMonth);
 
-  if (months.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  // លាក់ខែដែលគ្មានថ្ងៃធ្វើការ (មានតែធាតុថេរដូចអត្ថប្រយោជន៍/ប្រាក់កាត់)
+  const monthRows = months.map(month => ({ month, t: summarizeEmpMonth(emp, month) })).filter(r => r.t.workDays > 0);
+  if (monthRows.length === 0) { body.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  body.innerHTML = months.map(month => {
-    const t = summarizeEmpMonth(emp, month);
+  body.innerHTML = monthRows.map(({ month, t }) => {
     return `<tr>
       <td>${month}</td>
       <td>${t.workDays}</td>
