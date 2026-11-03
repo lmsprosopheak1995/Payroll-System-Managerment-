@@ -725,6 +725,21 @@ async function addHoliday() {
   if (error) { customAlert('រក្សាទុកថ្ងៃបុណ្យមិនជោគជ័យ៖ ' + error.message + '\n(តើអ្នកបានដំណើរការ holidays.sql ហើយឬនៅ?)'); return; }
   rows.forEach(r => { holidays[r.date] = r.name; });
   holidaysAvailable = true;
+  // ថ្ងៃដោះដូរ → ជូនដំណឹងបុគ្គលិកទាំងអស់ (ចូលក្នុងតារាង announcements → បុគ្គលិកឃើញក្នុងផ្ទាំងដំណឹង/ប្រវត្តិ + banner) និងកត់ audit
+  if (swapEl && swapEl.checked) {
+    const fmt = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+    const base = name.startsWith(HOLIDAY_SWAP_TAG) ? name.slice(HOLIDAY_SWAP_TAG.length).trim() : name;
+    const label = base ? ` (${base})` : '';
+    const body = swapTo
+      ? `ថ្ងៃទី ${fmt(date)}${label} ធ្វើការធម្មតា ហើយឈប់សម្រាកជំនួសនៅថ្ងៃទី ${fmt(swapTo)}។`
+      : `ថ្ងៃទី ${fmt(date)}${label} ធ្វើការធម្មតា (ដោះដូរថ្ងៃឈប់)។`;
+    try { if (typeof logAudit === 'function') logAudit('holiday_swap', { entity: 'holiday', ref: date, new: { name: rows[0].name, swapTo: swapTo || '' } }); } catch (e) { console.warn(e); }
+    const notifyEl = document.getElementById('holidaySwapNotify');
+    if (!notifyEl || notifyEl.checked) {
+      const { error: nErr } = await supabaseClient.from('announcements').insert({ title: '🔁 ដំណឹងដោះដូរថ្ងៃបុណ្យ', body, target_type: 'all', target_value: '' });
+      if (nErr) customAlert('បានរក្សាទុកថ្ងៃបុណ្យ ប៉ុន្តែផ្ញើដំណឹងមិនបាន៖ ' + nErr.message);
+    }
+  }
   document.getElementById('holidayName').value = '';
   if (swapEl) swapEl.checked = false;
   if (swapToEl) swapToEl.value = '';
