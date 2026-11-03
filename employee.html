@@ -1210,12 +1210,12 @@ function renderHomeHolidays() {
     const name = fmtDates(swap ? raw.slice(HOLIDAY_SWAP_TAG.length).trim() : raw) || 'ថ្ងៃបុណ្យ';
     const past = d < today;
     const label = swap
-      ? `<b>${dm(d)}</b> <span style="color:#b45309;">ធ្វើការធម្មតា (ដោះដូរ)</span> · ${escapeHtml(name)}`
-      : `<b>${dm(d)}</b> <span style="color:#be123c;">ឈប់សម្រាក</span> · ${escapeHtml(name)}`;
-    return `<div style="padding:6px 0;border-top:1px solid #f1f5f9;font-size:0.86rem;${past ? 'opacity:.5;' : ''}">${swap ? '🔁' : '🎉'} ${label}</div>`;
+      ? `<b>${dm(d)}</b> <span style="color:#f59e0b;">ធ្វើការធម្មតា (ដោះដូរ)</span> · ${escapeHtml(name)}`
+      : `<b>${dm(d)}</b> <span style="color:#fb7185;">ឈប់សម្រាក</span> · ${escapeHtml(name)}`;
+    return `<div style="padding:7px 0;border-top:1px solid var(--border, rgba(128,128,128,.25));font-size:0.86rem;color:inherit;${past ? 'opacity:.5;' : ''}">${swap ? '🔁' : '🎉'} ${label}</div>`;
   }).join('');
-  box.innerHTML = `<div style="background:var(--card,#fff);border-radius:14px;padding:12px 14px;margin:12px 0;box-shadow:0 1px 4px rgba(0,0,0,.08);">
-    <div style="font-weight:700;margin-bottom:4px;">🗓 ថ្ងៃបុណ្យ / ថ្ងៃដោះដូរ <small style="font-weight:400;color:#64748b;">(${m0} និង ${m1})</small></div>${rows}</div>`;
+  box.innerHTML = `<div style="background:rgba(128,128,128,.10);border:1px solid var(--border, rgba(128,128,128,.25));color:inherit;border-radius:14px;padding:12px 14px;margin:12px 0;">
+    <div style="font-weight:700;margin-bottom:4px;color:inherit;">🗓 ថ្ងៃបុណ្យ / ថ្ងៃដោះដូរ <small style="font-weight:400;opacity:.7;">(${m0} និង ${m1})</small></div>${rows}</div>`;
 }
 
 // ==== ទំព័រដើម៖ បញ្ជីបែងចែកប្រាក់ខែ + ប្រៀបធៀបខែមុន ====
