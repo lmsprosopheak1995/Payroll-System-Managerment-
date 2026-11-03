@@ -3556,3 +3556,50 @@ checkAdminAuthAndInit();
 
 // កំណត់តម្លៃដើមនៃប៊ូតុងជ្រើសរបៀបបង្ហាញប្រាក់ខែសុទ្ធ
 (function () { const el = document.getElementById('payCurrencyMode'); if (el) el.value = getPayMode(); })();
+
+/* ===== បញ្ជីប្រភេទអត្ថប្រយោជន៍/ប្រាក់កាត់ (ដូចប័ណ្ណបើកប្រាក់ខែ) ជាជម្រើសពេលវាយឈ្មោះធាតុ ===========
+   ប្រើ <datalist> ៖ ជ្រើសពីបញ្ជី ឬវាយឈ្មោះផ្ទាល់ខ្លួនបានដូចដើម។
+   អនុវត្តលើ ប្រអប់ «បន្ថែមអត្ថប្រយោជន៍/ប្រាក់កាត់» (piName) និងផ្នែកបន្ថែមលឿន (qaName)។ */
+const PAY_ITEM_NAMES = {
+  benefit: [
+    ['ប្រាក់ឧបត្ថម្ភទៀតទាត់', 'Att. Allowance'],
+    ['ប្រាក់អតីតភាព', 'Seniority Bonus'],
+    ['ប្រាក់ជំនាញ', 'Skill Bonus'],
+    ['ប្រាក់មុខងារ', 'Functionbonus'],
+    ['ប្រាក់ឧបត្ថម្ភផ្សេងៗ', 'Other Bonus'],
+    ['ប្រាក់ជំនួយថែទាំកូន', 'DayCareCost'],
+    ['ប្រាក់ឧបត្ថម្ភធ្វើដំណើរ', 'TransportPay'],
+    ['ប្រាក់បន្ថែមលើស្នាក់នៅ', 'HouseAllowance'],
+    ['ប្រាក់ព្យួរការងារ', 'Suspend Pay'],
+    ['ប្រាក់កែតម្រូវ', 'Adjustment'],
+    ['ប្រាក់បំណាច់ឆ្នាំ', 'AnnualLeavePay'],
+    ['ប្រាក់រង្វាន់ 5%', '5% Bonus'],
+    ['ប្រាក់សម្រាលកូន', 'Maternity Leave Pay']
+  ],
+  deduction: [
+    ['ប្រាក់ខែទី១', 'FirstSalary'],
+    ['ប្រាក់កម្ចី', 'Loan'],
+    ['សហជីព', 'UnionFee'],
+    ['ប្រាក់សោធន', 'Pension'],
+    ['ប្រាក់កាត់ផ្សេងៗ', 'Deduct']
+  ]
+};
+function fillPayItemNameList(inputEl, typeValue) {
+  if (!inputEl) return;
+  const listId = inputEl.id + 'List';
+  let dl = document.getElementById(listId);
+  if (!dl) { dl = document.createElement('datalist'); dl.id = listId; document.body.appendChild(dl); }
+  const items = PAY_ITEM_NAMES[typeValue === 'deduction' ? 'deduction' : 'benefit'];
+  dl.innerHTML = items.map(([km, en]) => `<option value="${km}" label="${en}"></option>`).join('');
+  inputEl.setAttribute('list', listId);
+  inputEl.setAttribute('autocomplete', 'off');
+}
+document.addEventListener('focusin', e => {
+  const t = e.target;
+  if (!t || !t.id) return;
+  if (t.id === 'piName') { const ty = document.getElementById('piType'); fillPayItemNameList(t, ty ? ty.value : 'benefit'); }
+  else if (t.id === 'qaName') { const ty = document.getElementById('qaType'); fillPayItemNameList(t, ty ? ty.value : 'benefit'); }
+});
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'qaType') fillPayItemNameList(document.getElementById('qaName'), e.target.value);
+});

@@ -14,17 +14,22 @@
   const NAME_BONUS = 'ពិនិត្យចុងខែ: រង្វាន់វត្តមាន';
   const NAME_DED = 'ពិនិត្យចុងខែ: កាត់វត្តមាន';
 
+  // គោលនយោបាយក្រុមហ៊ុន៖ ប្រាក់បន្ថែមស្នាក់នៅ $15 (ធាតុថេរស្រាប់) សម្រាប់អ្នកវត្តមានល្អ; បើឈប់ច្បាប់ កាត់ $6/ថ្ងៃ (2 ថ្ងៃ = $12);
+  // បើលើស $15 ក៏នៅតែកាត់ ដោយរួមជាមួយអត្ថប្រយោជន៍ផ្សេងក្នុងប្រាក់ខែ → មិនកំណត់ពិដាន (deduct_cap = 0)
   const DEFAULTS = {
-    bonus_amount: 10,        // រង្វាន់ ($)
-    bonus_max_late: 0,       // យឺតអតិបរមា (ថ្ងៃ) ដើម្បីបានរង្វាន់
-    bonus_max_absent: 0,     // អវត្តមានអតិបរមា (ថ្ងៃ)
-    bonus_max_leave: 99,     // ច្បាប់អតិបរមា (ថ្ងៃ)
-    bonus_need_complete: 1,  // 1 = ត្រូវកត់វត្តមានគ្រប់ថ្ងៃ (គ្មាន "មិនទាន់កត់") ទើបបានរង្វាន់
-    absent_deduct: 5,        // កាត់/ថ្ងៃអវត្តមាន ($)
-    late_free: 3,            // យឺតដែលមិនកាត់ (ថ្ងៃ)
-    late_deduct: 1,          // កាត់/ថ្ងៃយឺតលើស ($)
-    deduct_cap: 50           // កាត់អតិបរមា/នាក់ ($)
+    version: 2,
+    leave_deduct: 6,         // កាត់/ថ្ងៃច្បាប់ ($) — មិនរាប់ថ្ងៃបុណ្យជាតិ
+    absent_deduct: 0,        // កាត់/ថ្ងៃអវត្តមាន ($) — 0 = មិនកាត់ (កំណត់បើក្រុមហ៊ុនមាន)
+    late_free: 0,            // យឺតដែលមិនកាត់ (ថ្ងៃ)
+    late_deduct: 0,          // កាត់/ថ្ងៃយឺតលើស ($) — 0 = មិនកាត់ (ប្រព័ន្ធមានផ្ទាំងកាត់យឺតស្រាប់)
+    deduct_cap: 0,           // កាត់អតិបរមា/នាក់ ($) — 0 = មិនកំណត់
+    bonus_amount: 0,         // រង្វាន់បន្ថែម ($) — 0 = មិនប្រើ (ប្រាក់ស្នាក់នៅ $15 ជាធាតុថេរស្រាប់ហើយ)
+    bonus_max_late: 0,
+    bonus_max_absent: 0,
+    bonus_max_leave: 0,
+    bonus_need_complete: 1
   };
+
 
   let rules = { ...DEFAULTS };
   let month = '';
@@ -43,7 +48,8 @@
     try {
       const { data, error } = await sb().from('app_settings').select('month_end_rules').eq('id', 1).maybeSingle();
       if (error) throw error;
-      rules = { ...DEFAULTS, ...((data && data.month_end_rules) || {}) };
+      const saved = (data && data.month_end_rules) || {};
+      rules = (saved.version >= 2) ? { ...DEFAULTS, ...saved } : { ...DEFAULTS };   // ច្បាប់ចាស់ (v1) មានន័យខុស → ប្រើលំនាំដើមថ្មី
     } catch (e) {
       console.warn('month-end rules load failed (ដំណើរការ month-end-review.sql ហើយនៅ?)', e.message || e);
       rules = { ...DEFAULTS };
@@ -69,18 +75,35 @@
       else if (!st && dayMultiplier(d) <= 1) unmarked++;
     });
     let late = 0, leave = 0;
-    try { const c = calcDeductionRow(emp, month); late = c.lateDays || 0; leave = c.leaveDays || 0; } catch (e) { console.warn(e); }
+    try {
+      const c = calcDeductionRow(emp, month); late = c.lateDays || 0; leave = c.leaveDays || 0;
+      // ថ្ងៃបុណ្យជាតិ (ដែលប្រព័ន្ធកត់ជាច្បាប់) មិនរាប់ជាថ្ងៃច្បាប់កាត់ទេ
+      daysInMonth(month).forEach(d => {
+        const rec = attendance[d] && attendance[d][emp.id];
+        if (rec && rec.status === 'leave' && holidays[d] !== undefined && !(typeof isSwapHoliday === 'function' && isSwapHoliday(d))) leave -= 1;
+      });
+      if (leave < 0) leave = 0;
+    } catch (e) { console.warn(e); }
     return { present, late, leave, absent, unmarked };
   }
 
+  const fmtN = n => String(Math.round(n * 100) / 100);
   function suggest(s) {
     const lateOver = Math.max(0, s.late - rules.late_free);
-    const ded = Math.min(rules.deduct_cap, s.absent * rules.absent_deduct + lateOver * rules.late_deduct);
-    if (ded > 0) return { kind: 'deduction', amount: Math.round(ded * 100) / 100, why: `អវត្តមាន ${s.absent} · យឺតលើស ${lateOver}` };
-    const ok = s.present > 0 && s.late <= rules.bonus_max_late && s.absent <= rules.bonus_max_absent && s.leave <= rules.bonus_max_leave
+    let ded = s.leave * rules.leave_deduct + s.absent * rules.absent_deduct + lateOver * rules.late_deduct;
+    if (rules.deduct_cap > 0) ded = Math.min(rules.deduct_cap, ded);
+    ded = Math.round(ded * 100) / 100;
+    if (ded > 0) {
+      const parts = [];
+      if (s.leave > 0 && rules.leave_deduct > 0) parts.push(`ច្បាប់ ${fmtN(s.leave)} ថ្ងៃ × $${fmtN(rules.leave_deduct)}`);
+      if (s.absent > 0 && rules.absent_deduct > 0) parts.push(`អវត្តមាន ${s.absent} ថ្ងៃ × $${fmtN(rules.absent_deduct)}`);
+      if (lateOver > 0 && rules.late_deduct > 0) parts.push(`យឺតលើស ${lateOver} × $${fmtN(rules.late_deduct)}`);
+      return { kind: 'deduction', amount: ded, why: parts.join(' + ') };
+    }
+    const ok = rules.bonus_amount > 0 && s.present > 0 && s.late <= rules.bonus_max_late && s.absent <= rules.bonus_max_absent && s.leave <= rules.bonus_max_leave
       && !(rules.bonus_need_complete && s.unmarked > 0);
     if (ok) return { kind: 'benefit', amount: rules.bonus_amount, why: 'វត្តមានល្អ' };
-    return { kind: 'none', amount: 0, why: s.unmarked > 0 && rules.bonus_need_complete ? `មិនទាន់កត់ ${s.unmarked} ថ្ងៃ` : '-' };
+    return { kind: 'none', amount: 0, why: s.unmarked > 0 ? `មិនទាន់កត់ ${s.unmarked} ថ្ងៃ` : (s.leave === 0 && s.absent === 0 ? 'វត្តមានល្អ — មិនកាត់' : '-') };
   }
 
   function compute() {
@@ -118,7 +141,7 @@
     const btn = $('#mer-apply'); btn.disabled = true;
     try {
       for (const r of pick) {
-        const item = { id: itemId(r.emp.id, month), employeeId: r.emp.id, type: r.kind, name: r.kind === 'benefit' ? NAME_BONUS : NAME_DED,
+        const item = { id: itemId(r.emp.id, month), employeeId: r.emp.id, type: r.kind, name: r.kind === 'benefit' ? NAME_BONUS : (NAME_DED + (r.why ? ' (' + r.why + ')' : '')),
           recurrence: 'variable', month, currency: 'USD', amount: Number(r.amount) };
         const saved = await upsertPayrollItemRow(item);
         if (!saved) continue;                                         // upsertPayrollItemRow បានបង្ហាញ error ហើយ
@@ -149,9 +172,10 @@
   function close() { const m = $('#mer-modal'); if (m) m.remove(); }
 
   function readRules() {
-    const g = id => { const v = parseFloat($('#mer-r-' + id).value); return isFinite(v) && v >= 0 ? v : DEFAULTS[id]; };
+    const g = id => { if (!$('#mer-r-' + id)) return DEFAULTS[id]; const v = parseFloat($('#mer-r-' + id).value); return isFinite(v) && v >= 0 ? v : DEFAULTS[id]; };
     const out = {}; Object.keys(DEFAULTS).forEach(k => { out[k] = g(k); });
     out.bonus_need_complete = $('#mer-r-bonus_need_complete').checked ? 1 : 0;
+    out.version = 2;
     return out;
   }
 
@@ -177,14 +201,15 @@
         </div>
         <details style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">⚙️ ច្បាប់កំណត់ (ចុចដើម្បីកែ)</summary>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:10px">
-            ${f('bonus_amount', 'រង្វាន់ ($)')}
+            ${f('leave_deduct', 'កាត់/ថ្ងៃច្បាប់ ($)')}
+            ${f('absent_deduct', 'កាត់/ថ្ងៃអវត្តមាន ($) · 0 = មិនកាត់')}
+            ${f('late_free', 'យឺតដែលមិនកាត់ (ថ្ងៃ)')}
+            ${f('late_deduct', 'កាត់/ថ្ងៃយឺតលើស ($) · 0 = មិនកាត់')}
+            ${f('deduct_cap', 'កាត់អតិបរមា/នាក់ ($) · 0 = មិនកំណត់')}
+            ${f('bonus_amount', 'រង្វាន់បន្ថែម ($) · 0 = មិនប្រើ')}
             ${f('bonus_max_late', 'រង្វាន់៖ យឺតអតិបរមា (ថ្ងៃ)')}
             ${f('bonus_max_absent', 'រង្វាន់៖ អវត្តមានអតិបរមា (ថ្ងៃ)')}
             ${f('bonus_max_leave', 'រង្វាន់៖ ច្បាប់អតិបរមា (ថ្ងៃ)')}
-            ${f('absent_deduct', 'កាត់/ថ្ងៃអវត្តមាន ($)')}
-            ${f('late_free', 'យឺតដែលមិនកាត់ (ថ្ងៃ)')}
-            ${f('late_deduct', 'កាត់/ថ្ងៃយឺតលើស ($)')}
-            ${f('deduct_cap', 'កាត់អតិបរមា/នាក់ ($)')}
             <label style="display:flex;align-items:center;gap:6px;font-size:12px"><input id="mer-r-bonus_need_complete" type="checkbox" ${rules.bonus_need_complete ? 'checked' : ''}> ត្រូវកត់វត្តមានគ្រប់ថ្ងៃ ទើបបានរង្វាន់</label>
           </div>
           <div style="margin-top:10px"><button id="mer-save" class="secondary">💾 រក្សាទុក &amp; គណនាឡើងវិញ</button></div>
