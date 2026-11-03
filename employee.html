@@ -188,7 +188,7 @@
         <button class="menu-row" data-go="payroll" style="--c:#0ea5e9"><span class="menu-ico">💰</span><span class="lbl">ប្រាក់ខែ</span><span class="go">›</span></button>
         <button class="menu-row" data-go="feedback" style="--c:#ec4899"><span class="menu-ico">💬</span><span class="lbl">មតិកែលម្អ</span><span class="go">›</span></button>
       </div>
-      <div id="homeHolidayCard"></div>
+      <div id="homeHolidayCard" class="home-pay"></div>
       <div id="homePayCards" class="home-pay"></div>
     </div>
 
@@ -1192,7 +1192,9 @@ function renderHome() {
   renderHomePayCards();
 }
 
-// ==== ទំព័រដើម៖ ថ្ងៃបុណ្យ និងថ្ងៃដោះដូរ (ខែនេះ + ខែក្រោយ) — មើលតែប៉ុណ្ណោះ ====
+// ==== ទំព័រដើម៖ ថ្ងៃបុណ្យ និងថ្ងៃដោះដូរ (បង្ហាញម្តងមួយខែ៖ ខែនេះ / ខែក្រោយ) — មើលតែប៉ុណ្ណោះ ====
+let homeHolidayOffset = 0;   // 0 = ខែនេះ, 1 = ខែក្រោយ
+function setHomeHolidayMonth(n) { homeHolidayOffset = n; renderHomeHolidays(); }
 function renderHomeHolidays() {
   const box = document.getElementById('homeHolidayCard');
   if (!box) return;
@@ -1200,22 +1202,25 @@ function renderHomeHolidays() {
   const m0 = today.slice(0, 7);
   const d1 = new Date(Number(m0.slice(0, 4)), Number(m0.slice(5, 7)), 1);          // ខែក្រោយ
   const m1 = d1.getFullYear() + '-' + String(d1.getMonth() + 1).padStart(2, '0');
+  const has = m => Object.keys(holidays).some(d => d.startsWith(m));
+  if (!has(m0) && !has(m1)) { box.innerHTML = ''; return; }
+  // បើខែនេះគ្មានថ្ងៃបុណ្យ ហើយខែក្រោយមាន → បង្ហាញខែក្រោយ
+  const showM = (homeHolidayOffset === 1 || !has(m0)) ? m1 : m0;
   const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
   const fmtDates = txt => String(txt).replace(/\d{4}-(\d{2})-(\d{2})/g, (_, m, d) => d + '/' + m);   // YYYY-MM-DD → DD/MM
-  const dates = Object.keys(holidays).filter(d => d.startsWith(m0) || d.startsWith(m1)).sort();
-  if (!dates.length) { box.innerHTML = ''; return; }
-  const rows = dates.map(d => {
+  const dates = Object.keys(holidays).filter(d => d.startsWith(showM)).sort();
+  const lines = dates.map(d => {
     const raw = String(holidays[d] || '');
     const swap = isSwapHoliday(d);
     const name = fmtDates(swap ? raw.slice(HOLIDAY_SWAP_TAG.length).trim() : raw) || 'ថ្ងៃបុណ្យ';
-    const past = d < today;
-    const label = swap
-      ? `<b>${dm(d)}</b> <span style="color:#f59e0b;">ធ្វើការធម្មតា (ដោះដូរ)</span> · ${escapeHtml(name)}`
-      : `<b>${dm(d)}</b> <span style="color:#fb7185;">ឈប់សម្រាក</span> · ${escapeHtml(name)}`;
-    return `<div style="padding:7px 0;border-top:1px solid var(--border, rgba(128,128,128,.25));font-size:0.86rem;color:inherit;${past ? 'opacity:.5;' : ''}">${swap ? '🔁' : '🎉'} ${label}</div>`;
-  }).join('');
-  box.innerHTML = `<div style="background:rgba(128,128,128,.10);border:1px solid var(--border, rgba(128,128,128,.25));color:inherit;border-radius:14px;padding:12px 14px;margin:12px 0;">
-    <div style="font-weight:700;margin-bottom:4px;color:inherit;">🗓 ថ្ងៃបុណ្យ / ថ្ងៃដោះដូរ <small style="font-weight:400;opacity:.7;">(${m0} និង ${m1})</small></div>${rows}</div>`;
+    const left = swap
+      ? `🔁 <b>${dm(d)}</b> <span style="color:#f59e0b;">ធ្វើការធម្មតា (ដោះដូរ)</span>`
+      : `🎉 <b>${dm(d)}</b> <span style="color:#fb7185;">ឈប់សម្រាក</span>`;
+    return `<div class="hp-line"${d < today ? ' style="opacity:.5;"' : ''}><span>${left}</span><span style="text-align:right;">${escapeHtml(name)}</span></div>`;
+  }).join('') || '<div class="hp-line"><span style="color:var(--text-muted);">គ្មានថ្ងៃបុណ្យក្នុងខែនេះ</span></div>';
+  const btn = (m, n) => `<button type="button" onclick="setHomeHolidayMonth(${n})" style="margin-left:6px;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:${m === showM ? 'var(--accent)' : 'transparent'};color:${m === showM ? '#fff' : 'inherit'};">${n === 0 ? 'ខែនេះ' : 'ខែក្រោយ'}</button>`;
+  box.innerHTML = `<div class="portal-card hp-card">
+    <div class="hp-title">🗓 ថ្ងៃបុណ្យ / ថ្ងៃដោះដូរ <small>${showM}</small><span style="float:right;">${btn(m0, 0)}${btn(m1, 1)}</span></div>${lines}</div>`;
 }
 
 // ==== ទំព័រដើម៖ បញ្ជីបែងចែកប្រាក់ខែ + ប្រៀបធៀបខែមុន ====
