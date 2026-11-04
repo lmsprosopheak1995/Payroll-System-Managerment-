@@ -4,7 +4,7 @@
  * - ទទួលដំណឹង Web Push ពេលបិទកម្មវិធី
  * ពេលកែ employee.html/css/js ត្រូវប្តូរលេខ CACHE_VERSION ដើម្បីឱ្យទូរស័ព្ទយកថ្មី
  */
-const CACHE_VERSION = 'emp-pwa-v1';
+const CACHE_VERSION = 'emp-pwa-v2';
 const PRECACHE = [
   './employee.html',
   './style.css',
@@ -12,7 +12,8 @@ const PRECACHE = [
   './employee-modern.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
