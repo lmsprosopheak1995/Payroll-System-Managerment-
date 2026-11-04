@@ -7,7 +7,7 @@
   'use strict';
 
   // ⚠️ បិទភ្ជាប់ VAPID Public Key (បង្កើតដោយ: npx web-push generate-vapid-keys). ទុកទទេ = លាក់ប៊ូតុងដំណឹង
-  const VAPID_PUBLIC_KEY = '';
+  const VAPID_PUBLIC_KEY = 'BEdrSz-yF-yGA81_ynnUFEKki6qUyTNP0daINOVShDO_TeUbMc0EY2N3JkHuHE2dFV_NJlx829Dsrg92Rwdxw24';
 
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);

@@ -10,7 +10,8 @@
   },
   "devDependencies": {
     "electron": "^44.4.3",
-    "electron-builder": "^26.16.1"
+    "electron-builder": "^26.16.1",
+    "web-push": "^3.6.7"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
