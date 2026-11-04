@@ -1,6 +1,6 @@
 /* employee-pwa.js — ដំឡើងកម្មវិធី (PWA) + ដំណឹង Web Push សម្រាប់ទំព័របុគ្គលិក
  * ដាក់បន្ទាប់ពី employee-modern.js ក្នុង employee.html:  <script src="employee-pwa.js"></script>
- * ត្រូវការ៖ sw.js, manifest.webmanifest, icons/ នៅ folder ជាមួយ employee.html
+ * ត្រូវការ៖ sw.js, manifest.webmanifest, icon/ នៅ folder ជាមួយ employee.html
  * ដំណឹងពេលបិទកម្មវិធី ត្រូវការ VAPID key + push-setup.sql + Edge Function send-push (មើល README ក្នុងចម្លើយ)
  */
 (function () {

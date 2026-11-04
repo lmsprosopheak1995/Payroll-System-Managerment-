@@ -11,9 +11,9 @@ const PRECACHE = [
   './employee-modern.css',
   './employee-modern.js',
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icon/icon-192.png',
+  './icon/icon-512.png',
+  './icon/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
@@ -68,8 +68,8 @@ self.addEventListener('push', event => {
   const title = data.title || 'ដំណឹងថ្មី';
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
+    icon: './icon/icon-192.png',
+    badge: './icon/icon-192.png',
     tag: data.tag || 'announcement',
     renotify: true,
     data: { url: data.url || './employee.html' }
