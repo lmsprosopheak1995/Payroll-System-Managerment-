@@ -1,0 +1,19 @@
+{
+  "id": "./employee.html",
+  "name": "ប្រព័ន្ធបុគ្គលិក — ស្កេនវត្តមាន",
+  "short_name": "បុគ្គលិក",
+  "description": "ស្កេនវត្តមាន មើលប្រាក់ខែ ស្នើច្បាប់ និងទទួលដំណឹង",
+  "lang": "km",
+  "dir": "ltr",
+  "start_url": "./employee.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1623",
+  "theme_color": "#0d9488",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
