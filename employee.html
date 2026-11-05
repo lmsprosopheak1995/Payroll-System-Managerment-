@@ -2162,14 +2162,23 @@ async function submitLeaveRequest() {
   await renderLeaveHist();
 }
 
-async function renderLeaveHist() {
+// ==== បញ្ជីប្រវត្តិ៖ បង្ហាញតែ 5 ចុងក្រោយ + ប៊ូតុង «មើលបន្ថែម» ដើម្បីកុំឱ្យវែងពេក ====
+let leaveHistLimit = 5, otHistLimit = 5;
+function histMoreBtn(total, limit, kind) {
+  if (total <= limit) return '';
+  const fn = kind === 'leave' ? 'leaveHistLimit += 5; renderLeaveHist(true)' : 'otHistLimit += 5; renderOTHist(true)';
+  return `<button type="button" onclick="${fn}" style="width:100%;margin-top:10px;padding:9px;border-radius:10px;border:1px solid var(--border, rgba(128,128,128,.3));background:transparent;color:inherit;font-weight:600;cursor:pointer;">មើលបន្ថែម (${total - limit})</button>`;
+}
+
+async function renderLeaveHist(keepLimit) {
+  if (!keepLimit) leaveHistLimit = 5;
   const session = getSession();
   const list = document.getElementById('leaveHistList');
   list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
   const { data, error } = await supabaseClient.from('leave_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
-  list.innerHTML = data.map(r => `
+  list.innerHTML = data.slice(0, leaveHistLimit).map(r => `
     <div class="req-row">
       <div>
         <div><strong>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</strong></div>
@@ -2180,7 +2189,7 @@ async function renderLeaveHist() {
       </div>
       <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
     </div>
-  `).join('');
+  `).join('') + histMoreBtn(data.length, leaveHistLimit, 'leave');
 }
 
 // ==== ស្នើសុំថែមម៉ោង ====
@@ -2204,14 +2213,15 @@ async function submitOTRequest() {
   await renderOTHist();
 }
 
-async function renderOTHist() {
+async function renderOTHist(keepLimit) {
+  if (!keepLimit) otHistLimit = 5;
   const session = getSession();
   const list = document.getElementById('otHistList');
   list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
   const { data, error } = await supabaseClient.from('overtime_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
-  list.innerHTML = data.map(r => `
+  list.innerHTML = data.slice(0, otHistLimit).map(r => `
     <div class="req-row">
       <div>
         <div><strong>${r.work_date}</strong></div>
@@ -2221,7 +2231,7 @@ async function renderOTHist() {
       </div>
       <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
     </div>
-  `).join('');
+  `).join('') + histMoreBtn(data.length, otHistLimit, 'ot');
 }
 
 // ==== ប្រាក់ខែ (Payroll) ====
