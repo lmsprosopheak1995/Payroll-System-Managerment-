@@ -2159,26 +2159,30 @@ async function submitLeaveRequest() {
   document.getElementById('leaveReason').value = '';
   fileInput.value = '';
   document.getElementById('leaveAttachmentPreview').innerHTML = '';
-  await renderLeaveHist();
+  leaveHistMonth = String(start).slice(0, 7);
+  await renderLeaveHist(true);
 }
 
 // ==== បញ្ជីប្រវត្តិ៖ បង្ហាញតែ 5 ចុងក្រោយ + ប៊ូតុង «មើលបន្ថែម» ដើម្បីកុំឱ្យវែងពេក ====
-let leaveHistLimit = 5, otHistLimit = 5;
+let otHistLimit = 5;
 function histMoreBtn(total, limit, kind) {
   if (total <= limit) return '';
-  const fn = kind === 'leave' ? 'leaveHistLimit += 5; renderLeaveHist(true)' : 'otHistLimit += 5; renderOTHist(true)';
+  const fn = 'otHistLimit += 5; renderOTHist(true)';
   return `<button type="button" onclick="${fn}" style="width:100%;margin-top:10px;padding:9px;border-radius:10px;border:1px solid var(--border, rgba(128,128,128,.3));background:transparent;color:inherit;font-weight:600;cursor:pointer;">មើលបន្ថែម (${total - limit})</button>`;
 }
 
-async function renderLeaveHist(keepLimit) {
-  if (!keepLimit) leaveHistLimit = 5;
+let leaveHistMonth = '';   // '' = ស្វ័យប្រវត្តិ (ខែនេះ ឬខែចុងក្រោយដែលមានសំណើ), 'all' = ប្រវត្តិទាំងអស់, ឬ YYYY-MM
+function setLeaveHistMonth(m) { leaveHistMonth = m; renderLeaveHist(true); }
+async function renderLeaveHist(keep) {
+  if (!keep) leaveHistMonth = '';
   const session = getSession();
   const list = document.getElementById('leaveHistList');
   list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
   const { data, error } = await supabaseClient.from('leave_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
-  list.innerHTML = data.slice(0, leaveHistLimit).map(r => `
+
+  const rowHtml = r => `
     <div class="req-row">
       <div>
         <div><strong>${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)}</strong></div>
@@ -2189,7 +2193,26 @@ async function renderLeaveHist(keepLimit) {
       </div>
       <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
     </div>
-  `).join('') + histMoreBtn(data.length, leaveHistLimit, 'leave');
+  `;
+  const monthOf = r => String(r.start_date).slice(0, 7);
+  const months = [...new Set(data.map(monthOf))].sort().reverse();           // ខែដែលមានសំណើច្បាប់ប៉ុណ្ណោះ
+  let sel = leaveHistMonth;
+  if (sel !== 'all' && !months.includes(sel)) {
+    const cur = todayStr().slice(0, 7);
+    sel = months.includes(cur) ? cur : months[0];
+  }
+  const chipStyle = on => `flex:0 0 auto;padding:5px 12px;border-radius:999px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid var(--border, rgba(128,128,128,.3));background:${on ? 'var(--accent,#14b8a6)' : 'transparent'};color:${on ? '#fff' : 'inherit'};`;
+  const chips = months.map(m => `<button type="button" onclick="setLeaveHistMonth('${m}')" style="${chipStyle(sel === m)}">${m} (${data.filter(r => monthOf(r) === m).length})</button>`).join('')
+    + `<button type="button" onclick="setLeaveHistMonth('all')" style="${chipStyle(sel === 'all')}">📜 ប្រវត្តិទាំងអស់ (${data.length})</button>`;
+
+  let body;
+  if (sel === 'all') {
+    body = months.map(m => `<div style="font-weight:700;font-size:0.8rem;opacity:.75;margin:12px 0 2px;">${m} · ${data.filter(r => monthOf(r) === m).length} សំណើ</div>`
+      + data.filter(r => monthOf(r) === m).map(rowHtml).join('')).join('');
+  } else {
+    body = data.filter(r => monthOf(r) === sel).map(rowHtml).join('');
+  }
+  list.innerHTML = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;">${chips}</div>${body}`;
 }
 
 // ==== ស្នើសុំថែមម៉ោង ====
