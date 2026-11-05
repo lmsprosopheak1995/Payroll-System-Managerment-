@@ -314,6 +314,10 @@
           <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ចំនួនម៉ោង</label>
           <input type="number" id="leaveHours" min="0.5" max="8" step="0.5" value="1">
         </div>
+        <div class="form-group" id="leaveTimeOutWrap" style="display:none;">
+          <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ម៉ោងចេញ (ជាជម្រើស)</label>
+          <input type="time" id="leaveTimeOut">
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">ពីថ្ងៃ</label>
@@ -495,11 +499,13 @@ function leaveUnitOf(req) {
   const h = parseFloat(m[2]);
   return { unit: 'hour', hours: h > 0 ? h : 0 };
 }
-function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour):[^\]]+\]\s*/g, ' ').trim(); }
+function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour|out):[^\]]+\]\s*/g, ' ').trim(); }
+function leaveTimeOutOf(req) { const m = ((req && req.reason) || '').match(/\[#out:(\d{2}:\d{2})\]/); return m ? m[1] : ''; }
 function leaveUnitLabel(req) {
   const u = leaveUnitOf(req);
-  if (u.unit === 'half') return u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)';
-  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)`;
+  const out = leaveTimeOutOf(req) ? ` · ចេញ ${leaveTimeOutOf(req)}` : '';
+  if (u.unit === 'half') return (u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)') + out;
+  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)` + out;
   return 'ពេញថ្ងៃ';
 }
 function leaveWeightDays(req) {
@@ -1019,6 +1025,14 @@ async function fetchLeaveBalances(year) {
 function updateLeaveUnit() {
   const u = document.getElementById('leaveUnit').value;
   document.getElementById('leaveHoursWrap').style.display = u === 'hour' ? '' : 'none';
+  // ម៉ោងចេញ៖ បង្ហាញពេលសុំកន្លះថ្ងៃ/តាមម៉ោង; កន្លះថ្ងៃរសៀល → 12:00 ជាលំនាំដើម
+  const toWrap = document.getElementById('leaveTimeOutWrap'), toIn = document.getElementById('leaveTimeOut');
+  if (toWrap && toIn) {
+    toWrap.style.display = u === 'day' ? 'none' : '';
+    if (u === 'day') toIn.value = '';
+    else if (u === 'half_pm' && !toIn.value) toIn.value = '12:00';
+    else if (u !== 'half_pm' && toIn.value === '12:00') toIn.value = '';
+  }
   const endGroup = document.getElementById('leaveEnd').closest('.form-group');
   if (endGroup) endGroup.style.display = u === 'day' ? '' : 'none';
 }
@@ -2114,6 +2128,10 @@ async function submitLeaveRequest() {
     const std = settings.standardHours > 0 ? settings.standardHours : 8;
     if (!(hrs > 0) || hrs > std) { err.textContent = `ចំនួនម៉ោងត្រូវនៅចន្លោះ 0 – ${std}`; err.style.display = 'block'; return; }
     unitTag = `[#hour:${hrs}]`; daysReq = hrs / std;
+  }
+  if (unitSel !== 'day') {
+    const toVal = (document.getElementById('leaveTimeOut').value || '').trim();
+    if (/^\d{2}:\d{2}$/.test(toVal)) unitTag += `[#out:${toVal}]`;      // ម៉ោងចេញ (បង្ហាញក្នុងទម្រង់ក្រដាស)
   }
   if (!start || (unitSel === 'day' && !end)) { err.textContent = 'សូមជ្រើសរើសកាលបរិច្ឆេទ'; err.style.display = 'block'; return; }
   if (unitSel !== 'day') end = start; // កន្លះថ្ងៃ/តាមម៉ោង = ថ្ងៃតែមួយ

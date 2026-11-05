@@ -32,7 +32,7 @@
   }
   function cleanReason(req) {
     if (typeof stripUnitTag === 'function') return stripUnitTag(req.reason);
-    return String(req.reason || '').replace(/\s*\[#(half|hour):[^\]]+\]\s*/g, ' ').trim();
+    return String(req.reason || '').replace(/\s*\[#(half|hour|out):[^\]]+\]\s*/g, ' ').trim();
   }
   function addDays(dateStr, n) {
     const d = new Date(dateStr + 'T00:00:00');
@@ -62,12 +62,15 @@
     const u = unitOf(req);
     const stdHours = (typeof settings !== 'undefined' && settings.standardHours > 0) ? settings.standardHours : 8;
     let totalTxt, timeOut = '', dateIn;
+    const mOut = String(req.reason || '').match(/\[#out:(\d{2}:\d{2})\]/);
+    const chosenOut = mOut ? mOut[1] : '';                // ម៉ោងចេញដែលបុគ្គលិកបានបញ្ចូល
     if (u.unit === 'half') {
       totalTxt = 'កន្លះថ្ងៃ (0.5)';
-      timeOut = u.period === 'pm' ? '12:00' : '';        // ព្រឹក៖ មកវិញនៅថ្ងៃដដែល; រសៀល៖ ចេញម៉ោង 12:00
+      timeOut = chosenOut || (u.period === 'pm' ? '12:00' : '');   // បើមិនបានបញ្ចូល៖ រសៀល = 12:00
       dateIn = u.period === 'pm' ? nextWorkday(req.end_date) : req.end_date;
     } else if (u.unit === 'hour') {
       totalTxt = `${num(u.hours)} ម៉ោង (${num(u.hours / stdHours)} ថ្ងៃ)`;
+      timeOut = chosenOut;
       dateIn = nextWorkday(req.end_date);
     } else {
       totalTxt = `${daysBetween(req.start_date, req.end_date)} ថ្ងៃ`;

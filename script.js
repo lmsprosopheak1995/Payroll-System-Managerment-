@@ -1412,11 +1412,13 @@ function buildUnitTag(unit, period, hours) {
   if (unit === 'hour') return `[#hour:${hours}]`;
   return '';
 }
-function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour):[^\]]+\]\s*/g, ' ').trim(); }
+function stripUnitTag(reason) { return (reason || '').replace(/\s*\[#(half|hour|out):[^\]]+\]\s*/g, ' ').trim(); }
+function leaveTimeOutOf(req) { const m = ((req && req.reason) || '').match(/\[#out:(\d{2}:\d{2})\]/); return m ? m[1] : ''; }
 function leaveUnitLabel(req) {
   const u = leaveUnitOf(req);
-  if (u.unit === 'half') return u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)';
-  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)`;
+  const out = leaveTimeOutOf(req) ? ` · ចេញ ${leaveTimeOutOf(req)}` : '';
+  if (u.unit === 'half') return (u.period === 'pm' ? 'កន្លះថ្ងៃ (រសៀល)' : 'កន្លះថ្ងៃ (ព្រឹក)') + out;
+  if (u.unit === 'hour') return `តាមម៉ោង (${u.hours} ម៉ោង)` + out;
   return 'ពេញថ្ងៃ';
 }
 function leaveWeightDays(req) {
