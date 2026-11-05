@@ -2181,6 +2181,7 @@ async function renderLeaveHist(keep) {
   const { data, error } = await supabaseClient.from('leave_requests').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
   if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div class="hist-empty">មិនទាន់មានសំណើទេ</div>'; return; }
+  window.__leaveHistData = data;   // សម្រាប់ប៊ូតុងបោះពុម្ពទម្រង់
 
   const rowHtml = r => `
     <div class="req-row">
@@ -2191,7 +2192,7 @@ async function renderLeaveHist(keep) {
         ${r.attachment_url ? `<div class="rmeta"><a href="${r.attachment_url}" target="_blank" rel="noopener">🖼 រូបភាពបញ្ជាក់</a></div>` : ''}
         ${r.status === 'rejected' && r.admin_note ? `<div class="rmeta">មូលហេតុបដិសេធ៖ ${escapeHtml(r.admin_note)}</div>` : ''}
       </div>
-      <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span></div>
+      <div class="rright"><span class="badge ${r.status}">${REQUEST_STATUS_LABELS[r.status] || r.status}</span><div style="margin-top:6px;"><button type="button" onclick="printLeaveFormEmp('${r.id}')" style="padding:3px 9px;border-radius:8px;border:1px solid var(--border, rgba(128,128,128,.3));background:transparent;color:inherit;font-size:0.72rem;cursor:pointer;">🖨 ទម្រង់</button></div></div>
     </div>
   `;
   const monthOf = r => String(r.start_date).slice(0, 7);
@@ -2213,6 +2214,12 @@ async function renderLeaveHist(keep) {
     body = data.filter(r => monthOf(r) === sel).map(rowHtml).join('');
   }
   list.innerHTML = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;">${chips}</div>${body}`;
+}
+function printLeaveFormEmp(id) {
+  const req = (window.__leaveHistData || []).find(r => String(r.id) === String(id));
+  if (!req) return;
+  if (typeof printLeaveForm !== 'function') { customAlert('មិនទាន់បានដាក់ leave-form.js'); return; }
+  printLeaveForm(req, currentEmployee || {});
 }
 
 // ==== ស្នើសុំថែមម៉ោង ====

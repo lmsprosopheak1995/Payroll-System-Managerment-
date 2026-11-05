@@ -1940,6 +1940,7 @@ function renderRequestsTab() {
               <button class="secondary" onclick="approveLeaveRequest('${r.id}')">✓ អនុម័ត</button>
               <button class="danger" onclick="rejectLeaveRequest('${r.id}')">✕ បដិសេធ</button>
             </div>` : (r.admin_note ? escapeHtml(r.admin_note) : '-')}
+          <div style="margin-top:4px;"><button class="secondary" onclick="printLeaveFormById('${r.id}')">🖨 ទម្រង់</button></div>
         </td>
       </tr>`).join('');
   }
@@ -1968,6 +1969,15 @@ function renderRequestsTab() {
       </tr>`).join('');
   }
   if (typeof renderDashPending === 'function') renderDashPending();
+}
+
+// បោះពុម្ពទម្រង់សុំច្បាប់ (ពី leave-form.js) សម្រាប់សំណើដែលបានជ្រើស
+function printLeaveFormById(id) {
+  const req = leaveRequests.find(r => String(r.id) === String(id));
+  if (!req) return;
+  const emp = employees.find(e => e.id === req.employee_id) || { name: empName(req.employee_id) };
+  if (typeof printLeaveForm !== 'function') { customAlert('មិនទាន់បានដាក់ leave-form.js ក្នុង index.html'); return; }
+  printLeaveForm(req, emp);
 }
 
 async function approveLeaveRequest(id) {
