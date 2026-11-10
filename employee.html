@@ -1176,7 +1176,7 @@ async function enableBrowserNotifications() {
   customAlert(p === 'granted' ? '✓ បានបើកការជូនដំណឹង (ដំណើរការពេលបើកទំព័រនេះ)' : 'ការជូនដំណឹងត្រូវបានបិទ');
 }
 
-const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', correction:'ស្នើកែវត្តមាន', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
+const TAB_TITLES = { clock:'កត់ត្រាវត្តមាន', attendance:'ប្រតិទិនវត្តមាន', leave:'សុំច្បាប់', ot:'ធ្វើការថែមម៉ោង', payroll:'ប្រាក់ខែ', loan:'ប្រាក់កម្ចី', correction:'ស្នើកែវត្តមាន', feedback:'មតិកែលម្អ', notify:'ដំណឹង', profile:'ប្រវត្តិរូប' };
 
 // ==== ទំព័រដើម (Home): banner + ឈ្មោះ ====
 function renderHomeBanner() {
@@ -1327,6 +1327,7 @@ function switchEmpTab(tab) {
   document.getElementById('correctionTabContent').classList.toggle('active', tab === 'correction');
   document.getElementById('feedbackTabContent').classList.toggle('active', tab === 'feedback');
   document.getElementById('notifyTabContent').classList.toggle('active', tab === 'notify');
+  { const lt = document.getElementById('loanTabContent'); if (lt) lt.classList.toggle('active', tab === 'loan'); }
   if (tab !== 'home') stopEmpScanner();
   else refreshScanLock();
   if (tab === 'attendance') renderAttendanceTabEmp();
@@ -1336,6 +1337,7 @@ function switchEmpTab(tab) {
   if (tab === 'correction') loadMyCorrections();
   if (tab === 'feedback') renderFeedbackEmp();
   if (tab === 'notify') renderNotifyEmp();
+  if (tab === 'loan' && typeof renderLoanEmp === 'function') renderLoanEmp();
   if (tab === 'profile') renderProfileExtras();
 }
 
@@ -2535,6 +2537,7 @@ if (LOGO_URL) {
 <script src="employee-modern.js"></script>
 <script src="employee-pwa.js"></script>
 <script src="leave-form.js"></script>
+<script src="employee-loan.js"></script>
 <script src="about-contact.js"></script>
 </body>
 </html>
