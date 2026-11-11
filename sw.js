@@ -4,7 +4,7 @@
  * - ទទួលដំណឹង Web Push ពេលបិទកម្មវិធី
  * ពេលកែ employee.html/css/js ត្រូវប្តូរលេខ CACHE_VERSION ដើម្បីឱ្យទូរស័ព្ទយកថ្មី
  */
-const CACHE_VERSION = 'emp-pwa-v2';
+const CACHE_VERSION = 'emp-pwa-v3';
 const PRECACHE = [
   './employee.html',
   './style.css',
@@ -36,6 +36,7 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;          // Supabase, CDN, fonts → ទុកឱ្យ browser ដោះស្រាយ
+  if (url.pathname.endsWith('employee-version.json')) return;  // ឯកសារកំណែ៖ ត្រូវតែថ្មីជានិច្ច (មិន cache)
 
   // ទំព័រ HTML៖ យកពី network មុន (ទទួលកំណែថ្មី) បើគ្មានអ៊ីនធឺណិតទើបយកពី cache
   if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
@@ -49,7 +50,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ឯកសារឋិតិវន្ត៖ ប្រើ cache ភ្លាម ហើយអាប់ដេតក្រោយ (stale-while-revalidate)
+  // JS/CSS៖ យកពី network មុន (ទទួលកំណែថ្មីភ្លាមៗ គ្មានចាំបាច់បើក ២ ដង) បើយឺតលើស 4 វិនាទី ឬគ្មានអ៊ីនធឺណិត → យកពី cache
+  if (/\.(js|css)$/.test(url.pathname)) {
+    event.respondWith(
+      new Promise(resolve => {
+        let settled = false;
+        const fromCache = () => caches.match(req).then(c => { if (!settled && c) { settled = true; resolve(c); } });
+        const timer = setTimeout(fromCache, 4000);
+        fetch(req).then(res => {
+          clearTimeout(timer);
+          if (res && res.status === 200) { const copy = res.clone(); caches.open(CACHE_VERSION).then(c => c.put(req, copy)).catch(() => {}); }
+          if (!settled) { settled = true; resolve(res); }
+        }).catch(() => { clearTimeout(timer); caches.match(req).then(c => { if (!settled) { settled = true; resolve(c || Response.error()); } }); });
+      })
+    );
+    return;
+  }
+
+  // រូបភាព/ឯកសារផ្សេង៖ ប្រើ cache ភ្លាម ហើយអាប់ដេតក្រោយ (stale-while-revalidate)
   event.respondWith(
     caches.match(req).then(cached => {
       const network = fetch(req).then(res => {
