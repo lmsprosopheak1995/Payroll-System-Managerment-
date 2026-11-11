@@ -10,7 +10,7 @@
   const MIN_WORK_DAYS = 15;        // ត្រូវធ្វើការបានយ៉ាងតិចប៉ុន្មានថ្ងៃ ទើបស្នើកម្ចីបាន (ត្រូវដូច loan_min_work_days() ក្នុង SQL)
   const LOAN_MIN = 20;             // កម្ចីតិចបំផុត ($)
   const LOAN_STEP = 5;             // ជំហាន slider ($)
-  const LOAN_SALARY_RATIO = 1;     // ទំហំកម្ចីអតិបរមា = ប្រាក់ខែគោល × លេខនេះ (1 = មួយខែ)
+  const LOAN_PAY_RATIO = 1;        // ទំហំកម្ចីអតិបរមា = ប្រាក់ខែសរុបប្រចាំខែ × លេខនេះ (1 = មួយខែ; 0.5 = កន្លះខែ)
   const LOAN_CAP = 0;              // ពិដានដាច់ខាត ($) — 0 = មិនកំណត់
   const MONTH_CHOICES = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24];   // ជម្រើសរយៈពេលសង (ខែ)
 
@@ -85,7 +85,7 @@
   `;
 
   /* ---------- សមាសភាព ---------- */
-  let state = { amount: LOAN_MIN, months: 3, available: 0, maxLimit: 0, outstanding: 0, eligible: false, days: 0, view: 'main', editing: false };
+  let state = { amount: LOAN_MIN, months: 3, available: 0, maxLimit: 0, outstanding: 0, eligible: false, days: 0, view: 'main', editing: false, basis: null };
 
   function inject() {
     if ($('loanTabContent')) return;
@@ -110,7 +110,7 @@
             <div class="ln-card-h">កម្ចីបុគ្គលិក <span class="ln-info" id="loanInfoBtn">i</span></div>
             <div class="ln-elig" id="loanEligible"></div>
             <div class="ln-amount" id="loanAmountBox"></div>
-            <div class="ln-limit">ទំហំកម្ចីបានច្រើនបំផុត : <b id="loanLimitTxt">-</b></div>
+            <div class="ln-limit">ទំហំកម្ចីបានច្រើនបំផុត : <b id="loanLimitTxt">-</b><div id="loanBasisTxt" style="font-size:.74rem;opacity:.75;margin-top:2px;"></div></div>
             <input type="range" class="ln-slider" id="loanSlider" min="${LOAN_MIN}" max="${LOAN_MIN}" step="${LOAN_STEP}" value="${LOAN_MIN}">
             <div class="ln-range"><span id="loanMinTxt">${usd0(LOAN_MIN)}</span><span id="loanMaxTxt">-</span></div>
 
@@ -187,6 +187,7 @@
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
     }
     $('loanLimitTxt').textContent = state.maxLimit > 0 ? usd(state.available) + (state.outstanding > 0 ? ` (ដកបំណុល/សំណើ ${usd(state.outstanding)})` : '') : 'មិនទាន់កំណត់';
+    $('loanBasisTxt').textContent = state.basis ? `គណនាពីប្រាក់ខែសរុបខែ ${state.basis.month}៖ ${usd(state.basis.pay)}${LOAN_PAY_RATIO !== 1 ? ' × ' + LOAN_PAY_RATIO : ''}` : '';
     const sl = $('loanSlider');
     sl.min = LOAN_MIN; sl.max = Math.max(LOAN_MIN, state.available); sl.value = state.amount; sl.disabled = !can;
     $('loanMaxTxt').textContent = usd0(Math.max(LOAN_MIN, state.available));
@@ -194,6 +195,22 @@
     $('loanMonthly').textContent = usd(monthly);
     $('loanReceive').textContent = usd(state.amount);
     $('loanSubmitBtn').disabled = !can;
+  }
+
+  // ប្រាក់ខែសរុបប្រចាំខែ (មុនកាត់ = ប្រាក់សរុប TotalPay ក្នុង Payslip) ដែលប្រើជាមូលដ្ឋានគណនាទំហំកម្ចី៖
+  // យកខែមុន (ខែពេញ) បើមានថ្ងៃធ្វើការ បើគ្មាន → យកខែនេះរហូតដល់ពេលនេះ។ ប្រាក់កាត់កម្ចីត្រូវបូកត្រឡប់ ដើម្បីកុំឱ្យកម្ចីបន្ថយទំហំកម្ចីខ្លួនឯង
+  async function monthlyPayBasis() {
+    const cur = monthNow();
+    for (const m of [addMonths(cur, -1), cur]) {
+      try {
+        const t = await summarizeMonth(m);
+        if (t && t.workDays > 0) {
+          const pay = (t.net || 0) + (t.deductionsUSD || 0);     // = ប្រាក់សរុប (មុនកាត់ទាំងអស់ រួមទាំងប្រាក់កម្ចី ដូច្នេះកម្ចីមិនបន្ថយទំហំខ្លួនឯង)
+          if (pay > 0) return { month: m, pay: Math.round(pay * 100) / 100 };
+        }
+      } catch (e) { console.warn('monthlyPayBasis', m, e); }
+    }
+    return null;
   }
 
   async function workedDays() {
@@ -212,7 +229,7 @@
       <div style="font-weight:800;font-size:1.05rem;margin-bottom:10px;">ខចែង និងលក្ខខណ្ឌកម្ចី</div>
       <ul style="margin:0 0 14px 18px;padding:0;line-height:1.9;font-size:.88rem;">
         <li>ត្រូវធ្វើការបានយ៉ាងតិច <b>${MIN_WORK_DAYS} ថ្ងៃ</b> ទើបស្នើសុំកម្ចីបាន</li>
-        <li>កម្ចីតិចបំផុត ${usd0(LOAN_MIN)} · ច្រើនបំផុតមិនលើស <b>${LOAN_SALARY_RATIO} ដងនៃប្រាក់ខែគោល</b>${LOAN_CAP > 0 ? ` ហើយមិនលើស ${usd0(LOAN_CAP)}` : ''} (ដកបំណុលដែលកំពុងសង)</li>
+        <li>កម្ចីតិចបំផុត ${usd0(LOAN_MIN)} · ច្រើនបំផុតមិនលើស <b>${LOAN_PAY_RATIO === 1 ? 'ប្រាក់ខែសរុបប្រចាំខែ' : LOAN_PAY_RATIO + ' ដងនៃប្រាក់ខែសរុបប្រចាំខែ'}</b>${LOAN_CAP > 0 ? ` ហើយមិនលើស ${usd0(LOAN_CAP)}` : ''} (ដកបំណុលដែលកំពុងសង)</li>
         <li><b>គ្មានការប្រាក់</b> និងគ្មានកម្រៃសេវា ចំនួនប្រាក់ទទួលបាន = ចំនួនដែលអនុម័ត</li>
         <li>ប្រាក់ត្រូវកាត់ពីប្រាក់ខែរាល់ខែ <b>ស្មើៗគ្នា</b> ចាប់ពីខែដែល Admin កំណត់ រហូតដល់អស់បំណុល (សងអតិបរមា ${MAX_MONTHS} ខែ)</li>
         <li>មានសំណើរង់ចាំបានតែមួយក្នុងពេលតែមួយ ហើយទាល់តែ Admin អនុម័ត ទើបមានប្រសិទ្ធភាព</li>
@@ -265,9 +282,10 @@
     if (error) { list.innerHTML = '<div class="hist-empty">មិនអាចផ្ទុកទិន្នន័យបានទេ</div>'; sum.innerHTML = ''; return; }
     const loansArr = data || [];
 
-    // ទំហំកម្ចី = ប្រាក់ខែ × ratio − បំណុលកំពុងសង − សំណើរង់ចាំ
-    const salary = parseFloat(currentEmployee && currentEmployee.salary) || 0;
-    let maxLimit = Math.floor((salary * LOAN_SALARY_RATIO) / LOAN_STEP) * LOAN_STEP;
+    // ទំហំកម្ចី = ប្រាក់ខែសរុបប្រចាំខែ × ratio − បំណុលកំពុងសង − សំណើរង់ចាំ
+    state.basis = await monthlyPayBasis();
+    const basePay = state.basis ? state.basis.pay : 0;
+    let maxLimit = Math.floor((basePay * LOAN_PAY_RATIO) / LOAN_STEP) * LOAN_STEP;
     if (LOAN_CAP > 0) maxLimit = Math.min(maxLimit, LOAN_CAP);
     const active = loansArr.filter(l => l.status === 'approved' && !progress(l).finished);
     const outstanding = active.reduce((a, l) => a + progress(l).remaining, 0)
@@ -287,7 +305,7 @@
         : `⚠️ អ្នកមានថ្ងៃធ្វើការ ${state.days} ថ្ងៃ — នៅខ្វះ ${MIN_WORK_DAYS - state.days} ថ្ងៃ ទើបស្នើសុំបាន`;
       if (state.eligible && state.available < LOAN_MIN) {
         elig.style.color = '#f59e0b';
-        elig.textContent = salary > 0 ? '⚠️ ទំហំកម្ចីរបស់អ្នកពេញហើយ (បំណុល/សំណើបច្ចុប្បន្នដល់កំណត់)' : '⚠️ មិនទាន់មានប្រាក់ខែគោលកំណត់ក្នុងប្រព័ន្ធ';
+        elig.textContent = basePay > 0 ? '⚠️ ទំហំកម្ចីរបស់អ្នកពេញហើយ (បំណុល/សំណើបច្ចុប្បន្នដល់កំណត់)' : '⚠️ មិនទាន់មានប្រាក់ខែសរុបសម្រាប់គណនាទំហំកម្ចី';
       }
     } catch (e) { state.eligible = false; elig.style.color = '#f59e0b'; elig.textContent = 'មិនអាចពិនិត្យថ្ងៃធ្វើការបានទេ'; }
 
