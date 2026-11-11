@@ -19,6 +19,13 @@
   const locked = m => (typeof isMonthLocked === 'function') && isMonthLocked(m);
   const empName = id => { const e = (typeof employees !== 'undefined' ? employees : []).find(x => x.id === id); return e ? e.name : id; };
 
+  const MIN_WORK_DAYS = 15;     // លក្ខខណ្ឌ៖ ធ្វើការបានយ៉ាងតិច 15 ថ្ងៃ (ត្រូវដូច loan_min_work_days() ក្នុង SQL)
+  function workedDaysOf(empId) {
+    let n = 0;
+    try { Object.values(attendance).forEach(day => { const r = day && day[empId]; if (r && r.status === 'present') n++; }); } catch (e) { /* ignore */ }
+    return n;
+  }
+
   let loans = [];
   let tab = 'pending';        // pending | active | history
 
@@ -129,6 +136,8 @@
       months = parseInt($('#ln-add-mon').value, 10), start = $('#ln-add-start').value, reason = ($('#ln-add-reason').value || '').trim();
     if (!emp || !(amount > 0) || !(months >= 1 && months <= 60) || !/^\d{4}-\d{2}$/.test(start)) { alertMsg('សូមបំពេញ បុគ្គលិក ចំនួនទឹកប្រាក់ ចំនួនខែ និងខែចាប់ផ្តើមកាត់ឱ្យគ្រប់'); return; }
     const draft = { id: 'draft', employee_id: emp, amount, months, start_month: start };
+    const wd = workedDaysOf(emp);
+    if (wd < MIN_WORK_DAYS && !(await confirmMsg(`⚠️ ${empName(emp)} ធ្វើការបានតែ ${wd} ថ្ងៃ (លក្ខខណ្ឌយ៉ាងតិច ${MIN_WORK_DAYS} ថ្ងៃ)។\nតើអ្នកចង់បញ្ចូលកម្ចីដោយអនុញ្ញាតពិសេសឬទេ?`))) return;
     if (!checkMonthsFree(draft)) return;
     if (!(await confirmMsg(`បញ្ចូលកម្ចី ${usd(amount)} ឱ្យ ${empName(emp)}\nកាត់ ${months} ខែ ចាប់ពី ${start} (ប្រហែល ${usd(schedule(draft)[0].amount)}/ខែ)?`))) return;
     try {
@@ -175,7 +184,9 @@
 
     if (l.status === 'pending') {
       const defStart = addMonths(monthNow(), 1);
-      return wrap(`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+      const wd = workedDaysOf(l.employee_id);
+      const eligNote = `<div style="font-size:.78rem;margin-top:6px;color:${wd >= MIN_WORK_DAYS ? '#34d399' : '#fbbf24'};">${wd >= MIN_WORK_DAYS ? '✅' : '⚠️'} ថ្ងៃធ្វើការ ${wd} ថ្ងៃ (លក្ខខណ្ឌយ៉ាងតិច ${MIN_WORK_DAYS} ថ្ងៃ)</div>`;
+      return wrap(eligNote + `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
         <label style="font-size:.72rem;">ចំនួនខែសង<br><input id="ln-m-${l.id}" type="number" min="1" max="60" value="${l.months}" style="${inStyle}width:80px"></label>
         <label style="font-size:.72rem;">ចាប់ផ្តើមកាត់ខែ<br><input id="ln-s-${l.id}" type="month" value="${defStart}" style="${inStyle}"></label>
         <label style="font-size:.72rem;flex:1;min-width:140px;">កំណត់សម្គាល់<br><input id="ln-n-${l.id}" type="text" style="${inStyle}width:100%"></label>

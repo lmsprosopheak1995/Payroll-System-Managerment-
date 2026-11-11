@@ -6,6 +6,7 @@
 (function () {
   'use strict';
 
+  const MIN_WORK_DAYS = 15;       // លក្ខខណ្ឌ៖ ត្រូវធ្វើការបានយ៉ាងតិច 15 ថ្ងៃ ទើបស្នើកម្ចីបាន (ត្រូវដូច loan_min_work_days() ក្នុង SQL)
   const MAX_MONTHS = 24;          // បុគ្គលិកអាចស្នើសងបានអតិបរមាប៉ុន្មានខែ (Admin អាចកែពេលអនុម័ត)
   const $ = id => document.getElementById(id);
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(String(s ?? '')) : String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
@@ -50,6 +51,15 @@
     tab.innerHTML = `
       <div id="loanSummary"></div>
       <div class="portal-card" style="margin-bottom:14px;">
+        <h2 style="margin:0 0 8px;font-size:0.9rem;">លក្ខខណ្ឌកម្ចី</h2>
+        <ul style="margin:0 0 8px 18px;padding:0;font-size:0.8rem;line-height:1.7;">
+          <li>ត្រូវធ្វើការបានយ៉ាងតិច <b>${MIN_WORK_DAYS} ថ្ងៃ</b> ទើបស្នើសុំកម្ចីបាន</li>
+          <li>គ្មានការប្រាក់ · កាត់ពីប្រាក់ខែរាល់ខែស្មើៗគ្នា</li>
+          <li>ចំនួនខែសងអតិបរមា ${MAX_MONTHS} ខែ · ត្រូវរង់ចាំការអនុម័តពី Admin</li>
+        </ul>
+        <div id="loanEligible" style="font-size:0.82rem;font-weight:700;"></div>
+      </div>
+      <div class="portal-card" style="margin-bottom:14px;">
         <h2 style="margin:0 0 12px;font-size:0.9rem;">ស្នើសុំប្រាក់កម្ចី</h2>
         <p class="error-msg" id="loanError"></p>
         <div class="form-group">
@@ -93,6 +103,28 @@
     $('loanPreview').textContent = (a > 0 && m >= 1) ? `ប្រហែល ${usd(Math.floor((a / m) * 100) / 100)} ក្នុងមួយខែ` : '';
   }
 
+  let loanEligible = false;
+  async function workedDays() {
+    const session = getSession();
+    const { count, error } = await supabaseClient.from('attendance').select('date', { count: 'exact', head: true })
+      .eq('employee_id', session.id).eq('status', 'present');
+    if (error) throw error;
+    return count || 0;
+  }
+  async function refreshEligibility() {
+    const box = $('loanEligible'), btn = $('loanSubmitBtn');
+    if (!box) return;
+    try {
+      const d = await workedDays();
+      loanEligible = d >= MIN_WORK_DAYS;
+      box.style.color = loanEligible ? '#10b981' : '#f59e0b';
+      box.textContent = loanEligible
+        ? `✅ អ្នកមានថ្ងៃធ្វើការ ${d} ថ្ងៃ — មានសិទ្ធិស្នើសុំកម្ចី`
+        : `⚠️ អ្នកមានថ្ងៃធ្វើការ ${d} ថ្ងៃ — នៅខ្វះ ${MIN_WORK_DAYS - d} ថ្ងៃ ទើបស្នើសុំបាន`;
+    } catch (e) { loanEligible = false; box.style.color = '#f59e0b'; box.textContent = 'មិនអាចពិនិត្យថ្ងៃធ្វើការបានទេ'; }
+    if (btn) { btn.disabled = !loanEligible; btn.style.opacity = loanEligible ? '' : '.5'; }
+  }
+
   async function submitLoan() {
     const err = $('loanError'); err.style.display = 'none';
     const session = getSession();
@@ -103,6 +135,8 @@
     if (!reason) return fail('សូមបញ្ចូលមូលហេតុ');
     const btn = $('loanSubmitBtn'); btn.disabled = true;
     try {
+      const d = await workedDays();
+      if (d < MIN_WORK_DAYS) { await refreshEligibility(); return fail(`អ្នកត្រូវធ្វើការបានយ៉ាងតិច ${MIN_WORK_DAYS} ថ្ងៃ (បច្ចុប្បន្ន ${d} ថ្ងៃ)`); }
       // កុំឱ្យមានសំណើរង់ចាំច្រើនក្នុងពេលតែមួយ
       const { data: pend } = await supabaseClient.from('loans').select('id').eq('employee_id', session.id).eq('status', 'pending').limit(1);
       if (pend && pend.length) return fail('អ្នកមានសំណើកម្ចីកំពុងរង់ចាំការអនុម័តរួចហើយ');
@@ -112,7 +146,7 @@
       alertMsg('✅ បានដាក់សំណើកម្ចី ត្រូវរង់ចាំការអនុម័តពី Admin');
       await renderLoanEmp();
     } catch (e) { console.error(e); fail('មានបញ្ហា សូមព្យាយាមម្តងទៀត'); }
-    finally { btn.disabled = false; }
+    finally { btn.disabled = !loanEligible; }
   }
 
   async function deleteLoan(id) {
@@ -128,6 +162,7 @@
     inject();
     const list = $('loanList'), sum = $('loanSummary');
     if (!list) return;
+    refreshEligibility();
     list.innerHTML = '<div class="hist-empty">កំពុងផ្ទុក...</div>';
     const session = getSession();
     const { data, error } = await supabaseClient.from('loans').select('*').eq('employee_id', session.id).order('created_at', { ascending: false });
