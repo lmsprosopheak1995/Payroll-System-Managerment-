@@ -75,7 +75,19 @@
       h('td', null, h('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;' },
         h('button', { class: 'secondary', type: 'button', text: '✏️ កែ', onclick: () => { S.edit = w; render(); } }),
         USE_QR ? h('button', { class: 'secondary', type: 'button', text: '🔳 QR', onclick: () => printCards([w]) }) : null,
-        h('button', { class: 'secondary', type: 'button', text: w.active ? '⛔ បិទ' : '✅ បើក', onclick: async () => { if (await api('wk_save', { p_w: Object.assign({}, w, { active: !w.active }) })) render(); } })))));
+        h('button', { class: 'secondary', type: 'button', text: w.active ? '⛔ បិទ' : '✅ បើក', onclick: async () => {
+          if (w.active) {     // ព្រមានបើមានបំណុលកម្ចីនៅសល់ ឬសំណើរង់ចាំ
+            const lr = await rpcQuiet('wk_loan_list');
+            if (lr && !lr._err) {
+              const rp = lr.repaid || {}, mine = (lr.loans || []).filter(l => String(l.worker_id) === String(w.id));
+              const debt = mine.filter(l => l.status === 'approved' || l.status === 'cancelled').reduce((a, l) => a + Math.max(0, Number(l.amount) - Number(rp[l.id] || 0)), 0);
+              const pend = mine.some(l => l.status === 'pending');
+              if (debt > 0 || pend) {
+                if (!confirm('⚠️ ' + w.name + ' មាន' + (debt > 0 ? 'បំណុលកម្ចីនៅសល់ ' + money(debt, w.currency) : '') + (debt > 0 && pend ? ' និង' : '') + (pend ? 'សំណើកម្ចីកំពុងរង់ចាំ' : '') + '។\n\nមុនបិទ សូមបើកប្រាក់ចុងក្រោយសិន (ប្រព័ន្ធនឹងកាត់បំណុលទាំងអស់ពីប្រាក់ដែលត្រូវបើក)។\nបិទកម្មករឥឡូវនេះឬ?')) return;
+              }
+            }
+          }
+          if (await api('wk_save', { p_w: Object.assign({}, w, { active: !w.active }) })) render(); } })))));
     if (USE_QR) body.appendChild(h('div', { style: 'margin:12px 0;' }, h('button', { class: 'secondary', type: 'button', text: '🖨 បោះពុម្ពកាត QR (កម្មករសកម្មទាំងអស់)', onclick: () => printCards(S.workers.filter(w => w.active)) })));
     body.appendChild(h('div', { class: 'table-wrap' }, h('table', null,
       h('thead', null, h('tr', null, ['លេខកូដ', 'ឈ្មោះ', 'ប្រភេទ', 'ថ្លៃឈ្នួល', 'OT/ម៉ោង', 'បើកប្រាក់', 'ស្ថានភាព', ''].map(t => h('th', { text: t })))),
@@ -166,7 +178,7 @@
     // កម្ចីកំពុងសង (ស្ងាត់ៗ បើមិនទាន់រត់ wk-loans.sql) → កាត់ស្វ័យប្រវត្តិពីការបើកប្រាក់នេះ
     const ld = await rpcQuiet('wk_loan_list'), loansBy = {};
     if (ld && !ld._err) { const rp = ld.repaid || {}; (ld.loans || []).filter(l => l.status === 'approved').forEach(l => { const bal = Math.max(0, Number(l.amount) - Number(rp[l.id] || 0)); if (bal > 0) loansBy[String(l.worker_id)] = Object.assign({}, l, { bal }); }); }
-    const dedFor = (w, gross) => { const l = loansBy[String(w.id)]; return (!l || !(Number(gross) > 0)) ? 0 : Math.min(l.bal, Number(l.installment_amount), Number(gross)); };
+    const dedFor = (w, gross) => { const l = loansBy[String(w.id)]; if (!l || !(Number(gross) > 0)) return 0; const cap = w.active ? Math.min(l.bal, Number(l.installment_amount)) : l.bal; return Math.min(cap, Number(gross)); };   // កម្មករឈប់ = កាត់បំណុលនៅសល់ទាំងអស់ (ដល់ចំនួនប្រាក់ដែលត្រូវបើក)
     const due = {}; d.rows.forEach(r => { due[r.worker_id] = r; });
     const t = today(), ym = t.slice(0, 7), eomPrev = addDays(ym + '-01', -1), mid = t.slice(8) >= '15' ? ym + '-15' : eomPrev;
     const setUp = v => { S.upto = v; render(); };
@@ -175,12 +187,12 @@
       h('button', { class: 'secondary', type: 'button', text: 'ថ្ងៃនេះ', onclick: () => setUp(t) }),
       h('button', { class: 'secondary', type: 'button', text: 'ម្សិលមិញ', onclick: () => setUp(addDays(t, -1)) }),
       h('button', { class: 'secondary', type: 'button', text: 'ថ្ងៃទី ១៥ / ចុងខែមុន', onclick: () => setUp(mid) })));
-    const rows = S.workers.filter(w => w.active).map(w => { const r = due[w.id] || { days: 0, amount: 0 };
-      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' }), h('td', { text: TYPES[w.type] }), h('td', { text: FREQ[w.pay_freq] }), h('td', { text: String(r.days) }), h('td', { text: String(r.ot_hours || 0) }),
-        h('td', { text: money(r.amount, w.currency) }), h('td', { text: loansBy[String(w.id)] ? '−' + money(dedFor(w, r.amount), w.currency) + ' (នៅសល់ ' + money(loansBy[String(w.id)].bal, w.currency) + ')' : '—' }),
+    const rows = S.workers.filter(w => w.active || Number((due[w.id] || {}).amount) > 0 || loansBy[String(w.id)]).map(w => { const r = due[w.id] || { days: 0, amount: 0 };
+      return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' + (w.active ? '' : ' ⛔ ឈប់') }), h('td', { text: TYPES[w.type] }), h('td', { text: FREQ[w.pay_freq] }), h('td', { text: String(r.days) }), h('td', { text: String(r.ot_hours || 0) }),
+        h('td', { text: money(r.amount, w.currency) }), h('td', { text: loansBy[String(w.id)] ? '−' + money(dedFor(w, r.amount), w.currency) + ' (នៅសល់ ' + money(loansBy[String(w.id)].bal, w.currency) + ')' + (w.active ? '' : ' · កាត់ទាំងអស់') : '—' }),
         h('td', null, h('b', { text: money(Number(r.amount) - dedFor(w, r.amount), w.currency) })),
         h('td', null, h('button', { type: 'button', text: '💵 បើកប្រាក់', disabled: r.days > 0 ? null : '', onclick: async () => {
-          if (!confirm('បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ' + (r.ot_hours ? ' + OT ' + r.ot_hours + ' ម៉ោង' : '') + ' · ' + money(r.amount, w.currency) + (dedFor(w, r.amount) > 0 ? ' − កម្ចី ' + money(dedFor(w, r.amount), w.currency) + ' = ទទួលសុទ្ធ ' + money(Number(r.amount) - dedFor(w, r.amount), w.currency) : '') + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
+          if (!confirm((w.active ? '' : '⛔ ប្រាក់ចុងក្រោយ (កម្មករឈប់) — កាត់បំណុលកម្ចីនៅសល់ពីប្រាក់នេះ\n') + 'បើកប្រាក់ឱ្យ ' + w.name + ' · ' + r.days + ' ថ្ងៃ' + (r.ot_hours ? ' + OT ' + r.ot_hours + ' ម៉ោង' : '') + ' · ' + money(r.amount, w.currency) + (dedFor(w, r.amount) > 0 ? ' − កម្ចី ' + money(dedFor(w, r.amount), w.currency) + ' = ទទួលសុទ្ធ ' + money(Number(r.amount) - dedFor(w, r.amount), w.currency) : '') + ' (ដល់ថ្ងៃទី ' + S.upto + ')?')) return;
           const p = await api('wk_pay', { p_worker: w.id, p_upto: S.upto }); if (p) {
             let ded = Math.min(dedFor(w, r.amount), Number(p.amount));
             if (ded > 0) { const rr = await rpcQuiet('wk_loan_repay', { p_loan: loansBy[String(w.id)].id, p_payment: String(p.id || p.payment_id || ''), p_amount: ded });
@@ -242,7 +254,7 @@
   const PERIOD_WEEKS = { daily: 1 / 6, weekly: 1, semimonthly: 2, monthly: 4 };    // ប្រវែងវដ្តបើកប្រាក់ (សប្តាហ៍)
   const RISK = { low: ['ទាប', '#10b981'], medium: ['មធ្យម', '#f59e0b'], high: ['ខ្ពស់', '#ef4444'] };
   const RANK = { low: 0, medium: 1, high: 2 };
-  const L = { loans: [], repaid: {}, att: {}, res: null };
+  const L = { loans: [], repaid: {}, reps: [], att: {}, res: null };
   const lnNum = n => String(Math.round(Number(n) * 10) / 10);
   const lnUnit = c => (c === 'KHR' ? 1000 : 1);
   const lnFloor = (v, c) => Math.max(0, Math.floor(v / lnUnit(c)) * lnUnit(c));
@@ -259,12 +271,12 @@
   }
   async function loanCall(fn, args) {
     const d = await rpcQuiet(fn, args);
-    if (d && d._err) { say(d._err === 'missing' ? 'សូមរត់ wk-loans.sql ក្នុង Supabase ជាមុន' : (d._err === 'forbidden' ? ERR.forbidden : 'មានបញ្ហា៖ ' + d._err)); return null; }
+    if (d && d._err) { say(d._err === 'missing' ? 'សូមរត់ wk-loans.sql ក្នុង Supabase ជាមុន (ឬរត់ឡើងវិញ ដើម្បីដំឡើងកំណែថ្មី)' : (d._err === 'forbidden' ? ERR.forbidden : ({ over_balance: 'ចំនួនលើសបំណុលនៅសល់', note_required: 'ត្រូវបញ្ចូលមូលហេតុ', invalid: 'សកម្មភាពមិនត្រឹមត្រូវសម្រាប់ស្ថានភាពកម្ចីនេះ' }[d._err] || 'មានបញ្ហា៖ ' + d._err))); return null; }
     return d;
   }
   async function loadLoans() {
     const d = await loanCall('wk_loan_list'); if (!d) return false;
-    L.loans = d.loans || []; L.repaid = d.repaid || {};
+    L.loans = d.loans || []; L.repaid = d.repaid || {}; L.reps = d.reps || [];
     return true;
   }
 
@@ -294,7 +306,8 @@
     const cur = w.currency, rate = Number(w.rate || 0), wid = String(w.id);
     const maxLoan = lnFloor(Math.min(rate * LN.MAX_DAYS_RATE, st.earned), cur);
     const autoLimit = lnFloor(Math.min(rate * LN.AUTO_DAYS_RATE, maxLoan), cur);
-    const bal = loans.filter(l => l.worker_id === wid && l.status === 'approved').reduce((a, l) => a + lnBal(l), 0);
+    const bal = loans.filter(l => l.worker_id === wid && (l.status === 'approved' || l.status === 'cancelled')).reduce((a, l) => a + lnBal(l), 0);   // រួមទាំងកម្ចីដែលបានបញ្ឈប់ការកាត់ តែនៅមានបំណុល
+    const wroteOff = loans.filter(l => l.worker_id === wid && l.status === 'written_off').length;
     const pending = loans.some(l => l.worker_id === wid && l.status === 'pending');
     const att = st.worked / LN.EXPECTED_28;
     const checks = [
@@ -304,6 +317,7 @@
       { ok: weeks >= LN.MIN_WEEKS, hard: true, text: `រយៈពេលសងយ៉ាងតិច ${LN.MIN_WEEKS} សប្តាហ៍` },
       { ok: bal <= 0 && !pending, hard: false, text: bal > 0 ? `មានកម្ចីកំពុងសង ${money(bal, cur)}` : (pending ? 'មានសំណើកម្ចីរង់ចាំរួចហើយ' : 'គ្មានកម្ចីកំពុងសង') },
       { ok: att >= 0.6, hard: false, text: `វត្តមាន ${Math.round(att * 100)}% នៃ ${LN.EXPECTED_28} ថ្ងៃ` },
+      { ok: wroteOff === 0, hard: false, text: wroteOff ? `មានប្រវត្តិលុបបំណុល ${wroteOff} ដងពីមុន` : 'គ្មានប្រវត្តិលុបបំណុល' },
     ];
     let score = 100;
     if (!checks[0].ok) score -= 40;
@@ -313,6 +327,7 @@
     if (!checks[4].ok) score -= 25;
     if (att < 0.6) score -= 25; else if (att < 0.8) score -= 12;
     if (maxLoan > 0 && amount > maxLoan * 0.7) score -= 10;
+    if (!checks[6].ok) score -= 40;
     if (st.absent >= 5) score -= 8;
     score = Math.max(0, score);
     const hardOk = checks.filter(c => c.hard).every(c => c.ok);
@@ -417,8 +432,9 @@
     const badge = l => { const r = RISK[l.risk]; return r ? h('span', { style: 'padding:2px 10px;border-radius:999px;font-size:.74rem;font-weight:700;background:' + r[1] + '22;color:' + r[1] + ';', text: 'ហានិភ័យ ' + r[0] }) : null; };
     const pending = L.loans.filter(l => l.status === 'pending');
     const activeL = L.loans.filter(l => l.status === 'approved');
-    const hist = L.loans.filter(l => !['pending', 'approved'].includes(l.status));
-    const STAT = { pending: '⏳ រង់ចាំ', approved: '🟢 កំពុងសង', rejected: '✕ បដិសេធ', cancelled: '⏹ បញ្ឈប់', paid: '✅ សងរួច' };
+    const stopped = L.loans.filter(l => l.status === 'cancelled' && lnBal(l) > 0);          // បញ្ឈប់ការកាត់ តែនៅមានបំណុលត្រូវទារ
+    const hist = L.loans.filter(l => !['pending', 'approved'].includes(l.status) && !(l.status === 'cancelled' && lnBal(l) > 0));
+    const STAT = { pending: '⏳ រង់ចាំ', approved: '🟢 កំពុងសង', rejected: '✕ បដិសេធ', cancelled: '⏹ បញ្ឈប់', paid: '✅ សងរួច', written_off: '🧾 លុបបំណុល' };
 
     const sec = (title, list, mk) => { body.appendChild(h('h3', { class: 'sec-title', style: 'margin-top:18px;', text: title + ' (' + list.length + ')' }));
       body.appendChild(list.length ? h('div', null, list.map(mk)) : h('p', { class: 'scan-hint', text: 'គ្មានទិន្នន័យ' })); };
@@ -426,6 +442,46 @@
       h('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;' }, h('b', { text: nameOf(l) }), h('b', { text: money(l.amount, l.currency) + ' · ' + l.weeks + ' សប្តាហ៍' })),
       h('div', { style: 'font-size:.78rem;opacity:.75;', text: (l.reason || '-') + ' · ' + String(l.created_at || '').slice(0, 10) + (l.decision_by === 'ai' ? ' · អនុម័តដោយ AI' : (l.decision_by === 'admin' ? ' · សម្រេចដោយ Admin' : '')) }),
       extra);
+
+    // សង្ខេបបំណុល
+    const sumBy = list => { const o = {}; list.forEach(l => { o[l.currency] = (o[l.currency] || 0) + lnBal(l); }); return o; };
+    const fmtSum = o => (Object.keys(o).length ? Object.keys(o).map(c => money(o[c], c)).join(' + ') : '—');
+    const owing = [...activeL, ...stopped];
+    const quitDebt = sumBy(owing.filter(l => { const w = lnWorker(l.worker_id); return w && !w.active; }));
+    body.appendChild(h('div', { class: 'scan-result-card', style: 'margin-top:14px;display:flex;gap:28px;flex-wrap:wrap;' },
+      h('div', null, h('div', { style: 'font-size:.76rem;opacity:.7;', text: 'បំណុលនៅសល់សរុប' }), h('b', { style: 'font-size:1.2rem;', text: fmtSum(sumBy(owing)) })),
+      h('div', null, h('div', { style: 'font-size:.76rem;opacity:.7;', text: 'បំណុលកម្មករដែលឈប់ (ត្រូវទារ)' }), h('b', { style: 'font-size:1.2rem;color:' + (Object.keys(quitDebt).length ? '#ef4444' : 'inherit') + ';', text: fmtSum(quitDebt) }))));
+
+    // កត់ការសងដោយដៃ (សាច់ប្រាក់) · លុបបំណុល (ត្រូវមានមូលហេតុ)
+    const repaysOf = l => L.reps.filter(r => String(r.loan_id) === String(l.id));
+    const repayHist = l => { const rs = repaysOf(l); return rs.length ? h('details', { style: 'margin-top:6px;font-size:.8rem;' }, h('summary', { style: 'cursor:pointer;', text: 'ប្រវត្តិការសង (' + rs.length + ')' }),
+      rs.map(r => h('div', { style: 'display:flex;justify-content:space-between;padding:2px 0;' }, h('span', { text: String(r.created_at || '').slice(0, 10) + (r.payment_id ? ' · កាត់ពីការបើកប្រាក់' : ' · សាច់ប្រាក់') }), h('b', { text: money(r.amount, l.currency) })))) : null; };
+    const manualRepay = async l => {
+      const bal = lnBal(l), v = Number(prompt('ចំនួនប្រាក់ដែលបានសង (' + l.currency + ') · បំណុលនៅសល់ ' + money(bal, l.currency), String(bal)));
+      if (!(v > 0)) return;
+      if (v > bal + 0.001) { say('ចំនួនលើសបំណុលនៅសល់'); return; }
+      if (await loanCall('wk_loan_repay', { p_loan: l.id, p_payment: '', p_amount: v })) render();
+    };
+    const writeOff = async l => {
+      const bal = lnBal(l), why = (prompt('មូលហេតុលុបបំណុល ' + money(bal, l.currency) + ' (ចាំបាច់)') || '').trim();
+      if (!why) { say('ត្រូវបញ្ចូលមូលហេតុ ទើបលុបបំណុលបាន'); return; }
+      if (!confirm('លុបបំណុលនៅសល់ ' + money(bal, l.currency) + ' របស់ ' + nameOf(l) + ' ?\nមូលហេតុ៖ ' + why + '\n(មិនអាចត្រឡប់វិញបានទេ)')) return;
+      if (await loanCall('wk_loan_decide', { p_id: l.id, p_status: 'written_off', p_note: why })) render();
+    };
+    const debtCard = (l, isStopped) => { const bal = lnBal(l), paid = Number(l.amount) - bal, pct = Math.round((paid / Number(l.amount)) * 100), w = lnWorker(l.worker_id), quit = w && !w.active;
+      return base(l, h('div', null,
+        h('div', { style: 'margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;' }, badge(l),
+          quit ? h('span', { style: 'padding:2px 10px;border-radius:999px;font-size:.74rem;font-weight:700;background:#ef444422;color:#ef4444;', text: '⛔ កម្មករឈប់' }) : null,
+          isStopped ? h('span', { style: 'font-size:.76rem;opacity:.8;', text: 'បានបញ្ឈប់ការកាត់ស្វ័យប្រវត្តិ' }) : null,
+          h('span', { style: 'font-size:.84rem;', text: 'នៅសល់ ' + money(bal, l.currency) + ' · សងរួច ' + money(paid, l.currency) + (isStopped ? '' : ' · កាត់ម្តងៗ ' + money(l.installment_amount, l.currency)) })),
+        h('div', { style: 'background:rgba(128,128,128,.25);border-radius:6px;height:8px;margin:8px 0;overflow:hidden;' }, h('div', { style: 'width:' + pct + '%;height:100%;background:#10b981;' })),
+        quit && !isStopped ? h('div', { style: 'font-size:.8rem;color:#f59e0b;margin-bottom:4px;', text: 'កម្មករនេះឈប់ហើយ — បើកប្រាក់ចុងក្រោយក្នុង Tab «បើកប្រាក់» (កាត់បំណុលទាំងអស់ពីប្រាក់ដែលត្រូវបើក) ឬកត់ការសងដោយដៃ' }) : null,
+        l.ai_summary ? h('div', { style: 'font-size:.82rem;opacity:.85;', text: '🤖 ' + l.ai_summary }) : null,
+        repayHist(l),
+        h('div', { style: 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;' },
+          h('button', { type: 'button', text: '💵 កត់ការសង (សាច់ប្រាក់)', onclick: () => manualRepay(l) }),
+          h('button', { class: 'secondary', type: 'button', text: '🧾 លុបបំណុល', onclick: () => writeOff(l) }),
+          isStopped ? null : h('button', { class: 'secondary', type: 'button', text: '⏹ បញ្ឈប់ការកាត់', onclick: async () => { if (!confirm('បញ្ឈប់ការកាត់ស្វ័យប្រវត្តិ? បំណុលនៅសល់ ' + money(bal, l.currency) + ' នៅតែជាប់ ហើយអាចកត់ការសងដោយដៃ ឬលុបក្រោយ')) return; if (await loanCall('wk_loan_decide', { p_id: l.id, p_status: 'cancelled' })) render(); } })))); };
     sec('📥 សំណើរង់ចាំ Admin', pending, l => base(l, h('div', null,
       h('div', { style: 'margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;' }, badge(l), l.risk_score != null ? h('span', { style: 'font-size:.76rem;opacity:.75;', text: l.risk_score + '/100' }) : null,
         h('span', { style: 'font-size:.78rem;', text: 'កាត់ ' + l.installments + ' ដង × ' + money(l.installment_amount, l.currency) })),
@@ -433,14 +489,13 @@
       h('div', { style: 'margin-top:8px;display:flex;gap:8px;' },
         h('button', { type: 'button', text: '✓ អនុម័ត', onclick: async () => { if (!confirm('អនុម័តកម្ចី ' + money(l.amount, l.currency) + ' ឱ្យ ' + nameOf(l) + ' ? (ត្រូវប្រគល់ប្រាក់ ហើយកាត់ពីការបើកប្រាក់ក្រោយ)')) return; if (await loanCall('wk_loan_decide', { p_id: l.id, p_status: 'approved' })) render(); } }),
         h('button', { class: 'secondary', type: 'button', text: '✕ បដិសេធ', onclick: async () => { if (!confirm('បដិសេធសំណើនេះ?')) return; if (await loanCall('wk_loan_decide', { p_id: l.id, p_status: 'rejected' })) render(); } })))));
-    sec('🟢 កំពុងសង', activeL, l => { const bal = lnBal(l), paid = Number(l.amount) - bal, pct = Math.round((paid / Number(l.amount)) * 100);
-      return base(l, h('div', null,
-        h('div', { style: 'margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;' }, badge(l), h('span', { style: 'font-size:.84rem;', text: 'នៅសល់ ' + money(bal, l.currency) + ' · សងរួច ' + money(paid, l.currency) + ' · កាត់ម្តងៗ ' + money(l.installment_amount, l.currency) })),
-        h('div', { style: 'background:rgba(128,128,128,.25);border-radius:6px;height:8px;margin:8px 0;overflow:hidden;' }, h('div', { style: 'width:' + pct + '%;height:100%;background:#10b981;' })),
-        l.ai_summary ? h('div', { style: 'font-size:.82rem;opacity:.85;', text: '🤖 ' + l.ai_summary }) : null,
-        h('div', { style: 'margin-top:8px;' }, h('button', { class: 'secondary', type: 'button', text: '⏹ បញ្ឈប់កម្ចី', onclick: async () => { if (!confirm('បញ្ឈប់កម្ចីនេះ? ការកាត់ក្រោយនេះនឹងឈប់ (សំណល់ ' + money(bal, l.currency) + ' ត្រូវទារដោយដៃ)')) return; if (await loanCall('wk_loan_decide', { p_id: l.id, p_status: 'cancelled' })) render(); } })))); });
-    sec('📜 ប្រវត្តិ', hist, l => base(l, h('div', { style: 'margin-top:6px;font-size:.84rem;', text: (STAT[l.status] || l.status) + (l.admin_note ? ' · ' + l.admin_note : '') })));
+    sec('🟢 កំពុងសង', activeL, l => debtCard(l, false));
+    sec('⏹ បញ្ឈប់ការកាត់ (នៅមានបំណុល)', stopped, l => debtCard(l, true));
+    sec('📜 ប្រវត្តិ', hist, l => base(l, h('div', null,
+      h('div', { style: 'margin-top:6px;font-size:.84rem;', text: (STAT[l.status] || l.status) + (l.status === 'written_off' ? ' ' + money(l.written_off_amount || 0, l.currency) : '') + (l.admin_note ? ' · ' + l.admin_note : '') }),
+      repayHist(l))));
   }
+
 
   // ---------------------------------------------------------------- ដំឡើងម៉ឺនុយ + ទំព័រ ----
   function build() {
