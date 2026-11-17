@@ -40,7 +40,7 @@
 
   // សារពេលគ្មានកម្មករសកម្ម៖ ប្រាប់ថាមានកម្មករបិទប៉ុន្មាននាក់ ដើម្បីងាយបើកឡើងវិញ
   const noActive = () => { const n = S.workers.filter(w => !w.active).length; return 'មិនទាន់មានកម្មករសកម្មទេ' + (n ? ' — មានកម្មករបិទ ' + n + ' នាក់ សូមចូល «បញ្ជីកម្មករ» ហើយចុច ✅ បើក' : ' — សូមបន្ថែមក្នុង «បញ្ជីកម្មករ»'); };
-  const SUBS = [['list', '👷 បញ្ជីកម្មករ'], ['scan', '📷 ស្កេន QR'], ['att', '🗓 វត្តមាន'], ['pay', '💵 បើកប្រាក់'], ['loan', '💳 កម្ចី']].filter(s => USE_QR || s[0] !== 'scan');
+  const SUBS = [['list', '👷 បញ្ជីកម្មករ'], ['scan', '📷 ស្កេន QR'], ['att', '🗓 វត្តមាន'], ['review', '🧾 ពិនិត្យវគ្គ'], ['pay', '💵 បើកប្រាក់'], ['loan', '💳 កម្ចី']].filter(s => USE_QR || s[0] !== 'scan');
 
   async function stopScan() { if (scanner) { try { await scanner.stop(); scanner.clear(); } catch (_) { /* ignore */ } scanner = null; } }
   async function render() {
@@ -50,7 +50,7 @@
     S.workers = d.workers;
     root.querySelectorAll('[data-sub]').forEach(b => b.classList.toggle('secondary', b.dataset.sub !== S.sub));
     body.textContent = '';
-    ({ list: viewList, scan: viewScan, att: viewAtt, pay: viewPay, loan: viewLoan })[S.sub]();
+    ({ list: viewList, scan: viewScan, att: viewAtt, review: viewPeriod, pay: viewPay, loan: viewLoan })[S.sub]();
   }
 
   // ---------------------------------------------------------------- បញ្ជីកម្មករ ----
@@ -186,7 +186,7 @@
       h('input', { type: 'date', value: S.upto, onchange: e => { if (e.target.value) setUp(e.target.value); } }),
       h('button', { class: 'secondary', type: 'button', text: 'ថ្ងៃនេះ', onclick: () => setUp(t) }),
       h('button', { class: 'secondary', type: 'button', text: 'ម្សិលមិញ', onclick: () => setUp(addDays(t, -1)) }),
-      h('button', { class: 'secondary', type: 'button', text: 'ថ្ងៃទី ១៥ / ចុងខែមុន', onclick: () => setUp(mid) })));
+      recentCutoffs(2).map(d => h('button', { class: 'secondary', type: 'button', title: 'ថ្ងៃកាត់វគ្គ: ថ្ងៃទី 15 / ចុងខែ (ថយមក 1 ថ្ងៃ បើចំថ្ងៃអាទិត្យ)', text: 'ថ្ងៃកាត់វគ្គ ' + d.slice(5), onclick: () => setUp(d) }))));
     const rows = S.workers.filter(w => w.active || Number((due[w.id] || {}).amount) > 0 || loansBy[String(w.id)]).map(w => { const r = due[w.id] || { days: 0, amount: 0 };
       return h('tr', null, h('td', { text: w.name + ' (' + w.code + ')' + (w.active ? '' : ' ⛔ ឈប់') }), h('td', { text: TYPES[w.type] }), h('td', { text: FREQ[w.pay_freq] }), h('td', { text: String(r.days) }), h('td', { text: String(r.ot_hours || 0) }),
         h('td', { text: money(r.amount, w.currency) }), h('td', { text: loansBy[String(w.id)] ? '−' + money(dedFor(w, r.amount), w.currency) + ' (នៅសល់ ' + money(loansBy[String(w.id)].bal, w.currency) + ')' + (w.active ? '' : ' · កាត់ទាំងអស់') : '—' }),
@@ -238,6 +238,110 @@
       + '<tr class="t"><td>សរុបទទួលបាន</td><td class="r">' + money(Number(p.amount) - Number(p.loan_ded || 0), p.currency) + '</td></tr></table>'
       + '<div class="sg"><div>អ្នកបើកប្រាក់</div><div>អ្នកទទួល</div></div><script>onload=()=>setTimeout(print,400)<\/script>');
     win.document.close();
+  }
+
+  // ---------------------------------------------------------------- ពិនិត្យវត្តមានតាមវគ្គ (1–15 / 16–ចុងខែ) ----
+  // ថ្ងៃកាត់វគ្គ = ថ្ងៃទី 15 និងថ្ងៃចុងខែ (28/29/30/31) · បើចំថ្ងៃអាទិត្យ → ថយមក 1 ថ្ងៃ (សៅរ៍) ដើម្បីពិនិត្យវត្តមាន និងទូទាត់ប្រាក់ឈ្នួល
+  // ថ្ងៃអាទិត្យដែលត្រូវរំលង រាប់ចូលក្នុងវគ្គបន្ទាប់
+  const pad2 = n => String(n).padStart(2, '0');
+  const dowOf = d => new Date(d + 'T00:00:00Z').getUTCDay();                       // 0 = អាទិត្យ
+  const lastDayOf = ym => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).getUTCDate();
+  const shiftYm = (ym, k) => { let y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) + k; y += Math.floor((m - 1) / 12); m = ((m - 1) % 12 + 12) % 12 + 1; return y + '-' + pad2(m); };
+  function cutoffsOf(ym) {
+    const d15 = ym + '-15', dEnd = ym + '-' + pad2(lastDayOf(ym));
+    const s1 = dowOf(d15) === 0, s2 = dowOf(dEnd) === 0;
+    return { d15, dEnd, s1, s2, c1: s1 ? addDays(d15, -1) : d15, c2: s2 ? addDays(dEnd, -1) : dEnd };
+  }
+  function periodsOf(ym) {
+    const c = cutoffsOf(ym), p = cutoffsOf(shiftYm(ym, -1));
+    return [
+      { no: 1, from: addDays(p.c2, 1), to: c.c1, nominal: c.d15, shifted: c.s1, label: 'វគ្គទី១ (1–15)' },
+      { no: 2, from: addDays(c.c1, 1), to: c.c2, nominal: c.dEnd, shifted: c.s2, label: 'វគ្គទី២ (16–' + c.dEnd.slice(8) + ')' },
+    ];
+  }
+  function recentCutoffs(n) {                                                      // ថ្ងៃកាត់វគ្គដែលកន្លងមកហើយ (ថ្មីបំផុតមុន)
+    const t = today(), ym = t.slice(0, 7), out = [];
+    [shiftYm(ym, -2), shiftYm(ym, -1), ym].forEach(m => { const c = cutoffsOf(m); [c.c1, c.c2].forEach(d => { if (d <= t) out.push(d); }); });
+    return out.sort().reverse().slice(0, n);
+  }
+  const KH_DOW = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+
+  async function viewPeriod() {
+    if (!S.pm) {                                                                   // លំនាំដើម៖ វគ្គចុងក្រោយដែលកាត់រួច
+      const t0 = today(), ym0 = t0.slice(0, 7), pm0 = shiftYm(ym0, -1);
+      const cand = [].concat(periodsOf(pm0).map(p => ({ ym: pm0, p })), periodsOf(ym0).map(p => ({ ym: ym0, p }))).filter(x => x.p.to <= t0);
+      const pick = cand.length ? cand[cand.length - 1] : { ym: ym0, p: periodsOf(ym0)[0] };
+      S.pm = pick.ym; S.pno = pick.p.no;
+    }
+    if (S.pfilter === undefined) S.pfilter = S.workers.some(w => w.pay_freq === 'semimonthly');
+    const P = periodsOf(S.pm), per = P[S.pno - 1], t = today();
+
+    const mIn = h('input', { type: 'month', value: S.pm, onchange: e => { if (e.target.value) { S.pm = e.target.value; render(); } } });
+    body.appendChild(h('div', { class: 'toolbar', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;' },
+      h('button', { class: 'secondary', type: 'button', text: '◀', onclick: () => { S.pm = shiftYm(S.pm, -1); render(); } }), mIn,
+      h('button', { class: 'secondary', type: 'button', text: '▶', onclick: () => { S.pm = shiftYm(S.pm, 1); render(); } }),
+      P.map(p => h('button', { class: p.no === S.pno ? '' : 'secondary', type: 'button', text: p.label, onclick: () => { S.pno = p.no; render(); } })),
+      h('label', { style: 'display:flex;gap:6px;align-items:center;font-size:.85rem;' }, h('input', { type: 'checkbox', checked: S.pfilter ? '' : null, onchange: e => { S.pfilter = e.target.checked; render(); } }), 'តែកម្មករបើកប្រាក់ ២ ដង/ខែ')));
+
+    const note = [h('b', { text: per.label + ' · ' + per.from + ' → ' + per.to }), ' · ថ្ងៃកាត់៖ ' + per.to + ' (' + KH_DOW[dowOf(per.to)] + ')'];
+    if (per.shifted) note.push(h('div', { style: 'color:#f59e0b;margin-top:4px;', text: '⚠️ ថ្ងៃទី ' + per.nominal.slice(8) + ' ជាថ្ងៃអាទិត្យ → ថយមក 1 ថ្ងៃ ពិនិត្យដល់ថ្ងៃទី ' + per.to.slice(8) + ' (សៅរ៍) · ថ្ងៃអាទិត្យរាប់ចូលវគ្គបន្ទាប់' }));
+    if (per.from.slice(0, 7) !== S.pm && per.no === 1) note.push(h('div', { style: 'opacity:.8;margin-top:4px;', text: 'វគ្គនេះចាប់ពីថ្ងៃអាទិត្យចុងខែមុន (' + per.from + ') ដែលត្រូវបានរំលងពីវគ្គមុន' }));
+    if (per.to > t) note.push(h('div', { style: 'color:#f59e0b;margin-top:4px;', text: '⏳ វគ្គនេះមិនទាន់ដល់ថ្ងៃកាត់ — វត្តមានអាចមិនទាន់គ្រប់' }));
+    body.appendChild(h('div', { class: 'scan-result-card', style: 'margin-top:10px;' }, note));
+
+    // អានវត្តមានគ្រប់ថ្ងៃក្នុងវគ្គ (ទាញថ្មីជានិច្ច ព្រោះ Admin អាចទើបកែ)
+    const dates = []; for (let d = per.from; d <= per.to; d = addDays(d, 1)) dates.push(d);
+    dates.forEach(d => { delete L.att[d]; });
+    const loading = h('p', { class: 'scan-hint', text: '⏳ កំពុងអានវត្តមាន ' + dates.length + ' ថ្ងៃ…' }); body.appendChild(loading);
+    const byDate = {}; let failed = 0;
+    for (let i = 0; i < dates.length; i += 8) {
+      const chunk = await Promise.all(dates.slice(i, i + 8).map(attRows));
+      chunk.forEach((rows, k) => { if (!rows) failed++; else { const m = {}; rows.forEach(r => { m[String(r.worker_id)] = r; }); byDate[dates[i + k]] = m; } });
+    }
+    const dueRes = await rpcQuiet('wk_pay_due', { p_upto: per.to });
+    if (S.sub !== 'review') return;
+    loading.remove();
+    if (failed) body.appendChild(h('p', { class: 'scan-hint', style: 'color:#ef4444;', text: 'មិនអាចអានវត្តមាន ' + failed + ' ថ្ងៃបានទេ — លទ្ធផលខាងក្រោមអាចមិនពេញលេញ' }));
+    const due = {}; if (dueRes && !dueRes._err) (dueRes.rows || []).forEach(r => { due[String(r.worker_id)] = r; });
+
+    const list = S.workers.filter(w => (!S.pfilter || w.pay_freq === 'semimonthly') && (w.active || dates.some(d => (byDate[d] || {})[String(w.id)])));
+    if (!list.length) { body.appendChild(h('p', { class: 'scan-hint', text: S.pfilter ? 'គ្មានកម្មករបើកប្រាក់ ២ ដង/ខែ — ដកធីកខាងលើ ដើម្បីបង្ហាញកម្មករទាំងអស់' : noActive() })); return; }
+
+    const BOX = { full: ['#10b981', '#fff'], half: ['#f59e0b', '#fff'], abs: ['#ef4444', '#fff'], miss: ['transparent', '#9ca3af'], sun: ['rgba(128,128,128,.25)', '#9ca3af'], future: ['transparent', 'rgba(128,128,128,.4)'] };
+    const rowsEl = [], dueTot = {}; let firstMissing = null, missWorkers = 0;
+    list.forEach(w => {
+      let worked = 0, absent = 0, missing = 0, ot = 0, vouchers = 0; const strip = [];
+      dates.forEach(d => {
+        const r = (byDate[d] || {})[String(w.id)], sun = dowOf(d) === 0;
+        if (r) { const v = Number(r.day_value || 0); worked += v; ot += Number(r.ot_hours || 0); vouchers += Number(r.vouchers || 0); if (v === 0) absent++; strip.push([d, v >= 1 ? 'full' : (v > 0 ? 'half' : 'abs')]); }
+        else if (d > t) strip.push([d, 'future']);
+        else if (sun) strip.push([d, 'sun']);
+        else { missing++; if (!firstMissing || d < firstMissing) firstMissing = d; strip.push([d, 'miss']); }
+      });
+      if (missing) missWorkers++;
+      const dr = due[String(w.id)];
+      if (dr && Number(dr.amount) > 0) dueTot[w.currency] = (dueTot[w.currency] || 0) + Number(dr.amount);
+      rowsEl.push(h('tr', { style: missing ? 'background:rgba(245,158,11,.08);' : '' },
+        h('td', { text: w.name + ' (' + w.code + ')' + (w.active ? '' : ' ⛔ ឈប់') }), h('td', { text: FREQ[w.pay_freq] }),
+        h('td', null, h('b', { text: lnNum(worked) })), h('td', { text: String(absent) }),
+        h('td', { style: missing ? 'color:#f59e0b;font-weight:700;' : '', text: String(missing) }),
+        h('td', { text: lnNum(ot) + (w.type === 'voucher' ? ' · បុង ' + vouchers : '') }),
+        h('td', { text: dr ? lnNum(dr.days) : '0' }), h('td', null, h('b', { text: dr ? money(dr.amount, w.currency) : '—' })),
+        h('td', { style: 'color:' + (missing ? '#f59e0b' : '#10b981') + ';', text: missing ? '⚠ ខ្វះ ' + missing + ' ថ្ងៃ' : '✓ គ្រប់' })));
+      rowsEl.push(h('tr', null, h('td', { colspan: '9', style: 'padding:2px 8px 10px;' },
+        h('div', { style: 'display:flex;gap:3px;flex-wrap:wrap;' }, strip.map(x => h('span', { title: x[0] + ' · ' + KH_DOW[dowOf(x[0])], style: 'width:24px;height:24px;border-radius:6px;font-size:.66rem;display:inline-flex;align-items:center;justify-content:center;border:1px ' + (x[1] === 'miss' ? 'dashed' : 'solid') + ' ' + (x[1] === 'future' ? 'rgba(128,128,128,.3)' : BOX[x[1]][0] === 'transparent' ? BOX[x[1]][1] : BOX[x[1]][0]) + ';background:' + BOX[x[1]][0] + ';color:' + BOX[x[1]][1] + ';', text: x[0].slice(8) }))))));
+    });
+
+    body.appendChild(h('div', { class: 'scan-result-card', style: 'margin-top:10px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;' },
+      h('div', null, h('div', { style: 'font-size:.76rem;opacity:.7;', text: 'កម្មករ' }), h('b', { style: 'font-size:1.15rem;', text: String(list.length) })),
+      h('div', null, h('div', { style: 'font-size:.76rem;opacity:.7;', text: 'មានថ្ងៃមិនទាន់កត់' }), h('b', { style: 'font-size:1.15rem;color:' + (missWorkers ? '#f59e0b' : '#10b981') + ';', text: missWorkers ? missWorkers + ' នាក់' : 'គ្មាន ✓' })),
+      h('div', null, h('div', { style: 'font-size:.76rem;opacity:.7;', text: 'ប្រាក់ត្រូវបើកដល់ថ្ងៃកាត់ (មិនទាន់កាត់កម្ចី)' }), h('b', { style: 'font-size:1.15rem;', text: Object.keys(dueTot).length ? Object.keys(dueTot).map(c => money(dueTot[c], c)).join(' + ') : '—' }))));
+    body.appendChild(h('div', { class: 'scan-wrap', style: 'overflow-x:auto;margin-top:10px;' },
+      h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['កម្មករ', 'បើកប្រាក់', 'ថ្ងៃធ្វើការ', 'អវត្តមាន', 'មិនទាន់កត់', 'OT (ម៉ោង)', 'ថ្ងៃមិនទាន់បើក', 'ប្រាក់ត្រូវបើក', 'ស្ថានភាព'].map(x => h('th', { text: x })))), h('tbody', null, rowsEl)),
+      h('p', { class: 'scan-hint', text: 'ប្រអប់ពណ៌៖ បៃតង = មកពេញថ្ងៃ · លឿង = កន្លះថ្ងៃ · ក្រហម = អវត្តមាន · ស៊ុមដាច់ = មិនទាន់កត់ · ប្រផេះ = ថ្ងៃអាទិត្យ។ «ប្រាក់ត្រូវបើក» គណនាដោយប្រព័ន្ធបើកប្រាក់ (រួមទាំងថ្ងៃមិនទាន់បើកមុនវគ្គនេះ)។' })));
+    body.appendChild(h('div', { style: 'margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;' },
+      firstMissing ? h('button', { class: 'secondary', type: 'button', text: '✏️ កត់វត្តមានដែលខ្វះ (ចាប់ពី ' + firstMissing + ')', onclick: () => { S.date = firstMissing; S.sub = 'att'; render(); } }) : null,
+      h('button', { type: 'button', text: '💵 ទៅបើកប្រាក់ដល់ថ្ងៃទី ' + per.to, onclick: () => { S.upto = per.to; S.sub = 'pay'; render(); } })));
   }
 
   // ---------------------------------------------------------------- ប្រាក់កម្ចីកម្មករ ----
