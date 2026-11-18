@@ -141,6 +141,22 @@
   #homeTabContent .home-head .h-name{font-size:.98rem !important;}
   #homeTabContent .home-head .eh-ibtn{width:40px;height:40px;border-radius:13px;}
 
+  /* slider ព្រឹត្តិការណ៍ខាងមុខ (បញ្ឈរ + ចុចចំណុចខាងស្តាំ) */
+  #homeTabContent #ehUpBody{display:flex;align-items:stretch;gap:6px;}
+  #homeTabContent .eh-slides{flex:1;min-width:0;height:100px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;}
+  #homeTabContent .eh-slides::-webkit-scrollbar{display:none;}
+  #homeTabContent .eh-page{height:100px;scroll-snap-align:start;scroll-snap-stop:always;}
+  #homeTabContent .eh-sdots{display:flex;flex-direction:column;justify-content:center;gap:7px;padding:0 0 0 2px;}
+  #homeTabContent .eh-sdots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28);cursor:pointer;transition:background .2s,transform .2s;}
+  #homeTabContent .eh-sdots i.on{background:#2dd4bf;transform:scale(1.25);}
+  #homeTabContent .eh-today .eh-av{margin-left:auto;flex:none;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);color:#7fe3d6;display:flex;align-items:center;justify-content:center;}
+
+  /* slider ច្បាប់ (ចំណុចក្រោមលេខ) */
+  #homeTabContent .eh-ldots{display:flex;gap:6px;margin-top:6px;padding:4px 0;}
+  #homeTabContent .eh-ldots i{width:16px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);cursor:pointer;transition:all .25s;}
+  #homeTabContent .eh-ldots i.on{background:#2dd4bf;width:22px;}
+  #homeTabContent #ehRingArc{transition:stroke-dashoffset .45s ease;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -174,7 +190,7 @@
   `;
 
   /* ---------- សមាសភាព ---------- */
-  let observers = [], built = false, lastRec = null;
+  let observers = [], built = false, lastRec = null, leavePages = [], leavePage = 0;
 
   function greet() { const h = new Date().getHours(); return h < 12 ? 'អរុណសួស្តី' : (h < 17 ? 'ទិវាសួស្តី' : 'សាយណ្ហសួស្តី'); }
   function go(tab) { if (typeof switchEmpTab === 'function') switchEmpTab(tab); }
@@ -206,13 +222,21 @@
       <div class="eh-glass eh-ring" id="ehRing" data-go="leave" role="button">
         <svg viewBox="0 0 62 62"><circle cx="31" cy="31" r="25" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="7"/>
           <circle id="ehRingArc" cx="31" cy="31" r="25" fill="none" stroke="#2dd4bf" stroke-width="7" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="157" transform="rotate(-90 31 31)"/></svg>
-        <div><div class="t">ច្បាប់ប្រចាំឆ្នាំ</div><div class="n"><span id="ehLeaveNow">–</span> <small>/ <span id="ehLeaveTot">–</span></small></div></div>
+        <div><div class="t" id="ehLeaveTitle">ច្បាប់ប្រចាំឆ្នាំ</div><div class="n"><span id="ehLeaveNow">–</span> <small>/ <span id="ehLeaveTot">–</span></small></div><div class="eh-ldots" id="ehLdots"><i class="on"></i><i></i></div></div>
       </div>
       <button type="button" class="eh-glass eh-tile" data-go="leave" style="--c:#93c5fd"><span class="eh-ico">${ic('door', 34)}</span>សុំច្បាប់</button>
       <button type="button" class="eh-glass eh-tile" data-go="ot" style="--c:#5eead4"><span class="eh-ico">${ic('alarm', 34)}</span>ថែមម៉ោង</button>`;
     const anchor = H.querySelector('.home-scan');
     H.insertBefore(row1, anchor ? anchor.nextSibling : H.querySelector('.menu-card'));
     row1.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+    // slider រង្វង់ច្បាប់៖ អូសឆ្វេង/ស្តាំ ឬចុចចំណុច ដើម្បីប្តូរ (ចុចកាតធម្មតា → ទៅទំព័រសុំច្បាប់)
+    const ring = $('ehRing'); let sx = null, swiped = false;
+    ring.style.touchAction = 'pan-y';
+    ring.addEventListener('pointerdown', e => { sx = e.clientX; swiped = false; });
+    ring.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 30) { swiped = true; setLeavePage(leavePage + (dx < 0 ? 1 : -1)); } });
+    ring.addEventListener('pointercancel', () => { sx = null; });
+    ring.addEventListener('click', e => { if (swiped) { e.stopImmediatePropagation(); e.preventDefault(); swiped = false; } }, true);
+    $('ehLdots').addEventListener('click', e => { e.stopPropagation(); const d = e.target.closest('i'); if (d) setLeavePage(+d.dataset.i); });
 
     // ៤) ក្រឡាក្នុង .menu-card៖ កាត់ស្លាកវែង
     const corr = H.querySelector('.menu-row[data-go="correction"] .lbl'); if (corr) corr.textContent = 'កែវត្តមាន';
@@ -234,7 +258,7 @@
     row2.innerHTML = `
       <div class="eh-glass eh-card" id="ehUpcoming"><h4>ព្រឹត្តិការណ៍ខាងមុខ</h4><div id="ehUpBody"></div></div>
       <div class="eh-glass eh-card" id="ehToday" data-go="clock"><div class="eh-today"><div class="eh-cal"><small id="ehMon"></small><b id="ehDay"></b></div>
-        <div><div style="font-size:.76rem;opacity:.75;">ថ្ងៃនេះ</div><div style="font-weight:800;" id="ehDow"></div></div></div>
+        <div><div style="font-size:.76rem;opacity:.75;">ថ្ងៃនេះ</div><div style="font-weight:800;" id="ehDow"></div></div><span class="eh-av" aria-hidden="true">${ic('user', 18)}</span></div>
         <div class="eh-duty"><div>ចូល<b id="ehIn">--:--</b></div><div>ចេញ<b id="ehOut">--:--</b></div></div></div>`;
     chips.insertAdjacentElement('afterend', row2);
     $('ehToday').onclick = () => go('clock');
@@ -270,6 +294,16 @@
   function scanStarting() {   // កាមេរ៉ាកំពុងបើក (reader បង្ហាញ តែ empScannerRunning មិនទាន់ true)
     const r = $('empQrReader'), run = (typeof empScannerRunning !== 'undefined') && empScannerRunning;
     return !run && !!r && r.style.display !== 'none';
+  }
+
+  function setLeavePage(i) {
+    if (!leavePages.length) return;
+    leavePage = (i + leavePages.length) % leavePages.length;
+    const p = leavePages[leavePage];
+    $('ehLeaveTitle').textContent = p.t; $('ehLeaveNow').textContent = p.now; $('ehLeaveTot').textContent = p.tot;
+    const pct = p.tot > 0 ? Math.max(0, Math.min(1, p.now / p.tot)) : 0;
+    $('ehRingArc').style.strokeDashoffset = String(157 * (1 - pct));
+    document.querySelectorAll('#ehLdots i').forEach((d, k) => d.classList.toggle('on', k === leavePage));
   }
 
   function cancelScan() {
@@ -351,22 +385,37 @@
     // ព្រឹត្តិការណ៍ខាងមុខ៖ ថ្ងៃបុណ្យ/ថ្ងៃដោះដូរ 3 ទីមួយ ចាប់ពីថ្ងៃនេះ
     try {
       const hol = (typeof holidays !== 'undefined') ? holidays : {};
-      const list = Object.keys(hol).filter(x => x >= t).sort().slice(0, 3);
-      $('ehUpBody').innerHTML = list.length ? list.map(x => {
+      const list = Object.keys(hol).filter(x => x >= t).sort().slice(0, 6);
+      const evs = list.map(x => {
         const raw = String(hol[x] || ''), swap = (typeof isSwapHoliday === 'function') && isSwapHoliday(x);
         const name = (swap && typeof HOLIDAY_SWAP_TAG !== 'undefined' ? raw.slice(HOLIDAY_SWAP_TAG.length).trim() : raw).replace(/\d{4}-(\d{2})-(\d{2})/g, (_, m, dd) => dd + '/' + m) || 'ថ្ងៃបុណ្យ';
         const dt = new Date(x + 'T00:00:00');
         return `<div class="eh-ev"><div class="ic">${ic(swap ? 'swap' : 'party', 18)}</div><div><div class="d">${dt.getDate()} ${KH_MON[dt.getMonth()]} ${dt.getFullYear()}</div>${esc(name)}</div></div>`;
-      }).join('') : '<div style="opacity:.7;font-size:.8rem;">មិនមានថ្ងៃបុណ្យខាងមុខ</div>';
+      });
+      const body = $('ehUpBody');
+      if (!evs.length) body.innerHTML = '<div style="opacity:.7;font-size:.8rem;">មិនមានថ្ងៃបុណ្យខាងមុខ</div>';
+      else {
+        const pages = []; for (let i = 0; i < evs.length; i += 2) pages.push(evs.slice(i, i + 2).join(''));
+        body.innerHTML = `<div class="eh-slides" id="ehSlides">${pages.map(h => `<div class="eh-page">${h}</div>`).join('')}</div>`
+          + (pages.length > 1 ? `<div class="eh-sdots" id="ehSdots">${pages.map((_, i) => `<i data-i="${i}"${i ? '' : ' class="on"'}></i>`).join('')}</div>` : '');
+        const sl = $('ehSlides'), dots = $('ehSdots');
+        if (sl && dots) {
+          const setOn = () => { const k = Math.round(sl.scrollTop / (sl.clientHeight || 1)); dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === k)); };
+          sl.addEventListener('scroll', setOn, { passive: true });
+          dots.addEventListener('click', ev => { ev.stopPropagation(); const d = ev.target.closest('i'); if (d) sl.scrollTo({ top: d.dataset.i * sl.clientHeight, behavior: 'smooth' }); });
+          sl.addEventListener('click', ev => ev.stopPropagation());   // អូស/ចុចក្នុង slider មិនបើកកាតថ្ងៃបុណ្យ
+        }
+      }
     } catch (err) { /* ignore */ }
 
     // ច្បាប់ប្រចាំឆ្នាំ
     try {
       if (e && typeof fetchLeaveBalances === 'function') {
-        const bal = await fetchLeaveBalances(new Date().getFullYear()), a = bal.annual;
-        $('ehLeaveNow').textContent = a.remaining; $('ehLeaveTot').textContent = a.total;
-        const pct = a.total > 0 ? Math.max(0, Math.min(1, a.remaining / a.total)) : 0;
-        $('ehRingArc').style.strokeDashoffset = String(157 * (1 - pct));
+        const bal = await fetchLeaveBalances(new Date().getFullYear()), a = bal.annual, pd = bal.paid;
+        leavePages = [{ t: 'ច្បាប់ប្រចាំឆ្នាំ', now: a.remaining, tot: a.total }];
+        if (pd) leavePages.push({ t: 'ច្បាប់មានប្រាក់ខែ', now: pd.remaining, tot: pd.quota });
+        const dots = $('ehLdots'); if (dots) dots.innerHTML = leavePages.map((_, i) => '<i' + (i ? '' : ' class="on"') + ' data-i="' + i + '"></i>').join('');
+        setLeavePage(leavePage);
       }
     } catch (err) { /* ignore */ }
     syncVisibility();
