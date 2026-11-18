@@ -167,6 +167,13 @@
   #ehSlide .hint{padding-left:56px;font-size:.92rem;font-weight:500;color:#d3e2e8;gap:12px;}
   #ehSlide .hint .ar{font-size:1.25rem;opacity:.8;letter-spacing:-2px;}
 
+  /* ចំណុចបញ្ឈរខាងស្តាំកាតកត់ម៉ោង (ដូចគម្រូ) */
+  #ehSlide .box{display:flex;align-items:center;gap:8px;}
+  #ehSlide .main{flex:1;min-width:0;}
+  #ehSlide .sdots{display:flex;flex-direction:column;gap:0;padding:0;margin-right:-8px;}
+  #ehSlide .sdots i{width:7px;height:7px;padding:7px;box-sizing:content-box;border-radius:50%;background:rgba(255,255,255,.3);background-clip:content-box;cursor:pointer;transition:background .2s,transform .2s;}
+  #ehSlide .sdots i.on{background:#2dd4bf;background-clip:content-box;transform:scale(1.2);}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -200,7 +207,7 @@
   `;
 
   /* ---------- សមាសភាព ---------- */
-  let observers = [], built = false, lastRec = null, leavePages = [], leavePage = 0;
+  let observers = [], built = false, lastRec = null, leavePages = [], leavePage = 0, slidePage = 0;
 
   function greet() { const h = new Date().getHours(); return h < 12 ? 'អរុណសួស្តី' : (h < 17 ? 'ទិវាសួស្តី' : 'សាយណ្ហសួស្តី'); }
   function go(tab) { if (typeof switchEmpTab === 'function') switchEmpTab(tab); }
@@ -277,8 +284,10 @@
     // ៧) ប៊ូតុងអូសកត់ម៉ោង (នៅខាងក្រៅ tab ដើម្បីឱ្យអណ្តែតលើរបារក្រោម)
     const slide = document.createElement('div');
     slide.id = 'ehSlide';
-    slide.innerHTML = `<div class="box"><div class="tt" id="ehSlideTitle">កត់ម៉ោងធម្មតា</div>
-      <div class="track" id="ehTrack"><div class="hint"><span class="ar">»</span><span id="ehSlideHint">អូសដើម្បីស្កេនកត់ម៉ោង</span><span class="ar">»</span></div><div class="handle" id="ehHandle">${ic('clock')}</div></div></div>`;
+    slide.innerHTML = `<div class="box"><div class="main"><div class="tt" id="ehSlideTitle">កត់ម៉ោងធម្មតា</div>
+      <div class="track" id="ehTrack"><div class="hint"><span class="ar">»</span><span id="ehSlideHint">អូសដើម្បីស្កេនកត់ម៉ោង</span><span class="ar">»</span></div><div class="handle" id="ehHandle">${ic('clock')}</div></div></div>
+      <div class="sdots" id="ehSdots2" role="tablist"><i class="on" data-i="0"></i><i data-i="1"></i></div></div>`;
+    $('ehSdots2').addEventListener('click', e => { const d = e.target.closest('i'); if (d) setSlidePage(+d.dataset.i); });
     document.body.appendChild(slide);
     bindSlide();
 
@@ -443,12 +452,24 @@
     alignSlide();
     const rdr = $('empQrReader'); document.body.classList.toggle('eh-scanning', !!rdr && rdr.style.display !== 'none');
     const st = slideState(), ni = nextInfo(lastRec);
+    if (st.running) slidePage = 0;   // កំពុងស្កេន → ត្រឡប់ទំព័រកត់ម៉ោងធម្មតា
+    document.querySelectorAll('#ehSdots2 i').forEach((d, k) => d.classList.toggle('on', k === slidePage));
+    if (slidePage === 1) {   // ទំព័រទី២៖ ទៅទំព័រ "ធ្វើការថែមម៉ោង" (មានស្រាប់)
+      s.classList.remove('locked');
+      $('ehSlideTitle').textContent = 'ធ្វើការថែមម៉ោង';
+      $('ehSlideHint').textContent = 'អូសដើម្បីបើកទំព័រថែមម៉ោង';
+      $('ehHandle').innerHTML = ic('alarm');
+      return;
+    }
     s.classList.toggle('locked', st.locked);
     $('ehSlideTitle').textContent = st.locked ? '🔒 ការស្កេនបិទ' : 'កត់ម៉ោងធម្មតា · ' + ni.name;
     $('ehSlideHint').textContent = st.locked ? (st.msg || 'ការស្កេនបិទ')
       : (st.running ? 'ចុចដើម្បីបញ្ឈប់ការស្កេន' : (ni.time ? ni.label + ': ' + ni.time : (ni.label ? 'អូសដើម្បីស្កេនកត់ម៉ោង' : ni.name)));
     $('ehHandle').innerHTML = ic(st.running ? 'stop' : (st.locked ? 'lock' : 'clock'));
   }
+
+  function setSlidePage(i) { slidePage = i ? 1 : 0; syncSlide(); }
+  function slideAction() { if (slidePage === 1) go('ot'); else trigger(); }   // ប៊ូតុងស្កេនខាងលើប្រើ trigger() ផ្ទាល់ ដូច្នេះស្កេនបានជានិច្ច
 
   function trigger() {
     const st = slideState();
@@ -468,11 +489,11 @@
     handle.addEventListener('pointermove', e => { if (!dragging) return; const nx = e.clientX - startX; if (Math.abs(nx - x) > 2) moved = true; setX(nx); });
     const end = () => {
       if (!dragging) return; dragging = false;
-      if (x >= max() * 0.82) { reset(); trigger(); } else reset();
+      if (x >= max() * 0.82) { reset(); slideAction(); } else reset();
     };
     handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', () => { dragging = false; reset(); });
     // ចុចធម្មតា (មិនអូស) → បើកម៉ាស៊ីនស្កេនដែរ / បញ្ឈប់ពេលកំពុងស្កេន
-    handle.addEventListener('click', () => { if (!moved || slideState().running) { trigger(); } });
+    handle.addEventListener('click', () => { if (!moved || slideState().running) { slideAction(); } });
   }
 
   /* ---------- ភ្ជាប់ជាមួយ renderHome ចាស់ ---------- */
