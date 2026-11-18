@@ -35,7 +35,7 @@
 
   /* ---------- រចនាបថ ---------- */
   const CSS = `
-  #homeTabContent{position:relative;padding-bottom:235px;--text:#eaf6fb;--text-muted:#9db9c4;--border:rgba(255,255,255,.13);--bg:#0a2238;--card-bg:rgba(18,52,62,.7);--shadow:0 8px 22px rgba(0,0,0,.28);color:#eaf6fb;}
+  #homeTabContent{position:relative;padding-bottom:120px;--text:#eaf6fb;--text-muted:#9db9c4;--border:rgba(255,255,255,.13);--bg:#0a2238;--card-bg:rgba(18,52,62,.7);--shadow:0 8px 22px rgba(0,0,0,.28);color:#eaf6fb;}
   /* ផ្ទៃខាងក្រោយ: ពន្លឺ teal ជ្រុងឆ្វេងលើ + ស្រទាប់កញ្ចក់ទ្រេត */
   #homeTabContent::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
     background:
@@ -174,6 +174,10 @@
   #ehSlide .sdots i{width:7px;height:7px;padding:7px;box-sizing:content-box;border-radius:50%;background:rgba(255,255,255,.3);background-clip:content-box;cursor:pointer;transition:background .2s,transform .2s;}
   #ehSlide .sdots i.on{background:#2dd4bf;background-clip:content-box;transform:scale(1.2);}
 
+  /* លាក់/បង្ហាញតាម scroll */
+  #ehSlide{transition:opacity .28s ease,translate .28s ease;}
+  #ehSlide.eh-hide{opacity:0;pointer-events:none;translate:0 36px;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -290,6 +294,13 @@
     document.body.appendChild(slide);
     $('ehSdots2').addEventListener('click', e => { const d = e.target.closest('i'); if (d) setSlidePage(+d.dataset.i); });
     bindSlide();
+    slide.addEventListener('pointerdown', () => { touching = true; peekSlide(); });
+    ['pointerup', 'pointercancel'].forEach(ev => window.addEventListener(ev, () => { if (touching) { touching = false; peekSlide(); } }));
+    window.addEventListener('scroll', e => {
+      const t = e.target; if (t && t.closest && t.closest('#ehSlides')) return;   // slider ព្រឹត្តិការណ៍មិនរាប់
+      if (slide.classList.contains('on')) peekSlide();
+    }, { passive: true, capture: true });
+    peekSlide();   // បង្ហាញខ្លីៗពេលបើកទំព័រ ឲ្យអ្នកប្រើដឹងថាមាន
 
     // ៧.១) ប៊ូតុងបោះបង់ការស្កេន (បង្ហាញពេលកាមេរ៉ាបើក)
     const rd = $('empQrReader');
@@ -359,7 +370,9 @@
 
   function syncVisibility() {
     const s = $('ehSlide'), H = home(); if (!s || !H) return;
+    const was = s.classList.contains('on');
     s.classList.toggle('on', H.classList.contains('active')); alignSlide();
+    if (!was && s.classList.contains('on')) peekSlide();
     const mc = $('mainCard'), dark = H.classList.contains('active') && mc && mc.style.display !== 'none';
     const tc = document.querySelector('meta[name="theme-color"]');
     if (tc) { if (!tc.dataset.orig) tc.dataset.orig = tc.content; tc.content = dark ? '#0b3340' : tc.dataset.orig; }
@@ -452,6 +465,7 @@
     alignSlide();
     const rdr = $('empQrReader'); document.body.classList.toggle('eh-scanning', !!rdr && rdr.style.display !== 'none');
     const st = slideState(), ni = nextInfo(lastRec);
+    if (st.running || scanStarting()) peekSlide();
     if (st.running) slidePage = 0;   // កំពុងស្កេន → ត្រឡប់ទំព័រកត់ម៉ោងធម្មតា
     document.querySelectorAll('#ehSdots2 i').forEach((d, k) => d.classList.toggle('on', k === slidePage));
     if (slidePage === 1) {   // ទំព័រទី២៖ ទៅទំព័រ "ធ្វើការថែមម៉ោង" (មានស្រាប់)
@@ -466,6 +480,20 @@
     $('ehSlideHint').textContent = st.locked ? (st.msg || 'ការស្កេនបិទ')
       : (st.running ? 'ចុចដើម្បីបញ្ឈប់ការស្កេន' : (ni.time ? ni.label + ': ' + ni.time : (ni.label ? 'អូសដើម្បីស្កេនកត់ម៉ោង' : ni.name)));
     $('ehHandle').innerHTML = ic(st.running ? 'stop' : (st.locked ? 'lock' : 'clock'));
+  }
+
+  /* កាតអូសស្កេន៖ លាក់ជាធម្មតា · បង្ហាញពេល scroll · លាក់វិញបន្ទាប់ពីឈប់ scroll ~២.៥វិ */
+  let hideT = null, touching = false;
+  function slideBusy() { return touching || slideState().running || scanStarting(); }
+  function maybeHide() {
+    const s = $('ehSlide'); if (!s) return;
+    if (slideBusy()) { hideT = setTimeout(maybeHide, 1200); return; }   // កំពុងប្រើ/កំពុងស្កេន → ទុកបង្ហាញ
+    s.classList.add('eh-hide');
+  }
+  function peekSlide() {
+    const s = $('ehSlide'); if (!s) return;
+    s.classList.remove('eh-hide');
+    clearTimeout(hideT); hideT = setTimeout(maybeHide, 2500);
   }
 
   function setSlidePage(i) { slidePage = i ? 1 : 0; syncSlide(); }
