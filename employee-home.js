@@ -129,6 +129,10 @@
   #homeTabContent .eh-duty div + div{border-left:1px solid rgba(255,255,255,.18);}
   #homeTabContent .eh-duty b{font-size:.78rem;font-weight:500;opacity:.7;margin-top:3px;}
 
+  /* ចន្លោះរវាងកាតព្រឹត្តិការណ៍/ថ្ងៃនេះ និងកាតប្រាក់ខែខាងក្រោម */
+  #homeTabContent #homePayCards,#homeTabContent #homeHolidayCard.eh-open{margin:16px 16px 0 !important;gap:12px;}
+  #homeTabContent #homePayCards .hp-card{padding:14px 16px !important;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
