@@ -88,6 +88,22 @@
   body:has(#homeTabContent.active) .bnav{background:rgba(8,24,38,.92);backdrop-filter:blur(12px);box-shadow:0 -6px 24px rgba(0,0,0,.45);border-top:1px solid rgba(94,234,212,.2);}
   body:has(#homeTabContent.active) button.bnav-item{color:#8fb4ba;}
   body:has(#homeTabContent.active) button.bnav-item.active{color:#2dd4bf;}
+  /* ===== ធ្វើឱ្យស្អាតជាងមុន ===== */
+  /* ផ្ទៃខាងក្រោយងងឹតពេញអេក្រង់ (រួមទាំងតំបន់ status bar លើ iPhone) */
+  html:has(#mainCard:not([style*="none"]) #homeTabContent.active),body:has(#mainCard:not([style*="none"]) #homeTabContent.active){background:#0a1220 !important;}
+  /* របារម៉ឺនុយ + របារអូស: ទឹកអត់ថ្លា កុំឱ្យឃើញអក្សរពីក្រោម */
+  body:has(#homeTabContent.active) .bnav{background:#081826 !important;border:1px solid rgba(94,234,212,.28) !important;border-radius:22px;}
+  #ehSlide .box{background:linear-gradient(160deg,#0f3c46,#08202e) !important;}
+  #homeTabContent{padding-bottom:210px;}
+  /* កាតច្បាប់ប្រចាំឆ្នាំ: កុំឱ្យលេខបាក់បន្ទាត់ */
+  #homeTabContent .eh-row1{grid-template-columns:1.6fr 1fr 1fr;}
+  #homeTabContent .eh-ring{gap:10px;padding:12px;}
+  #homeTabContent .eh-ring svg{width:52px;height:52px;}
+  #homeTabContent .eh-ring .t{font-size:.76rem;}
+  #homeTabContent .eh-ring .n{font-size:1.3rem;white-space:nowrap;}
+  #homeTabContent .eh-ring .n small{font-size:.74rem;}
+  /* banner គ្មានរូប: ពណ៌ត្រូវនឹងរចនាបថ និងកម្ពស់តូចជាង */
+  #homeTabContent .banner:not(.has-img){background:linear-gradient(135deg,#0f766e,#0e7490 60%,#164e63) !important;aspect-ratio:auto !important;min-height:150px;justify-content:center;}
   `;
 
   /* ---------- សមាសភាព ---------- */
@@ -169,6 +185,7 @@
     const btn = $('empScanToggleBtn');
     if (btn) { const o = new MutationObserver(syncSlide); o.observe(btn, { childList: true, characterData: true, subtree: true, attributes: true }); observers.push(o); }
     const o2 = new MutationObserver(syncVisibility); o2.observe(H, { attributes: true, attributeFilter: ['class'] }); observers.push(o2);
+    const mcard = $('mainCard'); if (mcard) { const o3 = new MutationObserver(syncVisibility); o3.observe(mcard, { attributes: true, attributeFilter: ['style'] }); observers.push(o3); }
     syncBadge(); syncSlide(); syncVisibility();
   }
 
@@ -189,7 +206,13 @@
     s.style.left = r.left + 'px'; s.style.width = r.width + 'px'; s.style.transform = 'none';
   }
   window.addEventListener('resize', () => alignSlide());
-  function syncVisibility() { const s = $('ehSlide'), H = home(); if (s && H) { s.classList.toggle('on', H.classList.contains('active')); alignSlide(); } }
+  function syncVisibility() {
+    const s = $('ehSlide'), H = home(); if (!s || !H) return;
+    s.classList.toggle('on', H.classList.contains('active')); alignSlide();
+    const mc = $('mainCard'), dark = H.classList.contains('active') && mc && mc.style.display !== 'none';
+    const tc = document.querySelector('meta[name="theme-color"]');
+    if (tc) { if (!tc.dataset.orig) tc.dataset.orig = tc.content; tc.content = dark ? '#0a1b2b' : tc.dataset.orig; }
+  }
 
   /* ---------- ទិន្នន័យ ---------- */
   function nextStep(rec) {
