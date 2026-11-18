@@ -278,9 +278,12 @@
       const { worked, broken } = monthFlags(emp.id, year);       // worked = មានមកធ្វើការ · broken = មានអវត្តមានមិនបានលើកលែង
       const startKey = firstFullMonthKey(emp.startDate);         // ខែពេញដំបូង (ចូលក្រោយថ្ងៃទី ១ → ខែនោះមិនរាប់)
       const earned = [], used = new Array(12).fill(0), balance = [];
-      // ទទួលបានតែដល់ខែបច្ចុប្បន្ន — ខែអនាគតមិនទាន់បំពេញ ហើយនឹងលោតចូលស្វ័យប្រវត្តិពេលចូលខែថ្មី
+      // ទទួលបាន ១.៥ ថ្ងៃ លុះត្រាតែបំពេញការងារពេញលេញក្នុងខែនោះ → រាប់តែខែដែលចប់ហើយ
+      // (ខែបច្ចុប្បន្នមិនទាន់រាប់ រហូតដល់ថ្ងៃចុងខែ ហើយនឹងលោតចូលស្វ័យប្រវត្តិ)
       const curYear = parseInt(todayStr().slice(0, 4), 10), curMonth = parseInt(todayStr().slice(5, 7), 10);
-      const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : curMonth - 1);
+      const curDay = parseInt(todayStr().slice(8, 10), 10), daysInCur = new Date(curYear, curMonth, 0).getDate();
+      const curMonthDone = curDay >= daysInCur;
+      const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : (curMonthDone ? curMonth - 1 : curMonth - 2));
       for (let i = 0; i < 12; i++) {
         const key = `${year}-${String(i + 1).padStart(2, '0')}`;
         earned.push(i <= lastMonth && worked[i] && !broken[i] && (!startKey || key >= startKey) ? perMonth : 0);
