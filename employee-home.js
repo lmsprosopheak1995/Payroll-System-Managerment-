@@ -287,8 +287,8 @@
     slide.innerHTML = `<div class="box"><div class="main"><div class="tt" id="ehSlideTitle">កត់ម៉ោងធម្មតា</div>
       <div class="track" id="ehTrack"><div class="hint"><span class="ar">»</span><span id="ehSlideHint">អូសដើម្បីស្កេនកត់ម៉ោង</span><span class="ar">»</span></div><div class="handle" id="ehHandle">${ic('clock')}</div></div></div>
       <div class="sdots" id="ehSdots2" role="tablist"><i class="on" data-i="0"></i><i data-i="1"></i></div></div>`;
-    $('ehSdots2').addEventListener('click', e => { const d = e.target.closest('i'); if (d) setSlidePage(+d.dataset.i); });
     document.body.appendChild(slide);
+    $('ehSdots2').addEventListener('click', e => { const d = e.target.closest('i'); if (d) setSlidePage(+d.dataset.i); });
     bindSlide();
 
     // ៧.១) ប៊ូតុងបោះបង់ការស្កេន (បង្ហាញពេលកាមេរ៉ាបើក)
