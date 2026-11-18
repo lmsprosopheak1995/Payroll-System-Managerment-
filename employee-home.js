@@ -63,70 +63,18 @@
   #homeTabContent .home-head .h-name{font-size:1.05rem !important;font-weight:800 !important;text-transform:uppercase;letter-spacing:.3px;color:#fff;}
 
 
-  /* header រួម៖ avatar + ស្វាគមន៍ (ឆ្វេង) · ស្កេន + ជួង (ស្តាំ) */
-  #homeTabContent .eh-bar{gap:10px;padding:14px 16px 4px;}
-  #homeTabContent .eh-bar .home-head{flex:1;min-width:0;padding:0 !important;gap:10px;}
-  #homeTabContent .eh-bar .home-head > div:last-child{flex-direction:column;align-items:flex-start;row-gap:1px;}
-  #homeTabContent .eh-bar .home-head .h-hello{font-size:.78rem !important;color:#9fdcf0 !important;line-height:1.3;}
-  #homeTabContent .eh-bar .home-head .h-hello::after{content:none;}
-  #homeTabContent .eh-bar .home-head .h-name{font-size:.98rem !important;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-  #homeTabContent .eh-icons{flex:none;}
+  /* ផ្គូផ្គងគម្រូ៖ របារខាងលើ = ឡូហ្គោតែមួយ (គ្មានអក្សរ) + ស្កេន + ជួង */
+  #homeTabContent .eh-bar{padding:16px 16px 0;}
+  #homeTabContent .eh-logo{width:48px;height:48px;border-radius:14px;object-fit:cover;}
+  #homeTabContent .home-head{padding:12px 16px 2px !important;}
+  #homeTabContent .banner{height:128px;}
 
-  /* Banner */
-  #homeTabContent .banner-track{margin:12px 16px 0 !important;border-radius:24px !important;overflow-x:auto;overflow-y:hidden;border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 28px rgba(0,0,0,.35);}
-  #homeTabContent .banner{aspect-ratio:auto !important;height:150px;border-radius:0 !important;}
-  #homeTabContent .banner:not(.has-img){background:linear-gradient(135deg,#0f766e,#0e7490 60%,#164e63) !important;justify-content:center;}
-  #homeTabContent .banner-dots{margin-top:8px;}
-  #homeTabContent .banner-dots i.on{background:#2dd4bf;}
-
-  /* កាតកញ្ចក់ */
-  #homeTabContent .eh-glass,#homeTabContent .menu-card .menu-row,#homeTabContent .portal-card{background:linear-gradient(160deg,rgba(46,104,114,.36),rgba(12,40,54,.76)) !important;border:1px solid rgba(255,255,255,.13) !important;border-radius:22px !important;box-shadow:0 8px 22px rgba(0,0,0,.26);backdrop-filter:blur(8px);color:#eaf6fb !important;}
-
-  /* ជួរទី១ */
-  #homeTabContent .home-scan{margin:6px 16px 0 !important;}
-  #homeTabContent .home-scan #empScanToggleBtn,#homeTabContent .home-scan #empScanPrivacy{display:none !important;}
-  #homeTabContent .eh-row1{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:10px;padding:12px 16px 0;}
-  #homeTabContent .eh-ring{display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;min-height:104px;}
-  #homeTabContent .eh-ring svg{flex:0 0 auto;width:54px;height:54px;}
-  #homeTabContent .eh-ring .t{font-size:.76rem;font-weight:700;line-height:1.25;color:#dcecf2;}
-  #homeTabContent .eh-ring .n{font-size:1.3rem;font-weight:800;line-height:1.15;white-space:nowrap;}
-  #homeTabContent .eh-ring .n small{font-size:.76rem;opacity:.72;font-weight:500;}
-  #homeTabContent .eh-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 6px;min-height:104px;cursor:pointer;font-size:.8rem;font-weight:700;text-align:center;}
-  #homeTabContent .eh-ico,#homeTabContent .menu-card .menu-row .menu-ico{width:40px !important;height:40px !important;margin:0 !important;border-radius:0 !important;background:none !important;box-shadow:none !important;display:flex !important;align-items:center;justify-content:center;font-size:1.6rem !important;color:color-mix(in srgb,var(--c,#7dd3fc) 45%,#e8f6fc) !important;}
-  #homeTabContent .eh-ico svg,#homeTabContent .menu-card .menu-row .menu-ico svg{width:34px !important;height:34px !important;}
-
-  /* ក្រឡាក្នុង .menu-card (ចាស់) ប្តូរជា tile 4 ជួរ */
-  #homeTabContent .menu-card{display:grid !important;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 16px 0 !important;background:transparent !important;border:0 !important;box-shadow:none !important;margin:0 !important;}
-  #homeTabContent .menu-card .menu-row{display:flex !important;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 4px !important;min-height:96px;height:auto !important;text-align:center;}
-  #homeTabContent .menu-card .menu-row .go{display:none !important;}
-  #homeTabContent .menu-card .menu-row .lbl{font-size:.76rem !important;font-weight:700 !important;line-height:1.25;white-space:normal !important;flex:0 0 auto !important;}
-  #homeTabContent .menu-card .menu-row[data-go="leave"],#homeTabContent .menu-card .menu-row[data-go="ot"],#homeTabContent .menu-card .menu-row[data-go="clock"],#homeTabContent .menu-card .menu-row[data-go="feedback"]{display:none !important;}
-
-  /* ឈីព */
-  #homeTabContent .eh-chips{display:flex;gap:10px;overflow-x:auto;padding:14px 16px 2px;scrollbar-width:none;}
-  #homeTabContent .eh-chips::-webkit-scrollbar{display:none;}
-  #homeTabContent .eh-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(18,56,66,.62);color:#eaf6fb;font-weight:700;font-size:.88rem;cursor:pointer;backdrop-filter:blur(6px);box-shadow:none;}
-  #homeTabContent .eh-chip svg{width:20px;height:20px;color:#9fdcf0;}
-  #homeTabContent .eh-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ef4444;color:#fff;font-size:.72rem;font-weight:800;display:none;align-items:center;justify-content:center;}
-
-  /* ជួរទី២ */
-  #homeTabContent .eh-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px 0;}
-  #homeTabContent .eh-card{padding:14px;min-height:150px;cursor:pointer;}
-  #homeTabContent .eh-card h4{margin:0 0 10px;font-size:.96rem;font-weight:800;}
-  #homeTabContent .eh-ev{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;font-size:.8rem;line-height:1.3;}
-  #homeTabContent .eh-ev .d{opacity:.75;font-size:.74rem;}
-  #homeTabContent .eh-ev .ic{width:30px;height:30px;border-radius:9px;background:rgba(245,158,11,.2);color:#fbbf24;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
-  #homeTabContent .eh-ev .ic svg{width:18px;height:18px;}
-  #homeTabContent .eh-today{display:flex;gap:10px;align-items:center;margin-bottom:12px;}
-  #homeTabContent .eh-cal{width:46px;border-radius:12px;background:#0f766e;color:#fff;text-align:center;overflow:hidden;font-weight:800;flex:0 0 auto;}
-  #homeTabContent .eh-cal small{display:block;background:#14b8a6;font-size:.62rem;padding:2px 0;}
-  #homeTabContent .eh-cal b{display:block;font-size:1.3rem;padding:3px 0;}
-  #homeTabContent .eh-duty{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.76rem;}
-  #homeTabContent .eh-duty div{background:rgba(255,255,255,.07);border-radius:10px;padding:8px 6px;text-align:center;}
-  #homeTabContent .eh-duty b{display:block;font-size:.95rem;margin-top:2px;}
-  #homeTabContent #homeHolidayCard{display:none;}
-  #homeTabContent #homeHolidayCard.eh-open{display:block;}
-
+  /* កាត "ថ្ងៃនេះ"៖ ចូល | ចេញ ក្នុងជួរតែមួយ មានបន្ទាត់ខណ្ឌ */
+  #homeTabContent .eh-duty{display:flex;align-items:stretch;gap:0;margin-top:2px;}
+  #homeTabContent .eh-duty div{flex:1;background:none;border-radius:0;padding:2px 8px;text-align:left;font-weight:700;font-size:.78rem;}
+  #homeTabContent .eh-duty div + div{border-left:1px solid rgba(255,255,255,.18);}
+  #homeTabContent .eh-duty b{font-size:.78rem;font-weight:500;opacity:.7;margin-top:3px;}
+  #homeTabContent .eh-cal{background:#0f766e;border:2px solid #2dd4bf;border-radius:12px;}
 
   /* ពេលកាមេរ៉ាបើក៖ បិទ blur ដើម្បីកុំឲ្យទូរស័ព្ទយឺត/គាំង */
   body.eh-scanning #homeTabContent *,body.eh-scanning .bnav,body.eh-scanning #ehSlide *,body.eh-scanning #ehScanClose{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}
@@ -180,12 +128,12 @@
     // ១) របារខាងលើ៖ ឡូហ្គោ + ស្កេន + ជួង
     const bar = document.createElement('div');
     bar.className = 'eh-bar';
-    bar.innerHTML = `<div class="eh-icons">
+    bar.innerHTML = `<div class="eh-brand"><img class="eh-logo" src="icon/icon-192.png" alt="Hem Sopheak HR"></div>
+      <div class="eh-icons">
         <button type="button" class="eh-ibtn" id="ehScanBtn" aria-label="ស្កេន">${ic('scan', 22)}</button>
         <button type="button" class="eh-ibtn" id="ehBell" aria-label="ដំណឹង">${ic('bell', 22)}<span class="eh-dot" id="ehBellDot"></span></button>
       </div>`;
     H.insertBefore(bar, H.firstChild);
-    bar.insertBefore(head, bar.firstChild); // រួម avatar + ស្វាគមន៍ ក្នុងរបារតែមួយ
     $('ehBell').onclick = () => go('notify');
     $('ehScanBtn').onclick = () => trigger();
 
