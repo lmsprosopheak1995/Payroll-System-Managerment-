@@ -127,6 +127,10 @@
   #homeTabContent #homeHolidayCard{display:none;}
   #homeTabContent #homeHolidayCard.eh-open{display:block;}
 
+
+  /* ពេលកាមេរ៉ាបើក៖ បិទ blur ដើម្បីកុំឲ្យទូរស័ព្ទយឺត/គាំង */
+  body.eh-scanning #homeTabContent *,body.eh-scanning .bnav,body.eh-scanning #ehSlide *,body.eh-scanning #ehScanClose{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -256,12 +260,22 @@
     syncBadge(); syncSlide(); syncVisibility();
   }
 
+  function scanStarting() {   // កាមេរ៉ាកំពុងបើក (reader បង្ហាញ តែ empScannerRunning មិនទាន់ true)
+    const r = $('empQrReader'), run = (typeof empScannerRunning !== 'undefined') && empScannerRunning;
+    return !run && !!r && r.style.display !== 'none';
+  }
+
   function cancelScan() {
     const running = (typeof empScannerRunning !== 'undefined') && empScannerRunning;
     if (typeof stopEmpScanner === 'function') stopEmpScanner();
-    if (!running) {   // កាមេរ៉ាកំពុងចាប់ផ្តើម → លាក់ភ្លាមៗ ហើយបញ្ឈប់ម្តងទៀតពេលវាដំណើរការ
+    if (!running) {   // កាមេរ៉ាកំពុងចាប់ផ្តើម → លាក់ភ្លាមៗ ហើយរង់ចាំរហូតដល់ ១០វិ ទើបបញ្ឈប់ពេលវាដំណើរការ
       const r = $('empQrReader'); if (r) r.style.display = 'none';
-      setTimeout(() => { if (typeof empScannerRunning !== 'undefined' && empScannerRunning && typeof stopEmpScanner === 'function') stopEmpScanner(); }, 900);
+      let n = 0;
+      const t = setInterval(() => {
+        n++;
+        if (typeof empScannerRunning !== 'undefined' && empScannerRunning) { clearInterval(t); if (typeof stopEmpScanner === 'function') stopEmpScanner(); }
+        else if (n >= 40) clearInterval(t);
+      }, 250);
     }
     setTimeout(syncSlide, 400);
   }
@@ -361,6 +375,7 @@
   function syncSlide() {
     const s = $('ehSlide'); if (!s) return;
     alignSlide();
+    const rdr = $('empQrReader'); document.body.classList.toggle('eh-scanning', !!rdr && rdr.style.display !== 'none');
     const st = slideState(), ni = nextInfo(lastRec);
     s.classList.toggle('locked', st.locked);
     $('ehSlideTitle').textContent = st.locked ? '🔒 ការស្កេនបិទ' : 'កត់ម៉ោងធម្មតា · ' + ni.name;
@@ -372,6 +387,7 @@
   function trigger() {
     const st = slideState();
     if (st.locked) { if (typeof customAlert === 'function') customAlert(st.msg || 'ការស្កេនបិទ'); return; }
+    if (!st.running && scanStarting()) return;   // កាមេរ៉ាកំពុងបើក — កុំចាប់ផ្តើមស្ទួន
     if (typeof toggleEmpScanner === 'function') toggleEmpScanner();
     setTimeout(syncSlide, 300); setTimeout(syncSlide, 1200); setTimeout(syncSlide, 2500);
   }
