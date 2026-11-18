@@ -62,6 +62,16 @@
   #homeTabContent .home-head .h-hello::after{content:','}
   #homeTabContent .home-head .h-name{font-size:1.05rem !important;font-weight:800 !important;text-transform:uppercase;letter-spacing:.3px;color:#fff;}
 
+
+  /* header រួម៖ avatar + ស្វាគមន៍ (ឆ្វេង) · ស្កេន + ជួង (ស្តាំ) */
+  #homeTabContent .eh-bar{gap:10px;padding:14px 16px 4px;}
+  #homeTabContent .eh-bar .home-head{flex:1;min-width:0;padding:0 !important;gap:10px;}
+  #homeTabContent .eh-bar .home-head > div:last-child{flex-direction:column;align-items:flex-start;row-gap:1px;}
+  #homeTabContent .eh-bar .home-head .h-hello{font-size:.78rem !important;color:#9fdcf0 !important;line-height:1.3;}
+  #homeTabContent .eh-bar .home-head .h-hello::after{content:none;}
+  #homeTabContent .eh-bar .home-head .h-name{font-size:.98rem !important;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  #homeTabContent .eh-icons{flex:none;}
+
   /* Banner */
   #homeTabContent .banner-track{margin:12px 16px 0 !important;border-radius:24px !important;overflow-x:auto;overflow-y:hidden;border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 28px rgba(0,0,0,.35);}
   #homeTabContent .banner{aspect-ratio:auto !important;height:150px;border-radius:0 !important;}
@@ -166,12 +176,12 @@
     // ១) របារខាងលើ៖ ឡូហ្គោ + ស្កេន + ជួង
     const bar = document.createElement('div');
     bar.className = 'eh-bar';
-    bar.innerHTML = `<div class="eh-brand"><img class="eh-logo" src="icon/icon-192.png" alt=""><span>Hem Sopheak HR</span></div>
-      <div class="eh-icons">
+    bar.innerHTML = `<div class="eh-icons">
         <button type="button" class="eh-ibtn" id="ehScanBtn" aria-label="ស្កេន">${ic('scan', 22)}</button>
         <button type="button" class="eh-ibtn" id="ehBell" aria-label="ដំណឹង">${ic('bell', 22)}<span class="eh-dot" id="ehBellDot"></span></button>
       </div>`;
     H.insertBefore(bar, H.firstChild);
+    bar.insertBefore(head, bar.firstChild); // រួម avatar + ស្វាគមន៍ ក្នុងរបារតែមួយ
     $('ehBell').onclick = () => go('notify');
     $('ehScanBtn').onclick = () => trigger();
 
