@@ -78,6 +78,14 @@
   #ehSlide .handle{position:absolute;top:4px;left:4px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2dd4bf,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:#04201c;box-shadow:0 4px 14px rgba(20,184,166,.55);cursor:grab;touch-action:none;}
   #ehSlide.locked .handle{background:#64748b;box-shadow:none;cursor:not-allowed;}
   #ehSlide.locked .hint{opacity:.7;}
+  /* ===== ជួសជុលរបៀបស្រាល: ប្តូរអថេរពណ៌ក្នុងទំព័រដើមឱ្យស្រួលមើលលើផ្ទៃងងឹត ===== */
+  #homeTabContent{--text:#e8fffb;--text-muted:#9cc3c8;--border:rgba(94,234,212,.22);--bg:#0a1b2b;--card-bg:rgba(15,60,70,.55);--shadow:0 8px 22px rgba(0,0,0,.30);color:#e8fffb;}
+  #homeTabContent .portal-card{background:linear-gradient(160deg,rgba(20,184,166,.16),rgba(10,32,48,.62)) !important;border:1px solid rgba(94,234,212,.24) !important;border-radius:22px !important;backdrop-filter:blur(8px);color:#e8fffb;}
+  #homeTabContent .banner-dots i.on{background:#2dd4bf;}
+  /* របារម៉ឺនុយខាងក្រោម: កញ្ចក់ងងឹត តែពេលនៅទំព័រដើម */
+  body:has(#homeTabContent.active) .bnav{background:rgba(8,24,38,.92);backdrop-filter:blur(12px);box-shadow:0 -6px 24px rgba(0,0,0,.45);border-top:1px solid rgba(94,234,212,.2);}
+  body:has(#homeTabContent.active) button.bnav-item{color:#8fb4ba;}
+  body:has(#homeTabContent.active) button.bnav-item.active{color:#2dd4bf;}
   `;
 
   /* ---------- សមាសភាព ---------- */
