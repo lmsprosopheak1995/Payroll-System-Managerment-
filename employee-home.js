@@ -122,7 +122,7 @@
 
   /* ផ្គូផ្គងគម្រូ */
   #homeTabContent .eh-logo{width:48px;height:48px;border-radius:14px;object-fit:cover;}
-  #homeTabContent .eh-bar{padding:16px 16px 0;}
+  #homeTabContent .eh-bar{padding:14px 16px 0;justify-content:flex-end;}
   #homeTabContent .banner{height:128px;}
   #homeTabContent .eh-duty{display:flex;align-items:stretch;gap:0;margin-top:2px;}
   #homeTabContent .eh-duty div{flex:1;background:none;border-radius:0;padding:2px 8px;text-align:left;font-weight:700;font-size:.78rem;}
@@ -182,8 +182,7 @@
     // ១) របារខាងលើ៖ ឡូហ្គោ + ស្កេន + ជួង
     const bar = document.createElement('div');
     bar.className = 'eh-bar';
-    bar.innerHTML = `<div class="eh-brand"><img class="eh-logo" src="icon/icon-192.png" alt="Hem Sopheak HR"></div>
-      <div class="eh-icons">
+    bar.innerHTML = `<div class="eh-icons">
         <button type="button" class="eh-ibtn" id="ehScanBtn" aria-label="ស្កេន">${ic('scan', 22)}</button>
         <button type="button" class="eh-ibtn" id="ehBell" aria-label="ដំណឹង">${ic('bell', 22)}<span class="eh-dot" id="ehBellDot"></span></button>
       </div>`;
