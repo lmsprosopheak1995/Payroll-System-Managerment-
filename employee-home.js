@@ -105,6 +105,12 @@
   /* banner គ្មានរូប: ពណ៌ត្រូវនឹងរចនាបថ និងកម្ពស់តូចជាង */
   /* ប៊ូតុង ⓘ (about-contact.js): ដាក់លើរបារអូស ពណ៌ងងឹតតាមរចនាបថ ពេលនៅទំព័រដើម */
   body:has(#mainCard:not([style*="none"]) #homeTabContent.active) .ac-fab{bottom:calc(176px + env(safe-area-inset-bottom,0px));right:22px;width:34px;height:34px;border-radius:11px;background:#0f3c46;border:1px solid rgba(94,234,212,.35);color:#5eead4;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+  /* ម៉ាស៊ីនស្កេនកាមេរ៉ា: បើកជាផ្ទាំងពេញខាងលើ (មិនរុញមាតិកាចុះក្រោម) ទុករបារអូស/ម៉ឺនុយនៅខាងក្រោម */
+  #homeTabContent #empQrReader{position:fixed !important;top:0;left:0;right:0;bottom:calc(176px + env(safe-area-inset-bottom,0px));margin:0 !important;z-index:55;background:#000;border:0 !important;border-radius:0 0 26px 26px;overflow:hidden;min-height:0;box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  #homeTabContent #empQrReader video{width:100% !important;height:100% !important;object-fit:cover;}
+  #homeTabContent #empScanHint{display:none !important;}
+  #homeTabContent #empScanResult{position:fixed;left:22px;right:22px;bottom:calc(262px + env(safe-area-inset-bottom,0px));z-index:61;margin:0 !important;padding:8px 12px;border-radius:14px;background:rgba(8,24,38,.92);text-align:center;}
+  #homeTabContent #empScanResult:empty{display:none;}
   #homeTabContent .banner:not(.has-img){background:linear-gradient(135deg,#0f766e,#0e7490 60%,#164e63) !important;aspect-ratio:auto !important;min-height:150px;justify-content:center;}
   `;
 
