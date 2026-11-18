@@ -16,7 +16,7 @@
 
   /* ---------- រចនាបថ ---------- */
   const CSS = `
-  #homeTabContent{position:relative;padding-bottom:150px;}
+  #homeTabContent{position:relative;padding-bottom:120px;}
   #homeTabContent::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
     background:radial-gradient(120% 60% at 80% -10%,rgba(20,184,166,.30),transparent 60%),radial-gradient(90% 50% at -10% 30%,rgba(14,116,144,.28),transparent 60%),linear-gradient(180deg,#0a2a35 0%,#0a1b2b 45%,#0a1220 100%);}
   #homeTabContent .eh-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 4px;}
@@ -69,13 +69,13 @@
   #homeTabContent #homeHolidayCard{display:none;}
   #homeTabContent #homeHolidayCard.eh-open{display:block;}
   /* ប៊ូតុងអូសកត់ម៉ោង (Slide to clock) */
-  #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 28px));z-index:60;display:none;}
+  #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
-  #ehSlide .box{background:linear-gradient(160deg,rgba(15,60,70,.92),rgba(8,28,44,.95));border:1px solid rgba(94,234,212,.35);border-radius:26px;padding:14px 16px 16px;box-shadow:0 0 0 3px rgba(245,208,80,.16),0 14px 34px rgba(0,0,0,.5);backdrop-filter:blur(10px);color:#e8fffb;}
-  #ehSlide .tt{font-weight:800;font-size:.95rem;margin-bottom:10px;}
-  #ehSlide .track{position:relative;height:62px;border-radius:999px;background:rgba(0,0,0,.28);border:1px solid rgba(94,234,212,.22);overflow:hidden;user-select:none;touch-action:none;}
-  #ehSlide .hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;opacity:.85;pointer-events:none;padding-left:56px;font-size:.92rem;}
-  #ehSlide .handle{position:absolute;top:4px;left:4px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2dd4bf,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:#04201c;box-shadow:0 4px 14px rgba(20,184,166,.55);cursor:grab;touch-action:none;}
+  #ehSlide .box{background:linear-gradient(160deg,rgba(15,60,70,.92),rgba(8,28,44,.95));border:1px solid rgba(94,234,212,.35);border-radius:18px;padding:8px 12px 10px;box-shadow:0 0 0 2px rgba(245,208,80,.16),0 8px 22px rgba(0,0,0,.45);backdrop-filter:blur(10px);color:#e8fffb;}
+  #ehSlide .tt{font-weight:700;font-size:.78rem;margin-bottom:6px;}
+  #ehSlide .track{position:relative;height:42px;border-radius:999px;background:rgba(0,0,0,.28);border:1px solid rgba(94,234,212,.22);overflow:hidden;user-select:none;touch-action:none;}
+  #ehSlide .hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;opacity:.85;pointer-events:none;padding-left:40px;font-size:.78rem;}
+  #ehSlide .handle{position:absolute;top:3px;left:3px;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2dd4bf,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1.05rem;color:#04201c;box-shadow:0 3px 10px rgba(20,184,166,.5);cursor:grab;touch-action:none;}
   #ehSlide.locked .handle{background:#64748b;box-shadow:none;cursor:not-allowed;}
   #ehSlide.locked .hint{opacity:.7;}
   /* ===== ជួសជុលរបៀបស្រាល: ប្តូរអថេរពណ៌ក្នុងទំព័រដើមឱ្យស្រួលមើលលើផ្ទៃងងឹត ===== */
@@ -256,7 +256,7 @@
   function bindSlide() {
     const track = $('ehTrack'), handle = $('ehHandle');
     let dragging = false, startX = 0, x = 0, moved = false;
-    const max = () => track.clientWidth - handle.clientWidth - 8;
+    const max = () => track.clientWidth - handle.clientWidth - 6;
     const setX = v => { x = Math.max(0, Math.min(max(), v)); handle.style.transform = 'translateX(' + x + 'px)'; };
     const reset = () => { handle.style.transition = 'transform .25s'; setX(0); setTimeout(() => { handle.style.transition = ''; }, 260); };
     handle.addEventListener('pointerdown', e => { if (slideState().running) return; dragging = true; moved = false; startX = e.clientX - x; handle.setPointerCapture(e.pointerId); handle.style.transition = ''; });
