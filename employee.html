@@ -981,10 +981,42 @@ async function renderProfileExtras() {
     <div class="pf-meta"><span>ប្រើរួច ${p.used} ថ្ងៃ</span><span>សរុប ${p.quota} ថ្ងៃ</span></div>`;
 }
 
+// ច្បាប់ប្រចាំឆ្នាំដែលទទួលបានរហូតដល់ឥឡូវ — ក្បួនដូច admin (leave-extra.js)៖
+// ១.៥ ថ្ងៃ/ខែ លុះត្រាតែបំពេញការងារពេញខែ (មានស្កេនចូល ≥ ១ ថ្ងៃ · គ្មានអវត្តមានមិនបានលើកលែង) · ខែដែលចប់ហើយប៉ុណ្ណោះ · ចូលក្រោយថ្ងៃទី ១ → ខែនោះមិនរាប់
+async function accruedAnnualEmp(year, rows) {
+  const { data, error } = await supabaseClient.from('attendance').select('date,status,checkin')
+    .eq('employee_id', currentEmployee.id).gte('date', `${year}-01-01`).lte('date', `${year}-12-31`);
+  if (error || !data) return null;
+  const excused = d => rows.some(r => leaveUnitOf(r).unit === 'day' && r.start_date <= d && d <= r.end_date);
+  const worked = new Array(12).fill(false), broken = new Array(12).fill(false);
+  data.forEach(rec => {
+    const d = String(rec.date).slice(0, 10), mi = parseInt(d.slice(5, 7), 10) - 1;
+    if (!(mi >= 0 && mi < 12)) return;
+    if (rec.status === 'present' && rec.checkin) worked[mi] = true;
+    else if (rec.status === 'absent' && !excused(d)) broken[mi] = true;
+  });
+  let startKey = '';
+  const sd = currentEmployee.startDate || '';
+  if (sd.length >= 10) {
+    let y = parseInt(sd.slice(0, 4), 10), m = parseInt(sd.slice(5, 7), 10); const day = parseInt(sd.slice(8, 10), 10);
+    if (!isNaN(y) && !isNaN(m)) { if (day > 1) { m += 1; if (m > 12) { m = 1; y += 1; } } startKey = `${y}-${String(m).padStart(2, '0')}`; }
+  }
+  const perMonth = (settings.annualQuotaDays || 18) / 12;
+  const t = todayStr(), curYear = parseInt(t.slice(0, 4), 10), curMonth = parseInt(t.slice(5, 7), 10), curDay = parseInt(t.slice(8, 10), 10);
+  const curDone = curDay >= new Date(curYear, curMonth, 0).getDate();
+  const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : (curDone ? curMonth - 1 : curMonth - 2));
+  let total = 0;
+  for (let i = 0; i <= lastMonth; i++) {
+    const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+    if (worked[i] && !broken[i] && (!startKey || key >= startKey)) total += perMonth;
+  }
+  return Math.round(total * 100) / 100;
+}
+
 // គណនាសមតុល្យច្បាប់ប្រចាំឆ្នាំ (រួមទាំងផ្ទេរពីឆ្នាំមុន) និងច្បាប់មានប្រាក់ខែ សម្រាប់ឆ្នាំដែលបានជ្រើសរើស
 async function fetchLeaveBalances(year) {
   const { data, error } = await supabaseClient.from('leave_requests')
-    .select('start_date,end_date,leave_type,reason').eq('employee_id', currentEmployee.id).eq('status', 'approved').in('leave_type', ['annual', 'paid']);
+    .select('start_date,end_date,leave_type,reason').eq('employee_id', currentEmployee.id).eq('status', 'approved');
   if (error) throw error;
   const rows = data || [];
   const r2 = n => Math.round(n * 100) / 100;
@@ -1013,7 +1045,9 @@ async function fetchLeaveBalances(year) {
     const pool = quotaFor(prev) + carryIn(prev, depth + 1) - usedIn('annual', prev);
     return Math.min(maxCarry, Math.max(0, r2(pool)));
   };
-  const quota = quotaFor(year), carry = carryIn(year, 0), used = usedIn('annual', year);
+  let quota = quotaFor(year);
+  try { const acc = await accruedAnnualEmp(year, rows); if (acc !== null) quota = acc; } catch (e) { console.warn('accrual fallback', e); }
+  const carry = carryIn(year, 0), used = usedIn('annual', year);
   const months = annualMonthsInYearEmp(currentEmployee.startDate, year);
   const pQuota = months > 0 ? paidBase : 0, pUsed = usedIn('paid', year);
   return {
