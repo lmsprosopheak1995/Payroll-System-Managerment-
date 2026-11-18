@@ -202,6 +202,12 @@
     #homeTabContent #homePayCards,#homeTabContent #homeHolidayCard.eh-open{margin-left:12px !important;margin-right:12px !important;}
   }
 
+  /* ម៉ោងដើរផ្ទាល់ក្នុងរបារអូស */
+  #ehSlide .hint .mid{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;min-width:0;}
+  #ehSlide #ehClockNow{font-size:1.05rem;font-weight:700;letter-spacing:.6px;font-variant-numeric:tabular-nums;color:#f1f8fa;}
+  #ehSlide #ehSlideHint{font-size:.72rem;font-weight:500;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  #ehSlide.locked #ehClockNow{opacity:.7;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -313,7 +319,7 @@
     const slide = document.createElement('div');
     slide.id = 'ehSlide';
     slide.innerHTML = `<div class="box"><div class="main"><div class="tt" id="ehSlideTitle">កត់ម៉ោងធម្មតា</div>
-      <div class="track" id="ehTrack"><div class="hint"><span class="ar">»</span><span id="ehSlideHint">អូសដើម្បីស្កេនកត់ម៉ោង</span><span class="ar">»</span></div><div class="handle" id="ehHandle">${ic('clock')}</div></div></div>
+      <div class="track" id="ehTrack"><div class="hint"><span class="ar">»</span><span class="mid"><b id="ehClockNow">--:--:--</b><span id="ehSlideHint">អូសដើម្បីស្កេនកត់ម៉ោង</span></span><span class="ar">»</span></div><div class="handle" id="ehHandle">${ic('clock')}</div></div></div>
       <div class="sdots" id="ehSdots2" role="tablist"><i class="on" data-i="0"></i><i data-i="1"></i></div></div>`;
     document.body.appendChild(slide);
     $('ehSdots2').addEventListener('click', e => { const d = e.target.closest('i'); if (d) setSlidePage(+d.dataset.i); });
@@ -330,6 +336,12 @@
       lastY = y;
       if (slide.classList.contains('on')) peekSlide();
     }, { passive: true, capture: true });
+    const tick = () => {
+      const el = $('ehClockNow'); if (!el || document.hidden || slide.classList.contains('eh-hide')) return;
+      const d = new Date(), z = n => String(n).padStart(2, '0');
+      el.textContent = z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds());
+    };
+    tick(); setInterval(tick, 1000);
     peekSlide();   // បង្ហាញខ្លីៗពេលបើកទំព័រ ឲ្យអ្នកប្រើដឹងថាមាន
 
     // ៧.១) ប៊ូតុងបោះបង់ការស្កេន (បង្ហាញពេលកាមេរ៉ាបើក)
@@ -525,6 +537,7 @@
   function peekSlide() {
     const s = $('ehSlide'); if (!s) return;
     s.classList.remove('eh-hide');
+    { const el = $('ehClockNow'), d = new Date(), z = n => String(n).padStart(2, '0'); if (el) el.textContent = z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()); }
     clearTimeout(hideT); hideT = setTimeout(maybeHide, 2500);
   }
 
