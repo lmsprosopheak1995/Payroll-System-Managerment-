@@ -103,6 +103,8 @@
   #homeTabContent .eh-ring .n{font-size:1.3rem;white-space:nowrap;}
   #homeTabContent .eh-ring .n small{font-size:.74rem;}
   /* banner គ្មានរូប: ពណ៌ត្រូវនឹងរចនាបថ និងកម្ពស់តូចជាង */
+  /* ប៊ូតុង ⓘ (about-contact.js): ដាក់លើរបារអូស ពណ៌ងងឹតតាមរចនាបថ ពេលនៅទំព័រដើម */
+  body:has(#mainCard:not([style*="none"]) #homeTabContent.active) .ac-fab{bottom:calc(176px + env(safe-area-inset-bottom,0px));right:22px;width:34px;height:34px;border-radius:11px;background:#0f3c46;border:1px solid rgba(94,234,212,.35);color:#5eead4;box-shadow:0 4px 14px rgba(0,0,0,.4);}
   #homeTabContent .banner:not(.has-img){background:linear-gradient(135deg,#0f766e,#0e7490 60%,#164e63) !important;aspect-ratio:auto !important;min-height:150px;justify-content:center;}
   `;
 
