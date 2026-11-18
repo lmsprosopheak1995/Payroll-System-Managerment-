@@ -320,8 +320,14 @@
     bindSlide();
     slide.addEventListener('pointerdown', () => { touching = true; peekSlide(); });
     ['pointerup', 'pointercancel'].forEach(ev => window.addEventListener(ev, () => { if (touching) { touching = false; peekSlide(); } }));
+    // រាប់តែការ scroll ទំព័រ (ឡើង/ចុះ) ≥ 8px — មិនរាប់ banner ដើរស្វ័យប្រវត្តិ, slider, ឈីព ឬ layout ប្រែ
+    let lastY = window.scrollY || 0;
     window.addEventListener('scroll', e => {
-      const t = e.target; if (t && t.closest && t.closest('#ehSlides')) return;   // slider ព្រឹត្តិការណ៍មិនរាប់
+      const t = e.target;
+      if (t !== document && t !== document.documentElement && t !== document.body) return;
+      const y = window.scrollY || 0;
+      if (Math.abs(y - lastY) < 8) return;
+      lastY = y;
       if (slide.classList.contains('on')) peekSlide();
     }, { passive: true, capture: true });
     peekSlide();   // បង្ហាញខ្លីៗពេលបើកទំព័រ ឲ្យអ្នកប្រើដឹងថាមាន
