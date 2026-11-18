@@ -109,6 +109,8 @@
   #homeTabContent #empQrReader{position:fixed !important;top:0;left:0;right:0;bottom:calc(176px + env(safe-area-inset-bottom,0px));margin:0 !important;z-index:55;background:#000;border:0 !important;border-radius:0 0 26px 26px;overflow:hidden;min-height:0;box-shadow:0 10px 30px rgba(0,0,0,.5);}
   #homeTabContent #empQrReader video{width:100% !important;height:100% !important;object-fit:cover;}
   #homeTabContent #empScanHint{display:none !important;}
+  #ehScanClose{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(192px + env(safe-area-inset-bottom,0px));z-index:62;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,24,38,.88);color:#fff;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.45);}
+  #homeTabContent #empQrReader:not([style*="none"]) + #ehScanClose{display:flex;}
   #homeTabContent #empScanResult{position:fixed;left:22px;right:22px;bottom:calc(262px + env(safe-area-inset-bottom,0px));z-index:61;margin:0 !important;padding:8px 12px;border-radius:14px;background:rgba(8,24,38,.92);text-align:center;}
   #homeTabContent #empScanResult:empty{display:none;}
   #homeTabContent .banner:not(.has-img){background:linear-gradient(135deg,#0f766e,#0e7490 60%,#164e63) !important;aspect-ratio:auto !important;min-height:150px;justify-content:center;}
@@ -187,6 +189,15 @@
     document.body.appendChild(slide);
     bindSlide();
 
+    // ៧.១) ប៊ូតុងបោះបង់ការស្កេន (បង្ហាញពេលកាមេរ៉ាបើក)
+    const rd = $('empQrReader');
+    if (rd && !$('ehScanClose')) {
+      const cb = document.createElement('button');
+      cb.type = 'button'; cb.id = 'ehScanClose'; cb.textContent = '✕ បោះបង់ការស្កេន';
+      rd.insertAdjacentElement('afterend', cb);
+      cb.addEventListener('click', cancelScan);
+    }
+
     // ៨) ឆ្លុះ badge ដំណឹង និងស្ថានភាពស្កេន ពីធាតុដែលមានស្រាប់
     const nf = $('nfBadge');
     if (nf) { const o = new MutationObserver(syncBadge); o.observe(nf, { childList: true, characterData: true, subtree: true, attributes: true }); observers.push(o); }
@@ -195,6 +206,16 @@
     const o2 = new MutationObserver(syncVisibility); o2.observe(H, { attributes: true, attributeFilter: ['class'] }); observers.push(o2);
     const mcard = $('mainCard'); if (mcard) { const o3 = new MutationObserver(syncVisibility); o3.observe(mcard, { attributes: true, attributeFilter: ['style'] }); observers.push(o3); }
     syncBadge(); syncSlide(); syncVisibility();
+  }
+
+  function cancelScan() {
+    const running = (typeof empScannerRunning !== 'undefined') && empScannerRunning;
+    if (typeof stopEmpScanner === 'function') stopEmpScanner();
+    if (!running) {   // កាមេរ៉ាកំពុងចាប់ផ្តើម → លាក់ភ្លាមៗ ហើយបញ្ឈប់ម្តងទៀតពេលវាដំណើរការ
+      const r = $('empQrReader'); if (r) r.style.display = 'none';
+      setTimeout(() => { if (typeof empScannerRunning !== 'undefined' && empScannerRunning && typeof stopEmpScanner === 'function') stopEmpScanner(); }, 900);
+    }
+    setTimeout(syncSlide, 400);
   }
 
   function go(tab) { if (typeof switchEmpTab === 'function') switchEmpTab(tab); }
@@ -293,7 +314,7 @@
     if (st.locked) { if (typeof customAlert === 'function') customAlert(st.msg || 'ការស្កេនបិទ'); return; }
     if (typeof toggleEmpScanner === 'function') toggleEmpScanner();
     const r = $('empQrReader'); if (r) setTimeout(() => r.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
-    setTimeout(syncSlide, 300);
+    setTimeout(syncSlide, 300); setTimeout(syncSlide, 1200); setTimeout(syncSlide, 2500);
   }
 
   function bindSlide() {
