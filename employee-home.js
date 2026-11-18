@@ -133,6 +133,14 @@
   #homeTabContent #homePayCards,#homeTabContent #homeHolidayCard.eh-open{margin:16px 16px 0 !important;gap:12px;}
   #homeTabContent #homePayCards .hp-card{padding:14px 16px !important;}
 
+  /* ស្កេន + ជួង នៅខាងស្តាំជួរស្វាគមន៍ */
+  #homeTabContent .home-head{padding:14px 16px 2px !important;}
+  #homeTabContent .home-head > div:nth-child(2){flex:1;min-width:0;}
+  #homeTabContent .home-head > div.eh-icons{flex:none;flex-wrap:nowrap;align-items:center;gap:10px;margin-left:auto;}
+  #homeTabContent .home-head .h-hello{font-size:.9rem !important;}
+  #homeTabContent .home-head .h-name{font-size:.98rem !important;}
+  #homeTabContent .home-head .eh-ibtn{width:40px;height:40px;border-radius:13px;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -179,14 +187,12 @@
     if (!head) return;
     built = true;
 
-    // ១) របារខាងលើ៖ ឡូហ្គោ + ស្កេន + ជួង
-    const bar = document.createElement('div');
-    bar.className = 'eh-bar';
-    bar.innerHTML = `<div class="eh-icons">
-        <button type="button" class="eh-ibtn" id="ehScanBtn" aria-label="ស្កេន">${ic('scan', 22)}</button>
-        <button type="button" class="eh-ibtn" id="ehBell" aria-label="ដំណឹង">${ic('bell', 22)}<span class="eh-dot" id="ehBellDot"></span></button>
-      </div>`;
-    H.insertBefore(bar, H.firstChild);
+    // ១) ស្កេន + ជួង៖ ដាក់ខាងស្តាំជួរស្វាគមន៍ (មិនមានរបារដាច់ដោយឡែកទៀតទេ)
+    const icons = document.createElement('div');
+    icons.className = 'eh-icons';
+    icons.innerHTML = `<button type="button" class="eh-ibtn" id="ehScanBtn" aria-label="ស្កេន">${ic('scan', 22)}</button>
+        <button type="button" class="eh-ibtn" id="ehBell" aria-label="ដំណឹង">${ic('bell', 22)}<span class="eh-dot" id="ehBellDot"></span></button>`;
+    head.appendChild(icons);
     $('ehBell').onclick = () => go('notify');
     $('ehScanBtn').onclick = () => trigger();
 
