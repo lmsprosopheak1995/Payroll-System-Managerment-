@@ -35,7 +35,7 @@
 
   /* ---------- រចនាបថ ---------- */
   const CSS = `
-  #homeTabContent{position:relative;padding-bottom:215px;--text:#eaf6fb;--text-muted:#9db9c4;--border:rgba(255,255,255,.13);--bg:#0a2238;--card-bg:rgba(18,52,62,.7);--shadow:0 8px 22px rgba(0,0,0,.28);color:#eaf6fb;}
+  #homeTabContent{position:relative;padding-bottom:235px;--text:#eaf6fb;--text-muted:#9db9c4;--border:rgba(255,255,255,.13);--bg:#0a2238;--card-bg:rgba(18,52,62,.7);--shadow:0 8px 22px rgba(0,0,0,.28);color:#eaf6fb;}
   /* ផ្ទៃខាងក្រោយ: ពន្លឺ teal ជ្រុងឆ្វេងលើ + ស្រទាប់កញ្ចក់ទ្រេត */
   #homeTabContent::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
     background:
@@ -157,6 +157,16 @@
   #homeTabContent .eh-ldots i.on{background:#2dd4bf;width:22px;}
   #homeTabContent #ehRingArc{transition:stroke-dashoffset .45s ease;}
 
+  /* កាតអូសកត់ម៉ោង — រចនាតាមគម្រូ */
+  #ehSlide .box{background:linear-gradient(165deg,rgba(22,66,72,.96),rgba(8,32,42,.97)) !important;border:1.5px solid rgba(226,232,150,.42);border-radius:28px;padding:16px 18px 18px;
+    box-shadow:0 0 0 1px rgba(226,232,150,.12),0 0 30px rgba(214,224,120,.32),0 12px 28px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);}
+  #ehSlide .tt{font-size:1rem;font-weight:600;letter-spacing:.1px;margin:0 0 12px;padding-left:2px;color:#f1f8fa;}
+  #ehSlide .track{height:58px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 2px 6px rgba(0,0,0,.3);}
+  #ehSlide .handle{top:4px;left:4px;width:48px;height:48px;background:radial-gradient(circle at 35% 30%,#4fe3cf,#14b8a6);color:#fff;box-shadow:0 4px 14px rgba(20,184,166,.55),inset 0 1px 0 rgba(255,255,255,.35);}
+  #ehSlide .handle svg{width:26px;height:26px;}
+  #ehSlide .hint{padding-left:56px;font-size:.92rem;font-weight:500;color:#d3e2e8;gap:12px;}
+  #ehSlide .hint .ar{font-size:1.25rem;opacity:.8;letter-spacing:-2px;}
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -177,15 +187,15 @@
   body:has(#homeTabContent.active) button.bnav-item.active{color:#2dd4bf;}
 
   /* ប៊ូតុង ⓘ (about-contact.js) */
-  body:has(#mainCard:not([style*="none"]) #homeTabContent.active) .ac-fab{bottom:calc(184px + env(safe-area-inset-bottom,0px));right:22px;width:34px;height:34px;border-radius:11px;background:#0f3c46;border:1px solid rgba(255,255,255,.2);color:#7fe3d6;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+  body:has(#mainCard:not([style*="none"]) #homeTabContent.active) .ac-fab{bottom:calc(206px + env(safe-area-inset-bottom,0px));right:22px;width:34px;height:34px;border-radius:11px;background:#0f3c46;border:1px solid rgba(255,255,255,.2);color:#7fe3d6;box-shadow:0 4px 14px rgba(0,0,0,.4);}
 
   /* ម៉ាស៊ីនស្កេន: ផ្ទាំងពេញខាងលើ (មិនរុញមាតិកា) */
-  #homeTabContent #empQrReader{position:fixed !important;top:0;left:0;right:0;bottom:calc(184px + env(safe-area-inset-bottom,0px));margin:0 !important;z-index:55;background:#000;border:0 !important;border-radius:0 0 26px 26px;overflow:hidden;min-height:0;box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  #homeTabContent #empQrReader{position:fixed !important;top:0;left:0;right:0;bottom:calc(206px + env(safe-area-inset-bottom,0px));margin:0 !important;z-index:55;background:#000;border:0 !important;border-radius:0 0 26px 26px;overflow:hidden;min-height:0;box-shadow:0 10px 30px rgba(0,0,0,.5);}
   #homeTabContent #empQrReader video{width:100% !important;height:100% !important;object-fit:cover;}
   #homeTabContent #empScanHint{display:none !important;}
-  #homeTabContent #empScanResult{position:fixed;left:22px;right:22px;bottom:calc(272px + env(safe-area-inset-bottom,0px));z-index:61;margin:0 !important;padding:8px 12px;border-radius:14px;background:rgba(8,24,38,.92);text-align:center;}
+  #homeTabContent #empScanResult{position:fixed;left:22px;right:22px;bottom:calc(294px + env(safe-area-inset-bottom,0px));z-index:61;margin:0 !important;padding:8px 12px;border-radius:14px;background:rgba(8,24,38,.92);text-align:center;}
   #homeTabContent #empScanResult:empty{display:none;}
-  #ehScanClose{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom,0px));z-index:62;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,24,38,.88);color:#fff;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.45);}
+  #ehScanClose{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(222px + env(safe-area-inset-bottom,0px));z-index:62;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,24,38,.88);color:#fff;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.45);}
   #homeTabContent #empQrReader:not([style*="none"]) + #ehScanClose{display:flex;}
   `;
 
