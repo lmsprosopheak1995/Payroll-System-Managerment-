@@ -55,6 +55,15 @@
     root.id = 'lvxRoot';
     root.style.cssText = 'margin-top:24px;';
     root.innerHTML = `
+      <details id="lvxRules" style="margin-bottom:12px;border:1px solid var(--border,#e1e8ef);border-radius:12px;background:var(--card-bg,#fff);padding:10px 14px;">
+        <summary style="cursor:pointer;font-weight:700;">📜 លក្ខខណ្ឌនៃការទទួលបានថ្ងៃឈប់សម្រាកប្រចាំឆ្នាំ (បំណាច់ឆ្នាំ)</summary>
+        <div style="margin-top:10px;display:grid;gap:8px;font-size:0.86rem;line-height:1.7;">
+          <div>១. បុគ្គលិក/កម្មករនិយោជិត នឹងទទួលបានថ្ងៃឈប់សម្រាកប្រចាំឆ្នាំចំនួន ១.៥ ថ្ងៃ (មួយថ្ងៃកន្លះ) ក្នុងមួយខែ លុះត្រាតែបានបំពេញការងារពេញលេញក្នុងខែនោះ។</div>
+          <div>២. បុគ្គលិក/កម្មករនិយោជិត អាចប្រើប្រាស់ថ្ងៃឈប់សម្រាកប្រចាំឆ្នាំដែលខ្លួនមាន សម្រាប់ការឈប់សម្រាកផ្ទាល់ខ្លួន ឬក្នុងករណីមានធុរៈបន្ទាន់ចាំបាច់ណាមួយ។</div>
+          <div>៣. ក្រុមហ៊ុនមិនមានសិទ្ធិកាត់ប្រាក់ឈ្នួលរបស់កម្មករនិយោជិតឡើយ ប្រសិនបើសាមីខ្លួនបានស្នើសុំប្រើប្រាស់ថ្ងៃឈប់សម្រាកប្រចាំឆ្នាំដែលនៅសល់ មកទូទាត់ជំនួសថ្ងៃឈប់នោះ។</div>
+          <div>៤. ថ្ងៃឈប់សម្រាកប្រចាំឆ្នាំដែលនៅសល់ មិនអាចបូកបន្ត ឬផ្ទេរទៅឆ្នាំបន្ទាប់បានឡើយ។ នៅដំណាច់ឆ្នាំ ក្រុមហ៊ុនត្រូវទូទាត់ថ្ងៃឈប់សម្រាកដែលនៅសល់ទាំងនោះជាសាច់ប្រាក់ (ប្រាក់ឈ្នួល) ជូនដល់កម្មករនិយោជិតវិញ។</div>
+        </div>
+      </details>
       <div id="lvxSubTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button type="button" data-sub="payout">💵 បើកជំនួសចុងឆ្នាំ</button>
         <button type="button" data-sub="history">📜 ប្រវត្តិប្រើច្បាប់</button>
