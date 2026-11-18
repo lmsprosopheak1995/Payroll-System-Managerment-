@@ -283,10 +283,11 @@
       const curYear = parseInt(todayStr().slice(0, 4), 10), curMonth = parseInt(todayStr().slice(5, 7), 10);
       const curDay = parseInt(todayStr().slice(8, 10), 10), daysInCur = new Date(curYear, curMonth, 0).getDate();
       const curMonthDone = curDay >= daysInCur;
-      const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : (curMonthDone ? curMonth - 1 : curMonth - 2));
+      const earnLast = year < curYear ? 11 : (year > curYear ? -1 : (curMonthDone ? curMonth - 1 : curMonth - 2));   // ខែចុងក្រោយដែលរាប់ "ទទួលបាន"
+      const lastMonth = year < curYear ? 11 : (year > curYear ? -1 : curMonth - 1);                                   // ខែបច្ចុប្បន្ន (សមតុល្យកាត់ថ្ងៃប្រើរួច រួមទាំងខែនេះ)
       for (let i = 0; i < 12; i++) {
         const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-        earned.push(i <= lastMonth && worked[i] && !broken[i] && (!startKey || key >= startKey) ? perMonth : 0);
+        earned.push(i <= earnLast && worked[i] && !broken[i] && (!startKey || key >= startKey) ? perMonth : 0);
       }
       leaveRequests.forEach(r => {
         if (r.employee_id !== emp.id || r.status !== 'approved' || r.leave_type !== 'annual') return;
