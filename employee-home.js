@@ -76,6 +76,8 @@
   #ehSlide .track{position:relative;height:42px;border-radius:999px;background:rgba(0,0,0,.28);border:1px solid rgba(94,234,212,.22);overflow:hidden;user-select:none;touch-action:none;}
   #ehSlide .hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;opacity:.85;pointer-events:none;padding-left:40px;font-size:.78rem;}
   #ehSlide .handle{position:absolute;top:3px;left:3px;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2dd4bf,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1.05rem;color:#04201c;box-shadow:0 3px 10px rgba(20,184,166,.5);cursor:grab;touch-action:none;}
+  /* លាក់របារអូស ពេលនៅទំព័រចូលគណនី (mainCard ត្រូវបានលាក់) */
+  body:has(#mainCard[style*="none"]) #ehSlide{display:none !important;}
   #ehSlide.locked .handle{background:#64748b;box-shadow:none;cursor:not-allowed;}
   #ehSlide.locked .hint{opacity:.7;}
   /* ===== ជួសជុលរបៀបស្រាល: ប្តូរអថេរពណ៌ក្នុងទំព័រដើមឱ្យស្រួលមើលលើផ្ទៃងងឹត ===== */
