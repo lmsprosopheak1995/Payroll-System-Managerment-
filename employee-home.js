@@ -178,7 +178,16 @@
     if (dot) { dot.textContent = n > 99 ? '99+' : n; dot.style.display = n ? 'flex' : 'none'; }
     if (cb) { cb.textContent = n > 99 ? '99+' : n; cb.style.display = n ? 'inline-flex' : 'none'; }
   }
-  function syncVisibility() { const s = $('ehSlide'), H = home(); if (s && H) s.classList.toggle('on', H.classList.contains('active')); }
+  // តម្រឹមទទឹងរបារអូសឱ្យស្មើគ្នានឹងមាតិកាទំព័រដើម (banner)
+  function alignSlide() {
+    const s = $('ehSlide'), ref = $('homeBanner');
+    if (!s || !ref) return;
+    const r = ref.getBoundingClientRect();
+    if (!r.width) return;
+    s.style.left = r.left + 'px'; s.style.width = r.width + 'px'; s.style.transform = 'none';
+  }
+  window.addEventListener('resize', () => alignSlide());
+  function syncVisibility() { const s = $('ehSlide'), H = home(); if (s && H) { s.classList.toggle('on', H.classList.contains('active')); alignSlide(); } }
 
   /* ---------- ទិន្នន័យ ---------- */
   function nextStep(rec) {
@@ -238,6 +247,7 @@
   }
   function syncSlide() {
     const s = $('ehSlide'); if (!s) return;
+    alignSlide();
     const st = slideState();
     s.classList.toggle('locked', st.locked);
     $('ehSlideTitle').textContent = st.locked ? '🔒 ការស្កេនបិទ' : 'កត់ម៉ោងធម្មតា · ' + nextStep(lastRec);
