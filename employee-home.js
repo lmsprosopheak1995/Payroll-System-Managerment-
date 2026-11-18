@@ -50,7 +50,7 @@
   #homeTabContent .eh-brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.2px;font-size:.95rem;}
   #homeTabContent .eh-logo{width:38px;height:38px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #homeTabContent .eh-icons{display:flex;gap:10px;}
-  #homeTabContent .eh-ibtn{position:relative;width:42px;height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(18,56,66,.6);color:#e6f6fb;cursor:pointer;display:grid;place-items:center;padding:0;backdrop-filter:blur(6px);box-shadow:none;}
+  #homeTabContent .eh-ibtn{position:relative;width:42px;height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(18,56,66,.6);color:#e6f6fb;cursor:pointer;display:grid;place-items:center;padding:0;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:none;}
   #homeTabContent .eh-dot{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:.66rem;font-weight:800;display:none;align-items:center;justify-content:center;}
 
   /* ស្វាគមន៍ (មួយបន្ទាត់) */
@@ -70,7 +70,7 @@
   #homeTabContent .banner-dots i.on{background:#2dd4bf;}
 
   /* កាតកញ្ចក់ */
-  #homeTabContent .eh-glass,#homeTabContent .menu-card .menu-row,#homeTabContent .portal-card{background:linear-gradient(160deg,rgba(46,104,114,.36),rgba(12,40,54,.76)) !important;border:1px solid rgba(255,255,255,.13) !important;border-radius:22px !important;box-shadow:0 8px 22px rgba(0,0,0,.26);backdrop-filter:blur(8px);color:#eaf6fb !important;}
+  #homeTabContent .eh-glass,#homeTabContent .menu-card .menu-row,#homeTabContent .portal-card{background:linear-gradient(160deg,rgba(46,104,114,.36),rgba(12,40,54,.76)) !important;border:1px solid rgba(255,255,255,.13) !important;border-radius:22px !important;box-shadow:0 8px 22px rgba(0,0,0,.26);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#eaf6fb !important;}
 
   /* ជួរទី១ */
   #homeTabContent .home-scan{margin:6px 16px 0 !important;}
@@ -95,7 +95,7 @@
   /* ឈីព */
   #homeTabContent .eh-chips{display:flex;gap:10px;overflow-x:auto;padding:14px 16px 2px;scrollbar-width:none;}
   #homeTabContent .eh-chips::-webkit-scrollbar{display:none;}
-  #homeTabContent .eh-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(18,56,66,.62);color:#eaf6fb;font-weight:700;font-size:.88rem;cursor:pointer;backdrop-filter:blur(6px);box-shadow:none;}
+  #homeTabContent .eh-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(18,56,66,.62);color:#eaf6fb;font-weight:700;font-size:.88rem;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:none;}
   #homeTabContent .eh-chip svg{width:20px;height:20px;color:#9fdcf0;}
   #homeTabContent .eh-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ef4444;color:#fff;font-size:.72rem;font-weight:800;display:none;align-items:center;justify-content:center;}
 
@@ -143,7 +143,7 @@
 
   /* slider ព្រឹត្តិការណ៍ខាងមុខ (បញ្ឈរ + ចុចចំណុចខាងស្តាំ) */
   #homeTabContent #ehUpBody{display:flex;align-items:stretch;gap:6px;}
-  #homeTabContent .eh-slides{flex:1;min-width:0;height:100px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;}
+  #homeTabContent .eh-slides{flex:1;min-width:0;height:100px;overflow-y:hidden;scroll-snap-type:y mandatory;scrollbar-width:none;touch-action:pan-y;}
   #homeTabContent .eh-slides::-webkit-scrollbar{display:none;}
   #homeTabContent .eh-page{height:100px;scroll-snap-align:start;scroll-snap-stop:always;}
   #homeTabContent .eh-sdots{display:flex;flex-direction:column;justify-content:center;gap:7px;padding:0 0 0 2px;}
@@ -178,6 +178,30 @@
   #ehSlide{transition:opacity .28s ease,translate .28s ease;}
   #ehSlide.eh-hide{opacity:0;pointer-events:none;translate:0 36px;}
 
+  /* iPhone / ទូរស័ព្ទគ្រប់ទំហំ */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+  @supports (height:100dvh){.portal{min-height:100dvh;}}
+  #homeTabContent{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);-webkit-tap-highlight-color:transparent;}
+  #homeTabContent .eh-row1>*,#homeTabContent .eh-row2>*,#homeTabContent .menu-card>*{min-width:0;}
+  #homeTabContent .eh-chips,#homeTabContent .banner-track{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+  #homeTabContent button,#homeTabContent [data-go]{touch-action:manipulation;}
+  @media (max-width:380px){
+    #homeTabContent .home-head{padding-left:12px !important;padding-right:12px !important;}
+    #homeTabContent .banner-track{margin-left:12px !important;margin-right:12px !important;}
+    #homeTabContent .eh-row1{grid-template-columns:1.5fr 1fr 1fr;gap:8px;padding:12px 12px 0;}
+    #homeTabContent .eh-ring{padding:10px;gap:8px;}
+    #homeTabContent .eh-ring svg{width:42px;height:42px;}
+    #homeTabContent .eh-ring .t{font-size:.68rem;}
+    #homeTabContent .eh-ring .n{font-size:1.05rem;}
+    #homeTabContent .eh-tile,#homeTabContent .menu-card .menu-row .lbl{font-size:.7rem !important;}
+    #homeTabContent .eh-ico svg,#homeTabContent .menu-card .menu-row .menu-ico svg{width:30px !important;height:30px !important;}
+    #homeTabContent .menu-card{padding:10px 12px 0 !important;gap:8px;}
+    #homeTabContent .eh-chips{padding:12px 12px 2px;gap:8px;}
+    #homeTabContent .eh-row2{padding:12px 12px 0;gap:8px;}
+    #homeTabContent .eh-card{padding:12px;}
+    #homeTabContent #homePayCards,#homeTabContent #homeHolidayCard.eh-open{margin-left:12px !important;margin-right:12px !important;}
+  }
+
   /* ប៊ូតុងអូសកត់ម៉ោង */
   #ehSlide{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100% - 40px));z-index:60;display:none;}
   #ehSlide.on{display:block;}
@@ -206,7 +230,7 @@
   #homeTabContent #empScanHint{display:none !important;}
   #homeTabContent #empScanResult{position:fixed;left:22px;right:22px;bottom:calc(294px + env(safe-area-inset-bottom,0px));z-index:61;margin:0 !important;padding:8px 12px;border-radius:14px;background:rgba(8,24,38,.92);text-align:center;}
   #homeTabContent #empScanResult:empty{display:none;}
-  #ehScanClose{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(222px + env(safe-area-inset-bottom,0px));z-index:62;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,24,38,.88);color:#fff;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.45);}
+  #ehScanClose{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(222px + env(safe-area-inset-bottom,0px));z-index:62;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,24,38,.88);color:#fff;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.45);}
   #homeTabContent #empQrReader:not([style*="none"]) + #ehScanClose{display:flex;}
   `;
 
@@ -427,6 +451,7 @@
       const body = $('ehUpBody');
       if (!evs.length) body.innerHTML = '<div style="opacity:.7;font-size:.8rem;">មិនមានថ្ងៃបុណ្យខាងមុខ</div>';
       else {
+        clearInterval(evTimer);
         const pages = []; for (let i = 0; i < evs.length; i += 2) pages.push(evs.slice(i, i + 2).join(''));
         body.innerHTML = `<div class="eh-slides" id="ehSlides">${pages.map(h => `<div class="eh-page">${h}</div>`).join('')}</div>`
           + (pages.length > 1 ? `<div class="eh-sdots" id="ehSdots">${pages.map((_, i) => `<i data-i="${i}"${i ? '' : ' class="on"'}></i>`).join('')}</div>` : '');
@@ -435,7 +460,8 @@
           const setOn = () => { const k = Math.round(sl.scrollTop / (sl.clientHeight || 1)); dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === k)); };
           sl.addEventListener('scroll', setOn, { passive: true });
           dots.addEventListener('click', ev => { ev.stopPropagation(); const d = ev.target.closest('i'); if (d) sl.scrollTo({ top: d.dataset.i * sl.clientHeight, behavior: 'smooth' }); });
-          sl.addEventListener('click', ev => ev.stopPropagation());   // អូស/ចុចក្នុង slider មិនបើកកាតថ្ងៃបុណ្យ
+          sl.addEventListener('click', ev => ev.stopPropagation());   // ចុចក្នុង slider មិនបើកកាតថ្ងៃបុណ្យ
+          evTimer = setInterval(() => { if (document.hidden || !sl.isConnected) return; const k = Math.round(sl.scrollTop / (sl.clientHeight || 1)); sl.scrollTo({ top: ((k + 1) % pages.length) * sl.clientHeight, behavior: 'smooth' }); }, 5000);
         }
       }
     } catch (err) { /* ignore */ }
@@ -483,7 +509,7 @@
   }
 
   /* កាតអូសស្កេន៖ លាក់ជាធម្មតា · បង្ហាញពេល scroll · លាក់វិញបន្ទាប់ពីឈប់ scroll ~២.៥វិ */
-  let hideT = null, touching = false;
+  let hideT = null, touching = false, evTimer = null;
   function slideBusy() { return touching || slideState().running || scanStarting(); }
   function maybeHide() {
     const s = $('ehSlide'); if (!s) return;
