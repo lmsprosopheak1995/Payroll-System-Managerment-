@@ -957,7 +957,7 @@ function renderAttendanceTab() {
       <td class="c-work"><input type="time" value="${r.breakIn}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','breakIn',this.value)" style="width:115px;"></td>
       <td class="c-work"><input type="time" value="${r.checkout}" ${r.status !== 'present' ? 'disabled' : ''} onchange="updateAttRecord('${date}','${emp.id}','checkout',this.value)" style="width:115px;"></td>
       <td class="c-work">${r.late ? '<span class="badge inactive">យឺត</span>' : '-'}</td>
-      <td class="c-work"><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select></td>
+      <td class="c-work"><select onchange="updateAttRecord('${date}','${emp.id}','status',this.value)" style="min-width:110px;">${statusOptions}</select>${partialLeaveBadge(emp.id, date)}</td>
       <td class="c-nor g-s${r.normalHours ? '' : ' z'}">${r.normalHours ? fmtHours(r.normalHours) : '-'}</td>
       <td class="c-nor${r.workPay ? '' : ' z'}">$${fmtUSD4(r.workPay)}</td>
       <td class="c-ot g-s${r.otHours ? ' has' : ' z'}">${r.otHours ? fmtHours(r.otHours) : '-'}</td>
@@ -1443,6 +1443,13 @@ function partialLeaveInfo(empId, date) {
     out.items.push({ r, h });
   });
   return out;
+}
+
+// ស្លាកច្បាប់មិនពេញថ្ងៃ (កន្លះថ្ងៃ/តាមម៉ោង) ក្បែរប្រអប់ស្ថានភាព — ស្ថានភាពនៅតែ "មកធ្វើការ" (ព្រោះមកធ្វើការមួយផ្នែក) តែឃើញថាមានច្បាប់
+function partialLeaveBadge(empId, date) {
+  const pl = partialLeaveInfo(empId, date);
+  if (!pl.items.length) return '';
+  return pl.items.map(({ r }) => `<div style="margin-top:3px;"><span style="display:inline-block;font-size:0.66rem;font-weight:700;color:#7c3aed;background:#f3e8ff;border-radius:6px;padding:1px 6px;white-space:nowrap;">🌴 ${escapeHtml(LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type)} · ${escapeHtml(leaveUnitLabel(r))}</span></div>`).join('');
 }
 
 const REQUEST_STATUS_LABELS = { pending: 'កំពុងរង់ចាំ', approved: 'អនុម័ត', rejected: 'បដិសេធ' };
