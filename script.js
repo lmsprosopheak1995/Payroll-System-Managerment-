@@ -1426,7 +1426,7 @@ function leaveWeightDays(req) {
   const std = settings.standardHours > 0 ? settings.standardHours : 8;
   if (u.unit === 'half') return 0.5;
   if (u.unit === 'hour') return Math.min(1, u.hours / std);
-  return datesInRange(req.start_date, req.end_date).length;
+  return leaveCountDates(req.start_date, req.end_date).length;
 }
 // ច្បាប់មិនពេញថ្ងៃ (កន្លះថ្ងៃ/ម៉ោង) ដែលបានអនុម័ត ក្នុងថ្ងៃមួយ — ម៉ោងច្បាប់ត្រូវបង់ប្រាក់ លើកលែងប្រភេទ "គ្មានប្រាក់ខែ"
 function partialLeaveInfo(empId, date) {
@@ -1883,6 +1883,19 @@ function empName(id) {
   return e ? e.name : id;
 }
 
+// ថ្ងៃច្បាប់ដែលត្រូវកាត់ពីសមតុល្យ៖ ច្បាប់ច្រើនថ្ងៃ មិនរាប់ថ្ងៃអាទិត្យ និងថ្ងៃបុណ្យ (ថ្ងៃបុណ្យដែល "ដោះដូរ" ជាថ្ងៃធ្វើការ → រាប់ធម្មតា · ថ្ងៃឈប់ជំនួស → មិនរាប់)
+// ច្បាប់ ១ ថ្ងៃ រាប់ ១ ដូចដើម · បើគ្រប់ថ្ងៃក្នុងចន្លោះជាថ្ងៃឈប់ → រក្សាការរាប់ដូចដើម
+function leaveCountDates(startStr, endStr) {
+  const all = datesInRange(startStr, endStr);
+  if (all.length <= 1) return all;
+  const work = all.filter(d => {
+    if (new Date(d + 'T00:00:00').getDay() === 0) return false;
+    try { if (typeof holidays !== 'undefined' && holidays[d] !== undefined && !isSwapHoliday(d)) return false; } catch (e) { /* ignore */ }
+    return true;
+  });
+  return work.length ? work : all;
+}
+
 function datesInRange(startStr, endStr) {
   const dates = [];
   let d = new Date(startStr + 'T00:00:00');
@@ -2104,7 +2117,7 @@ function usedLeaveDays(empId, year, type) {
       const s = r.start_date < yearStart ? yearStart : r.start_date;
       const e = r.end_date > yearEnd ? yearEnd : r.end_date;
       if (s > e) return sum;
-      return sum + datesInRange(s, e).length;
+      return sum + leaveCountDates(s, e).length;
     }, 0);
 }
 function usedAnnualLeaveDays(empId, year) { return usedLeaveDays(empId, year, 'annual'); }

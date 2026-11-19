@@ -32,7 +32,7 @@
     const s = req.start_date < ys ? ys : req.start_date;
     const e = req.end_date > ye ? ye : req.end_date;
     if (s > e) return out;
-    datesInRange(s, e).forEach(d => { out[parseInt(d.slice(5, 7), 10) - 1] += 1; });
+    leaveCountDates(s, e).forEach(d => { out[parseInt(d.slice(5, 7), 10) - 1] += 1; });
     return out;
   }
 
