@@ -32,7 +32,7 @@
         const pay1 = r2(adv.amount);
         // ប្រាក់ខែសុទ្ធ (t.net) ដកទី១រួចហើយ ពេលដល់ថ្ងៃទូទាត់ទី១។ មុនថ្ងៃនោះ → ដកប៉ាន់ស្មាន
         const pay2 = r2(adv.due ? t.net : t.net - pay1);
-        return { e, adv, pay1, pay2, total: r2(pay1 + pay2) };
+        return { e, t, adv, pay1, pay2, total: r2(pay1 + pay2) };
       });
   }
 
@@ -61,9 +61,21 @@
         r.adv.eligible ? (r.adv.due ? 'បានបើក' : 'មិនទាន់ដល់ថ្ងៃ') : 'មិនគ្រប់ថ្ងៃ', money(r.pay1)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', '', '', '', money(sum('pay1'))];
     } else if (mode === '2') {
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'ប្រាក់ខែសុទ្ធ ($)'].concat(showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
-      body = rows.map((r, i) => [i + 1, ...base(r), d2, money(r.pay2)].concat(showKhr ? [fmtNetByMode(r.pay2)] : []));
-      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sum('pay2'))].concat(showKhr ? [fmtNetByMode(sum('pay2'))] : []);
+      // បំបែកលម្អិត៖ តាមវត្តមាន + អត្ថប្រយោជន៍ − ប្រាក់កាត់ − ប្រាក់ខែទី១ = ប្រាក់ខែសុទ្ធ (លើកទី២)
+      const calc = rows.map(r => {
+        const earn = r2(r.t.total), ben = r2(r.t.benefitsUSD);
+        const ded = r2(r.t.deductionsUSD - (r.adv.due ? r.pay1 : 0));   // ប្រាក់កាត់ដោយមិនរាប់ទី១
+        const other = r2(r.pay2 - (earn + ben - ded - r.pay1));         // ធាតុផ្សេងដែលមិនក្នុងបួនជួរខាងលើ (បើមាន)
+        return { r, earn, ben, ded, other };
+      });
+      const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)', '+ អត្ថប្រយោជន៍ ($)', '− ប្រាក់កាត់ ($)', '− ប្រាក់ខែទី១ ($)']
+        .concat(hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
+      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn), money(c.ben), money(c.ded), money(c.r.pay1)]
+        .concat(hasOther ? [money(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : []));
+      const sm = k => r2(calc.reduce((s, c) => s + c[k], 0));
+      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm('earn')), money(sm('ben')), money(sm('ded')), money(sum('pay1'))]
+        .concat(hasOther ? [money(sm('other'))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : []);
     } else {
       headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់ទី១', 'ចំនួនទី១ ($)', 'ថ្ងៃបើកប្រាក់ទី២', 'ចំនួនទី២ ($)', 'សរុប ($)'];
       body = rows.map((r, i) => [i + 1, ...base(r), r.adv.dueDate, money(r.pay1), d2, money(r.pay2), money(r.total)]);
