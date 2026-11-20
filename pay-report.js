@@ -56,16 +56,16 @@
     const base = r => [r.e.username || '-', r.e.name || '', r.e.dept || '-'];
 
     if (mode === '1') {
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើក', `ថ្ងៃធ្វើការ (ទី១–${endDay})`, 'ត្រូវការ', 'ស្ថានភាព', 'ចំនួន ($)'];
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', `ថ្ងៃដែលបានធ្វើការ (ទី១–${endDay})`, 'ថ្ងៃត្រូវធ្វើការ', 'ស្ថានភាព', 'ចំនួន ($)'];
       body = rows.map((r, i) => [i + 1, ...base(r), r.adv.dueDate, r.adv.workedDays, r.adv.requiredDays,
         r.adv.eligible ? (r.adv.due ? 'បានបើក' : 'មិនទាន់ដល់ថ្ងៃ') : 'មិនគ្រប់ថ្ងៃ', money(r.pay1)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', '', '', '', money(sum('pay1'))];
     } else if (mode === '2') {
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើក', 'ប្រាក់ខែសុទ្ធ ($)'].concat(showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'ប្រាក់ខែសុទ្ធ ($)'].concat(showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
       body = rows.map((r, i) => [i + 1, ...base(r), d2, money(r.pay2)].concat(showKhr ? [fmtNetByMode(r.pay2)] : []));
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sum('pay2'))].concat(showKhr ? [fmtNetByMode(sum('pay2'))] : []);
     } else {
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ទី១ ថ្ងៃបើក', 'ទី១ ($)', 'ទី២ ថ្ងៃបើក', 'ទី២ ($)', 'សរុប ($)'];
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់ទី១', 'ចំនួនទី១ ($)', 'ថ្ងៃបើកប្រាក់ទី២', 'ចំនួនទី២ ($)', 'សរុប ($)'];
       body = rows.map((r, i) => [i + 1, ...base(r), r.adv.dueDate, money(r.pay1), d2, money(r.pay2), money(r.total)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sum('pay1')), '', money(sum('pay2')), money(sum('total'))];
     }
