@@ -97,6 +97,8 @@
   #homeTabContent .eh-chips::-webkit-scrollbar{display:none;}
   #homeTabContent .eh-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(18,56,66,.62);color:#eaf6fb;font-weight:700;font-size:.88rem;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:none;}
   #homeTabContent .eh-chip svg{width:20px;height:20px;color:#9fdcf0;}
+  /* ឈីពស្មើគ្នា ពេញទទឹងជួរ */
+  #homeTabContent .eh-chips .eh-chip{flex:1 1 0;min-width:0;justify-content:center;padding-left:10px;padding-right:10px;white-space:nowrap;}
   #homeTabContent .eh-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ef4444;color:#fff;font-size:.72rem;font-weight:800;display:none;align-items:center;justify-content:center;}
 
   /* ជួរទី២ */
