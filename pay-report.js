@@ -61,21 +61,41 @@
         r.adv.eligible ? (r.adv.due ? 'បានបើក' : 'មិនទាន់ដល់ថ្ងៃ') : 'មិនគ្រប់ថ្ងៃ', money(r.pay1)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', '', '', '', money(sum('pay1'))];
     } else if (mode === '2') {
-      // បំបែកលម្អិត៖ តាមវត្តមាន + អត្ថប្រយោជន៍ − ប្រាក់កាត់ − ប្រាក់ខែទី១ = ប្រាក់ខែសុទ្ធ (លើកទី២)
+      // តាមវត្តមាន + អត្ថប្រយោជន៍ (បំបែកតាមប្រភេទនីមួយៗ) − ប្រាក់កាត់ → ប្រាក់ខែសុទ្ធលើកទី២ (ដកទី១រួច)
       const calc = rows.map(r => {
         const earn = r2(r.t.total), ben = r2(r.t.benefitsUSD);
         const ded = r2(r.t.deductionsUSD - (r.adv.due ? r.pay1 : 0));   // ប្រាក់កាត់ដោយមិនរាប់ទី១
-        const other = r2(r.pay2 - (earn + ben - ded - r.pay1));         // ធាតុផ្សេងដែលមិនក្នុងបួនជួរខាងលើ (បើមាន)
-        return { r, earn, ben, ded, other };
+        const other = r2(r.pay2 - (earn + ben - ded - r.pay1));         // ធាតុផ្សេងដែលមិនក្នុងជួរខាងលើ (បើមាន)
+        const bmap = {};
+        const locked = typeof getLockedSnapshot === 'function' && getLockedSnapshot(r.e.id, month);
+        if (!locked && typeof getPayrollItemsForEmpMonth === 'function') {
+          getPayrollItemsForEmpMonth(r.e.id, month).filter(p => p.type === 'benefit').forEach(p => {
+            const n = String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ';
+            bmap[n] = r2((bmap[n] || 0) + payrollItemToUSD(p));
+          });
+        }
+        const benOther = r2(ben - Object.values(bmap).reduce((a, b) => a + b, 0)); // អត្ថប្រយោជន៍ដែលមិនមានឈ្មោះបំបែក
+        return { r, earn, ben, ded, other, bmap, benOther };
       });
+      const names = {};
+      calc.forEach(c => Object.entries(c.bmap).forEach(([n, v]) => { names[n] = (names[n] || 0) + v; }));
+      const nameList = Object.keys(names).sort((a, b) => names[b] - names[a]);
+      const hasBenOther = calc.some(c => Math.abs(c.benOther) > 0.01);
       const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)', '+ អត្ថប្រយោជន៍ ($)', '− ប្រាក់កាត់ ($)']
-        .concat(hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
-      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn), money(c.ben), money(c.ded)]
-        .concat(hasOther ? [money(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : []));
-      const sm = k => r2(calc.reduce((s, c) => s + c[k], 0));
-      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm('earn')), money(sm('ben')), money(sm('ded'))]
-        .concat(hasOther ? [money(sm('other'))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : []);
+      const dash = v => (Math.abs(v) > 0.004 ? money(v) : '-');
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)']
+        .concat(nameList.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [],
+          ['+ អត្ថប្រយោជន៍សរុប ($)', '− ប្រាក់កាត់ ($)'], hasOther ? ['± ផ្សេងៗ ($)'] : [],
+          ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
+      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn)]
+        .concat(nameList.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [],
+          [dash(c.ben), dash(c.ded)], hasOther ? [dash(c.other)] : [],
+          [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : []));
+      const sm = f => r2(calc.reduce((s, c) => s + f(c), 0));
+      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.earn))]
+        .concat(nameList.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [],
+          [money(sm(c => c.ben)), money(sm(c => c.ded))], hasOther ? [money(sm(c => c.other))] : [],
+          [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : []);
     } else {
       headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់ទី១', 'ចំនួនទី១ ($)', 'ថ្ងៃបើកប្រាក់ទី២', 'ចំនួនទី២ ($)', 'សរុប ($)'];
       body = rows.map((r, i) => [i + 1, ...base(r), r.adv.dueDate, money(r.pay1), d2, money(r.pay2), money(r.total)]);
