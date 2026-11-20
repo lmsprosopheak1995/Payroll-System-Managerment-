@@ -68,11 +68,49 @@
     scan.parentNode.insertBefore(b, scan);
   }
 
+  // ---- ប៊ូតុង Contact/ព័ត៌មាន (about-contact.js) ៖ ផ្លាស់ពីជ្រុងអេក្រង់ ទៅ header ខាងស្តាំជួង ----
+  function findContactBtn() {
+    const skip = '.eh-icons,.bnav,#ehSlide,#ehScanClose,.sub-head';
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    let best = null;
+    document.querySelectorAll('button,a,div[role="button"],[id*="contact" i],[id*="about" i],[class*="contact" i],[class*="about" i]').forEach(el => {
+      if (best || el.id === BTN_ID || el.closest(skip)) return;
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return;
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.width > 80 || r.height > 80 || r.right < vw * 0.6) return;   // តូច + នៅខាងស្តាំ
+      if (!el.querySelector('svg,img') && !(el.textContent || '').trim()) return;
+      best = el;
+    });
+    return best;
+  }
+
+  function moveContact() {
+    const bell = document.getElementById('ehBell');
+    if (!bell || document.querySelector('[data-eh-contact]')) return;
+    const c = findContactBtn();
+    if (!c) return;
+    c.setAttribute('data-eh-contact', '1');
+    c.classList.add('eh-ibtn');
+    const set = (k, v) => c.style.setProperty(k, v, 'important');
+    set('position', 'static'); set('inset', 'auto'); set('transform', 'none'); set('translate', 'none');
+    set('margin', '0'); set('width', '36px'); set('height', '36px'); set('flex', 'none');
+    set('z-index', 'auto'); set('display', 'grid'); set('place-items', 'center'); set('padding', '0');
+    bell.parentNode.insertBefore(c, bell.nextSibling);   // ខាងស្តាំជួង
+    const hd = document.querySelector('#homeTabContent .eh-icons');
+    if (hd) hd.style.setProperty('gap', '6px', 'important');
+  }
+
   function start() {
-    inject();
+    inject(); moveContact();
     // employee-home.js អាចគូស header ឡើងវិញ → ដាក់ម្តងទៀតបើបាត់
     const root = document.getElementById('homeTabContent') || document.body;
-    new MutationObserver(inject).observe(root, { childList: true, subtree: true });
+    let raf = 0;
+    const run = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { inject(); moveContact(); }); };
+    new MutationObserver(run).observe(root, { childList: true, subtree: true });
+    // about-contact.js ប្រហែលបន្ថែមប៊ូតុងទៅ <body> ក្រោយមក
+    new MutationObserver(run).observe(document.body, { childList: true });
+    setTimeout(run, 800); setTimeout(run, 2500);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
