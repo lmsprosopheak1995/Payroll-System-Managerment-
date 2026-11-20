@@ -340,7 +340,7 @@
     }, { passive: true, capture: true });
     const tick = () => {
       const el = $('ehClockNow'); if (!el || document.hidden || slide.classList.contains('eh-hide')) return;
-      const d = new Date(), z = n => String(n).padStart(2, '0');
+      const d = (window.srvNow ? srvNow() : new Date()), z = n => String(n).padStart(2, '0');
       el.textContent = z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds());
     };
     tick(); setInterval(tick, 1000);
@@ -554,7 +554,7 @@
   function peekSlide() {
     const s = $('ehSlide'); if (!s) return;
     s.classList.remove('eh-hide');
-    { const el = $('ehClockNow'), d = new Date(), z = n => String(n).padStart(2, '0'); if (el) el.textContent = z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()); }
+    { const el = $('ehClockNow'), d = (window.srvNow ? srvNow() : new Date()), z = n => String(n).padStart(2, '0'); if (el) el.textContent = z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()); }
     clearTimeout(hideT); hideT = setTimeout(maybeHide, 2500);
   }
 

@@ -466,6 +466,7 @@
 <!-- Hidden template rendered to canvas then exported as PDF -->
 <div id="payslipTemplate"></div>
 
+<script src="employee-time.js"></script>
 <script src="print.js"></script>
 <script>
 const SUPABASE_URL = 'https://veszfcxlkgfrljfqsaec.supabase.co';
@@ -788,7 +789,7 @@ function todayStr() {
   return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
 }
 function nowTimeStr() {
-  const d = new Date();
+  const d = (window.srvNow ? srvNow() : new Date());   // ម៉ោងតាម server (employee-time.js)
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 function weekdayLabel(dateStr) {
@@ -2586,7 +2587,7 @@ if (LOGO_URL) {
 <script src="leave-form.js"></script>
 <script src="employee-loan.js"></script>
 <script src="employee-update.js"></script>
-<script src="employee-home.js?v=8"></script>
+<script src="employee-home.js?v=9"></script>
 <script src="employee-refresh.js"></script>
 <script src="about-contact.js"></script>
 </body>

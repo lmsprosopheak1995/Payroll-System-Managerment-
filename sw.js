@@ -4,13 +4,14 @@
  * - ទទួលដំណឹង Web Push ពេលបិទកម្មវិធី
  * ពេលកែ employee.html/css/js ត្រូវប្តូរលេខ CACHE_VERSION ដើម្បីឱ្យទូរស័ព្ទយកថ្មី
  */
-const CACHE_VERSION = 'emp-pwa-v4';
+const CACHE_VERSION = 'emp-pwa-v5';
 const PRECACHE = [
   './employee.html',
   './style.css',
   './employee-modern.css',
   './employee-modern.js',
   './employee-refresh.js',
+  './employee-time.js',
   './manifest.webmanifest',
   './icon/icon-192.png',
   './icon/icon-512.png',
