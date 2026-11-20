@@ -404,16 +404,31 @@
   function alignSlide() {
     const s = $('ehSlide'), ref = $('homeBanner');
     if (!s || !ref) return;
-    const r = ref.getBoundingClientRect();
-    if (!r.width) return;
-    s.style.left = r.left + 'px'; s.style.width = r.width + 'px'; s.style.transform = 'none';
+    // ប្រើ offsetWidth (មិនប៉ះពាល់ដោយ animation/transform) + ទទឹង layout viewport
+    // ដើម្បីតម្រឹមកណ្តាលជានិច្ច — getBoundingClientRect() អាចខុសពេល tab កំពុង animate ឬទំព័រ scroll ចំហៀង
+    const w = ref.offsetWidth;
+    if (!w) return;
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    s.style.left = Math.max(0, Math.round((vw - w) / 2)) + 'px';
+    s.style.width = w + 'px';
+    s.style.transform = 'none';
   }
-  window.addEventListener('resize', () => alignSlide());
+  let alignT = 0;
+  function alignSoon() {
+    alignSlide();
+    clearTimeout(alignT);
+    alignT = setTimeout(alignSlide, 350);   // ម្តងទៀតក្រោយ animation/ការផ្លាស់ប្តូរ tab ចប់
+  }
+  window.addEventListener('resize', alignSoon);
+  window.addEventListener('orientationchange', alignSoon);
+  window.addEventListener('pageshow', alignSoon);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) alignSoon(); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', alignSoon);
 
   function syncVisibility() {
     const s = $('ehSlide'), H = home(); if (!s || !H) return;
     const was = s.classList.contains('on');
-    s.classList.toggle('on', H.classList.contains('active')); alignSlide();
+    s.classList.toggle('on', H.classList.contains('active')); alignSoon();
     if (!was && s.classList.contains('on')) peekSlide();
     const mc = $('mainCard'), dark = H.classList.contains('active') && mc && mc.style.display !== 'none';
     const tc = document.querySelector('meta[name="theme-color"]');
