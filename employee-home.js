@@ -136,10 +136,11 @@
   /* ស្កេន + ជួង នៅខាងស្តាំជួរស្វាគមន៍ */
   #homeTabContent .home-head{padding:14px 16px 2px !important;}
   #homeTabContent .home-head > div:nth-child(2){flex:1;min-width:0;}
-  #homeTabContent .home-head > div.eh-icons{flex:none;flex-wrap:nowrap;align-items:center;gap:10px;margin-left:auto;}
+  #homeTabContent .home-head > div.eh-icons{flex:none;flex-wrap:nowrap;align-items:center;gap:6px;margin-left:auto;}
   #homeTabContent .home-head .h-hello{font-size:.9rem !important;}
   #homeTabContent .home-head .h-name{font-size:.98rem !important;}
-  #homeTabContent .home-head .eh-ibtn{width:40px;height:40px;border-radius:13px;}
+  #homeTabContent .home-head .eh-ibtn{width:34px;height:34px;border-radius:11px;}
+  #homeTabContent .home-head .eh-ibtn svg{width:19px;height:19px;}
 
   /* slider ព្រឹត្តិការណ៍ខាងមុខ (បញ្ឈរ + ចុចចំណុចខាងស្តាំ) */
   #homeTabContent #ehUpBody{display:flex;align-items:stretch;gap:6px;}
@@ -297,8 +298,7 @@
     const chips = document.createElement('div');
     chips.className = 'eh-chips';
     chips.innerHTML = `<button type="button" class="eh-chip" data-go="notify">${ic('mega', 20)} ដំណឹង <span class="eh-badge" id="ehChipBadge"></span></button>
-      <button type="button" class="eh-chip" data-go="feedback">${ic('chat', 20)} មតិកែលម្អ</button>
-      <button type="button" class="eh-chip" data-go="profile">${ic('user', 20)} ប្រវត្តិរូប</button>`;
+      <button type="button" class="eh-chip" data-go="feedback">${ic('chat', 20)} មតិកែលម្អ</button>`;
     const menu = H.querySelector('.menu-card');
     menu.insertAdjacentElement('afterend', chips);
     chips.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
