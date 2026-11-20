@@ -69,12 +69,12 @@
         return { r, earn, ben, ded, other };
       });
       const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)', '+ អត្ថប្រយោជន៍ ($)', '− ប្រាក់កាត់ ($)', '− ប្រាក់ខែទី១ ($)']
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)', '+ អត្ថប្រយោជន៍ ($)', '− ប្រាក់កាត់ ($)']
         .concat(hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
-      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn), money(c.ben), money(c.ded), money(c.r.pay1)]
+      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn), money(c.ben), money(c.ded)]
         .concat(hasOther ? [money(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : []));
       const sm = k => r2(calc.reduce((s, c) => s + c[k], 0));
-      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm('earn')), money(sm('ben')), money(sm('ded')), money(sum('pay1'))]
+      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm('earn')), money(sm('ben')), money(sm('ded'))]
         .concat(hasOther ? [money(sm('other'))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : []);
     } else {
       headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់ទី១', 'ចំនួនទី១ ($)', 'ថ្ងៃបើកប្រាក់ទី២', 'ចំនួនទី២ ($)', 'សរុប ($)'];
@@ -82,7 +82,10 @@
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sum('pay1')), '', money(sum('pay2')), money(sum('total'))];
     }
     const note = mode === '1' ? `ថ្ងៃបើក ${d1}` : mode === '2' ? `ថ្ងៃបើក ${d2}` : `ទី១ ${d1} · ទី២ ${d2}`;
-    return { title: `របាយការណ៍បើកប្រាក់ខែ — ខែ ${month}`, sub: `${MODE_LABEL[mode]} · ${note}`, headers, body, totals, rows };
+    const foot = mode === '2'
+      ? 'ចំណាំ៖ ប្រាក់ខែលើកទី២ គិតរួចដកប្រាក់ខែទី១ ដែលបានបើកដាច់ដោយឡែករួចហើយ (មើលក្នុងរបាយការណ៍ «លើកទី១») ដូច្នេះមិនបូកបញ្ចូលក្នុងតារាងនេះទេ។'
+      : '';
+    return { title: `របាយការណ៍បើកប្រាក់ខែ — ខែ ${month}`, sub: `${MODE_LABEL[mode]} · ${note}`, foot, headers, body, totals, rows };
   }
 
   function tableHtml(rep, forFile) {
@@ -100,7 +103,8 @@
     return `<div style="font-family:${font};color:#111827;background:#fff;padding:16px;">
       <h2 style="margin:0 0 4px;font-size:18px;">${esc(rep.title)}</h2>
       <div style="margin:0 0 10px;font-size:12px;color:#475569;">${esc(rep.sub)} · បោះពុម្ពថ្ងៃ ${esc(todayStr())}</div>
-      ${tableHtml(rep)}</div>`;
+      ${tableHtml(rep)}
+      ${rep.foot ? `<div style="margin-top:8px;font-size:11px;color:#475569;">${esc(rep.foot)}</div>` : ''}</div>`;
   }
 
   // ---- Print ----
@@ -127,7 +131,7 @@
   function exportExcel(rep, month, mode) {
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
       <head><meta charset="utf-8"></head><body>
-      <h3>${esc(rep.title)}</h3><div>${esc(rep.sub)}</div>${tableHtml(rep, true)}</body></html>`;
+      <h3>${esc(rep.title)}</h3><div>${esc(rep.sub)}</div>${tableHtml(rep, true)}<div>${esc(rep.foot || '')}</div></body></html>`;
     download(new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }), `pay-report_${month}_${mode === 'all' ? 'all' : 'p' + mode}.xls`);
   }
 
@@ -203,7 +207,7 @@
       if (!month) return;
       rep = buildReport(month, mode, $('prSearch').value, $('prOnlyPaid').checked);
       $('prInfo').textContent = rep.sub + ' · គណនាពីវត្តមាន និងច្បាប់ទី១ ដែលមានក្នុងប្រព័ន្ធ (មិនមែនកំណត់ត្រាបើកផ្ទាល់ពីធនាគារទេ)';
-      $('prBody').innerHTML = rep.rows.length ? `<div style="padding:8px;">${tableHtml(rep)}</div>` : '<div style="padding:24px;text-align:center;color:#64748b;">មិនមានទិន្នន័យ</div>';
+      $('prBody').innerHTML = rep.rows.length ? `<div style="padding:8px;">${tableHtml(rep)}${rep.foot ? `<div style="margin-top:8px;font-size:11px;color:#475569;">${esc(rep.foot)}</div>` : ''}</div>` : '<div style="padding:24px;text-align:center;color:#64748b;">មិនមានទិន្នន័យ</div>';
     };
     ['prMonth', 'prMode', 'prOnlyPaid'].forEach(id => $(id).addEventListener('change', render));
     $('prSearch').addEventListener('input', render);
