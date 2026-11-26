@@ -30,9 +30,11 @@
         const snap = typeof getLockedSnapshot === 'function' ? getLockedSnapshot(e.id, month) : null;
         const adv = (snap && snap.advance) || calcAdvanceRow(e, month);
         const pay1 = r2(adv.amount);
+        const quitter = e.status === 'inactive';   // ឈប់បម្រើការ → បើកតាមដៃ គិតប្រាក់ទាំងអស់
         // ប្រាក់ខែសុទ្ធ (t.net) ដកទី១រួចហើយ ពេលដល់ថ្ងៃទូទាត់ទី១។ មុនថ្ងៃនោះ → ដកប៉ាន់ស្មាន
-        const pay2 = r2(adv.due ? t.net : t.net - pay1);
-        return { e, t, adv, pay1, pay2, total: r2(pay1 + pay2) };
+        // អ្នកឈប់៖ មិនដកទី១ប៉ាន់ស្មានទេ — បើកទាំងអស់ដែលគាត់ត្រូវទទួល
+        const pay2 = r2(quitter ? t.net : (adv.due ? t.net : t.net - pay1));
+        return { e, t, adv, pay1, pay2, quitter, total: r2(pay1 + pay2) };
       });
   }
 
@@ -51,7 +53,7 @@
     const d2 = secondPayDateOf(month);
     const showKhr = getPayMode() !== 'usd';
     const endDay = advRules.endDay;
-    let headers, body, totals;
+    let headers, body, totals, sigCols = [];
     const sum = k => r2(rows.reduce((s, r) => s + r[k], 0));
     const base = r => [r.e.username || '-', r.e.name || '', r.e.dept || '-'];
 
@@ -61,41 +63,55 @@
         r.adv.eligible ? (r.adv.due ? 'បានបើក' : 'មិនទាន់ដល់ថ្ងៃ') : 'មិនគ្រប់ថ្ងៃ', money(r.pay1)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', '', '', '', money(sum('pay1'))];
     } else if (mode === '2') {
-      // តាមវត្តមាន + អត្ថប្រយោជន៍ (បំបែកតាមប្រភេទនីមួយៗ) − ប្រាក់កាត់ → ប្រាក់ខែសុទ្ធលើកទី២ (ដកទី១រួច)
+      // របាយការណ៍បើកលើកទី២៖ បំបែកអត្ថប្រយោជន៍ និងប្រាក់កាត់ គ្រប់ធាតុដែល admin បានបន្ថែម + ប្រអប់ហត្ថលេខា/ស្នាមមេដៃ
+      const isAdv = p => p.virtual || /^(auto_)?adv_/.test(String(p.id || ''));
       const calc = rows.map(r => {
         const earn = r2(r.t.total), ben = r2(r.t.benefitsUSD);
-        const ded = r2(r.t.deductionsUSD - (r.adv.due ? r.pay1 : 0));   // ប្រាក់កាត់ដោយមិនរាប់ទី១
-        const other = r2(r.pay2 - (earn + ben - ded - r.pay1));         // ធាតុផ្សេងដែលមិនក្នុងជួរខាងលើ (បើមាន)
-        const bmap = {};
+        const advIn = r.adv.due ? r.pay1 : 0;                 // ទី១ ដែលបានដកក្នុង t.deductionsUSD រួច
+        const ded = r2(r.t.deductionsUSD - advIn);            // ប្រាក់កាត់ដោយមិនរាប់ទី១
+        const sub = (r.adv.due || !r.quitter) ? r.pay1 : 0;   // ទី១ ដែលត្រូវដកចេញពីលើកទី២
+        const other = r2(r.pay2 - (earn + ben - ded - sub));  // ធាតុផ្សេងដែលមិនក្នុងជួរខាងលើ (បើមាន)
+        const bmap = {}, dmap = {};
         const locked = typeof getLockedSnapshot === 'function' && getLockedSnapshot(r.e.id, month);
         if (!locked && typeof getPayrollItemsForEmpMonth === 'function') {
-          getPayrollItemsForEmpMonth(r.e.id, month).filter(p => p.type === 'benefit').forEach(p => {
+          getPayrollItemsForEmpMonth(r.e.id, month).forEach(p => {
+            if (isAdv(p)) return;
             const n = String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ';
-            bmap[n] = r2((bmap[n] || 0) + payrollItemToUSD(p));
+            const m = p.type === 'benefit' ? bmap : (p.type === 'deduction' ? dmap : null);
+            if (m) m[n] = r2((m[n] || 0) + payrollItemToUSD(p));
           });
         }
-        const benOther = r2(ben - Object.values(bmap).reduce((a, b) => a + b, 0)); // អត្ថប្រយោជន៍ដែលមិនមានឈ្មោះបំបែក
-        return { r, earn, ben, ded, other, bmap, benOther };
+        const sumOf = m => Object.values(m).reduce((a, b) => a + b, 0);
+        return { r, earn, ben, ded, other, bmap, dmap, benOther: r2(ben - sumOf(bmap)), dedOther: r2(ded - sumOf(dmap)) };
       });
-      const names = {};
-      calc.forEach(c => Object.entries(c.bmap).forEach(([n, v]) => { names[n] = (names[n] || 0) + v; }));
-      const nameList = Object.keys(names).sort((a, b) => names[b] - names[a]);
+      const rank = key => {
+        const t = {};
+        calc.forEach(c => Object.entries(c[key]).forEach(([n, v]) => { t[n] = (t[n] || 0) + v; }));
+        return Object.keys(t).sort((a, b) => t[b] - t[a]);
+      };
+      const bNames = rank('bmap'), dNames = rank('dmap');
       const hasBenOther = calc.some(c => Math.abs(c.benOther) > 0.01);
+      const hasDedOther = calc.some(c => Math.abs(c.dedOther) > 0.01);
       const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
+      const hasNote = calc.some(c => c.r.quitter);
       const dash = v => (Math.abs(v) > 0.004 ? money(v) : '-');
       headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)']
-        .concat(nameList.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [],
-          ['+ អត្ថប្រយោជន៍សរុប ($)', '− ប្រាក់កាត់ ($)'], hasOther ? ['± ផ្សេងៗ ($)'] : [],
-          ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : []);
-      body = calc.map((c, i) => [i + 1, ...base(c.r), d2, money(c.earn)]
-        .concat(nameList.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [],
-          [dash(c.ben), dash(c.ded)], hasOther ? [dash(c.other)] : [],
-          [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : []));
+        .concat(bNames.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [], ['+ អត្ថប្រយោជន៍សរុប ($)'],
+          dNames.map(n => `− ${n} ($)`), hasDedOther ? ['− ប្រាក់កាត់ផ្សេងៗ ($)'] : [], ['− ប្រាក់កាត់សរុប ($)'],
+          hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : [],
+          hasNote ? ['កំណត់ចំណាំ'] : [], ['ហត្ថលេខា', 'ស្នាមមេដៃ']);
+      body = calc.map((c, i) => [i + 1, ...base(c.r), c.r.quitter ? 'តាមដៃ' : d2, money(c.earn)]
+        .concat(bNames.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [], [dash(c.ben)],
+          dNames.map(n => dash(c.dmap[n] || 0)), hasDedOther ? [dash(c.dedOther)] : [], [dash(c.ded)],
+          hasOther ? [dash(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : [],
+          hasNote ? [c.r.quitter ? 'ឈប់បម្រើការ · បើកតាមដៃ គិតប្រាក់ទាំងអស់' : ''] : [], ['', '']));
       const sm = f => r2(calc.reduce((s, c) => s + f(c), 0));
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.earn))]
-        .concat(nameList.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [],
-          [money(sm(c => c.ben)), money(sm(c => c.ded))], hasOther ? [money(sm(c => c.other))] : [],
-          [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : []);
+        .concat(bNames.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [], [money(sm(c => c.ben))],
+          dNames.map(n => money(sm(c => c.dmap[n] || 0))), hasDedOther ? [money(sm(c => c.dedOther))] : [], [money(sm(c => c.ded))],
+          hasOther ? [money(sm(c => c.other))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : [],
+          hasNote ? [''] : [], ['', '']);
+      sigCols = [headers.length - 2, headers.length - 1];
     } else {
       headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់ទី១', 'ចំនួនទី១ ($)', 'ថ្ងៃបើកប្រាក់ទី២', 'ចំនួនទី២ ($)', 'សរុប ($)'];
       body = rows.map((r, i) => [i + 1, ...base(r), r.adv.dueDate, money(r.pay1), d2, money(r.pay2), money(r.total)]);
@@ -103,18 +119,19 @@
     }
     const note = mode === '1' ? `ថ្ងៃបើក ${d1}` : mode === '2' ? `ថ្ងៃបើក ${d2}` : `ទី១ ${d1} · ទី២ ${d2}`;
     const foot = mode === '2'
-      ? 'ចំណាំ៖ ប្រាក់ខែលើកទី២ គិតរួចដកប្រាក់ខែទី១ ដែលបានបើកដាច់ដោយឡែករួចហើយ (មើលក្នុងរបាយការណ៍ «លើកទី១») ដូច្នេះមិនបូកបញ្ចូលក្នុងតារាងនេះទេ។'
+      ? 'ចំណាំ៖ ប្រាក់ខែលើកទី២ គិតរួចដកប្រាក់ខែទី១ ដែលបានបើកដាច់ដោយឡែករួចហើយ (មើលក្នុងរបាយការណ៍ «លើកទី១»)។ អ្នកដែលឈប់បម្រើការ ត្រូវបើកតាមដៃ ហើយគិតប្រាក់ទាំងអស់ដែលគាត់ត្រូវទទួល (មិនដកប្រាក់ខែទី១ ប៉ាន់ស្មាន)។ អ្នកទទួលប្រាក់ត្រូវចុះហត្ថលេខា ឬផ្តិតស្នាមមេដៃ។'
       : '';
-    return { title: `របាយការណ៍បើកប្រាក់ខែ — ខែ ${month}`, sub: `${MODE_LABEL[mode]} · ${note}`, foot, headers, body, totals, rows };
+    return { title: `របាយការណ៍បើកប្រាក់ខែ — ខែ ${month}`, sub: `${MODE_LABEL[mode]} · ${note}`, foot, headers, body, totals, rows, sigCols };
   }
 
   function tableHtml(rep, forFile) {
     const th = 'style="border:1px solid #cbd5e1;padding:6px 8px;background:#e2e8f0;font-weight:700;text-align:center;white-space:nowrap;"';
     const td = 'style="border:1px solid #cbd5e1;padding:5px 8px;"';
+    const sig0 = rep.sigCols && rep.sigCols.length, isSig = i => sig0 && rep.sigCols.includes(i);
     const num = i => (/\(\$\)|ចំនួន|\(បើកជាប្រាក់\)/.test(rep.headers[i]) ? ' text-align:right;' : '');
     return `<table style="border-collapse:collapse;width:100%;font-size:12px;">
       <thead><tr>${rep.headers.map(h => `<th ${th}>${esc(h)}</th>`).join('')}</tr></thead>
-      <tbody>${rep.body.map(r => `<tr>${r.map((c, i) => `<td style="border:1px solid #cbd5e1;padding:5px 8px;${num(i)}">${esc(c)}</td>`).join('')}</tr>`).join('')}
+      <tbody>${rep.body.map(r => `<tr${sig0 ? ' style="height:40px;"' : ''}>${r.map((c, i) => `<td style="border:1px solid #cbd5e1;padding:5px 8px;${num(i)}${isSig(i) ? 'min-width:90px;' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}
       <tr>${rep.totals.map((c, i) => `<td style="border:1px solid #94a3b8;padding:6px 8px;font-weight:700;background:#f1f5f9;${num(i)}">${esc(c)}</td>`).join('')}</tr></tbody></table>`;
   }
 
