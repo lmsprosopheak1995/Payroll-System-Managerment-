@@ -176,17 +176,35 @@
   }
 
   // ---- Print ----
-  function printReport(rep) {
+  // paper: 'A4' | 'A3' (ទំព័រទទឹង) — តារាងត្រូវបានបង្រួម (zoom) ដោយស្វ័យប្រវត្តិឱ្យចូលទទឹងទំព័រ គ្មានកាត់ជួរចោល
+  const PAPER_MM = { A4: 297, A3: 420 };
+  const availPx = paper => ((PAPER_MM[paper] || 297) - 16) / 25.4 * 96;
+
+  function printReport(rep, paper) {
+    paper = PAPER_MM[paper] ? paper : 'A4';
+    const avail = Math.floor(availPx(paper));
     const f = document.createElement('iframe');
-    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    f.style.cssText = `position:fixed;left:-99999px;top:0;width:${avail}px;height:900px;border:0;opacity:0;pointer-events:none;`;
     document.body.appendChild(f);
     const d = f.contentWindow.document;
     d.open();
     d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(rep.title)}</title>
-      <style>@page{size:A4 landscape;margin:10mm}body{margin:0}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
-      <body>${docHtml(rep)}</body></html>`);
+      <style>@page{size:${paper} landscape;margin:8mm}html,body{margin:0}
+      tr{page-break-inside:avoid}thead{display:table-header-group}
+      #wrap{width:max-content;min-width:100%;box-sizing:border-box}</style></head>
+      <body><div id="wrap">${docHtml(rep)}</div></body></html>`);
     d.close();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 400);
+    setTimeout(() => {
+      try {
+        const wrap = d.getElementById('wrap');
+        const natural = wrap.scrollWidth;                       // ទទឹងពិតរបស់តារាង
+        const scale = Math.min(1, avail / natural);
+        if (scale < 1) wrap.style.zoom = String(Math.floor(scale * 1000) / 1000);
+      } catch (e) { console.warn('fit failed', e); }
+      f.contentWindow.focus();
+      f.contentWindow.print();
+      setTimeout(() => f.remove(), 2000);
+    }, 500);
   }
 
   // ---- Excel (.xls — HTML table, Excel បើកបាន) ----
@@ -204,17 +222,18 @@
   }
 
   // ---- PDF (html2canvas + jsPDF ដូច Payslip) ----
-  async function exportPdf(rep, month, mode, btn) {
+  async function exportPdf(rep, month, mode, btn, paper) {
+    paper = PAPER_MM[paper] ? paper : 'A4';
     if (!window.html2canvas || !(window.jspdf && window.jspdf.jsPDF)) { customAlert('មិនអាចបង្កើត PDF បានទេ (ខ្វះ library) — សូមប្រើ «ព្រីន» រួចជ្រើស Save as PDF'); return; }
     const old = btn && btn.textContent;
     if (btn) { btn.disabled = true; btn.textContent = 'កំពុងបង្កើត...'; }
     const holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:1100px;background:#fff;';
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:max-content;min-width:1100px;background:#fff;';
     holder.innerHTML = docHtml(rep);
     document.body.appendChild(holder);
     try {
       const canvas = await html2canvas(holder, { scale: 2, backgroundColor: '#ffffff' });
-      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: paper.toLowerCase() });
       const pw = pdf.internal.pageSize.getWidth() - 10, ph = pdf.internal.pageSize.getHeight() - 10;
       const pxPerPage = Math.floor(ph * canvas.width / pw);
       for (let y = 0, page = 0; y < canvas.height; y += pxPerPage, page++) {
@@ -259,6 +278,10 @@
           <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;"><input type="checkbox" id="prOnlyPaid" checked> បង្ហាញតែអ្នកដែលមានប្រាក់បើក</label>
           <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;" title="លើកទី២៖ បង្ហាញគ្រប់ជួរតាម Payslip ទោះទទេ"><input type="checkbox" id="prShowAll"> ជួរគ្រប់ប្រភេទ (ដូច Payslip)</label>
           <span style="flex:1"></span>
+          <select id="prPaper" style="${field}" title="ជួរច្រើន → ជ្រើស A3 ទំព័រទទឹង ដើម្បីឱ្យអក្សរធំជាង">
+            <option value="A4">ក្រដាស A4 ទទឹង</option>
+            <option value="A3">ក្រដាស A3 ទទឹង (ទំព័រធំ)</option>
+          </select>
           <button type="button" class="secondary" id="prPrint">🖨 ព្រីន</button>
           <button type="button" class="secondary" id="prXls">📊 Excel</button>
           <button type="button" class="secondary" id="prPdf">⬇ PDF</button>
@@ -283,9 +306,9 @@
     $('prClose').onclick = () => wrap.remove();
     wrap.addEventListener('mousedown', e => { if (e.target === wrap) wrap.remove(); });
     const guard = fn => () => { if (!rep || !rep.rows.length) { customAlert('មិនមានទិន្នន័យ'); return; } fn(); };
-    $('prPrint').onclick = guard(() => printReport(rep));
+    $('prPrint').onclick = guard(() => printReport(rep, $('prPaper').value));
     $('prXls').onclick = guard(() => exportExcel(rep, $('prMonth').value, $('prMode').value));
-    $('prPdf').onclick = guard(() => exportPdf(rep, $('prMonth').value, $('prMode').value, $('prPdf')));
+    $('prPdf').onclick = guard(() => exportPdf(rep, $('prMonth').value, $('prMode').value, $('prPdf'), $('prPaper').value));
     render();
   }
 
