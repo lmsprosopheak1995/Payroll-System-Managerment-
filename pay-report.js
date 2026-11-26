@@ -65,7 +65,11 @@
     } else if (mode === '2') {
       // រៀបជួរតាមលំដាប់ Payslip៖ ឈ្នួល · OT · ប្រាក់បាយ · LeavePay · អត្ថប្រយោជន៍ (Att. Allowance … Maternity) ·
       // TotalPay · TotalPay before Tax · ប្រាក់កាត់ (Loan, UnionFee, Pension, Deduct …) · ប្រាក់ខែសុទ្ធ · ហត្ថលេខា · ស្នាមមេដៃ
-      const STD = (typeof PAY_ITEM_NAMES !== 'undefined' && PAY_ITEM_NAMES) || { benefit: [], deduction: [] };
+      const STD0 = (typeof PAY_ITEM_NAMES !== 'undefined' && PAY_ITEM_NAMES) || { benefit: [], deduction: [] };
+      const TAX_KEY = 'ពន្ធលើប្រាក់បៀវត្សរ៍';
+      // បន្ថែមជួរពន្ធ (salary-tax.js កាត់ជាធាតុ deduction id = auto_tos_<emp>_<month>)
+      const STD = { benefit: STD0.benefit || [], deduction: (STD0.deduction || []).concat([[TAX_KEY, 'Tax on Salary']]) };
+      const isTax = p => /^auto_tos_/.test(String(p.id || '')) || String(p.name || '').startsWith(TAX_KEY);
       const norm = x => String(x || '').toLowerCase().replace(/\s+/g, '');
       const canon = (type, name) => {
         const list = STD[type === 'benefit' ? 'benefit' : 'deduction'] || [];
@@ -92,7 +96,7 @@
             if (isAdv(p)) return;
             const m = p.type === 'benefit' ? bmap : (p.type === 'deduction' ? dmap : null);
             if (!m) return;
-            const n = canon(p.type, p.name) || (String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ');
+            const n = (p.type === 'deduction' && isTax(p)) ? TAX_KEY : (canon(p.type, p.name) || (String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ'));
             m[n] = r2((m[n] || 0) + payrollItemToUSD(p));
           });
         }
@@ -106,7 +110,7 @@
         const std = (STD[type] || []).filter(([km, en]) => !(type === 'deduction' && km === 'ប្រាក់ខែទី១'));
         const tot = {};
         calc.forEach(c => Object.entries(c[key]).forEach(([n, v]) => { tot[n] = (tot[n] || 0) + v; }));
-        const stdCols = std.filter(([km]) => showAllStd || Math.abs(tot[km] || 0) > 0.004).map(([km, en]) => ({ key: km, label: `${km} ${en}` }));
+        const stdCols = std.filter(([km]) => showAllStd || km === TAX_KEY || Math.abs(tot[km] || 0) > 0.004).map(([km, en]) => ({ key: km, label: `${km} ${en}` }));
         const stdKeys = new Set(std.map(x => x[0]));
         const custom = Object.keys(tot).filter(n => !stdKeys.has(n)).sort((a, b) => tot[b] - tot[a]).map(n => ({ key: n, label: n }));
         return stdCols.concat(custom);
@@ -150,7 +154,7 @@
     }
     const note = mode === '1' ? `ថ្ងៃបើក ${d1}` : mode === '2' ? `ថ្ងៃបើក ${d2}` : `ទី១ ${d1} · ទី២ ${d2}`;
     const foot = mode === '2'
-      ? 'ចំណាំ៖ ប្រាក់ខែលើកទី២ គិតរួចដកប្រាក់ខែទី១ ដែលបានបើកដាច់ដោយឡែករួចហើយ (មើលក្នុងរបាយការណ៍ «លើកទី១»)។ អ្នកដែលឈប់បម្រើការ ត្រូវបើកតាមដៃ ហើយគិតប្រាក់ទាំងអស់ដែលគាត់ត្រូវទទួល (មិនដកប្រាក់ខែទី១ ប៉ាន់ស្មាន)។ អ្នកទទួលប្រាក់ត្រូវចុះហត្ថលេខា ឬផ្តិតស្នាមមេដៃ។'
+      ? 'ចំណាំ៖ ប្រាក់ខែលើកទី២ គិតរួចដកប្រាក់ខែទី១ ដែលបានបើកដាច់ដោយឡែករួចហើយ (មើលក្នុងរបាយការណ៍ «លើកទី១»)។ អ្នកដែលឈប់បម្រើការ ត្រូវបើកតាមដៃ ហើយគិតប្រាក់ទាំងអស់ដែលគាត់ត្រូវទទួល (មិនដកប្រាក់ខែទី១ ប៉ាន់ស្មាន)។ អ្នកទទួលប្រាក់ត្រូវចុះហត្ថលេខា ឬផ្តិតស្នាមមេដៃ។ ជួរពន្ធបង្ហាញតែពន្ធដែលបានកាត់ចូលប្រាក់ខែរួច (ចុច «កាត់ពន្ធ» ក្នុងផ្ទាំងពន្ធលើប្រាក់បៀវត្សរ៍) — បើមិនទាន់កាត់ ជួរនេះបង្ហាញ «-» ហើយមិនដកក្នុងប្រាក់ខែសុទ្ធ។'
       : '';
     return { title: `របាយការណ៍បើកប្រាក់ខែ — ខែ ${month}`, sub: `${MODE_LABEL[mode]} · ${note}`, foot, headers, body, totals, rows, sigCols };
   }
@@ -177,19 +181,24 @@
 
   // ---- Print ----
   // paper: 'A4' | 'A3' (ទំព័រទទឹង) — តារាងត្រូវបានបង្រួម (zoom) ដោយស្វ័យប្រវត្តិឱ្យចូលទទឹងទំព័រ គ្មានកាត់ជួរចោល
-  const PAPER_MM = { A4: 297, A3: 420 };
-  const availPx = paper => ((PAPER_MM[paper] || 297) - 16) / 25.4 * 96;
+  const PAPER_MM = { A4: [210, 297], A3: [297, 420] };           // [ទទឹងខ្លី, វែង] មម
+  const orientOf = o => (o === 'portrait' ? 'portrait' : 'landscape');
+  const availPx = (paper, orient) => {
+    const [w, l] = PAPER_MM[paper] || PAPER_MM.A4;
+    return ((orientOf(orient) === 'portrait' ? w : l) - 16) / 25.4 * 96;   // ទទឹងអាចព្រីនបាន (px) — ដក margin 8មម ២ចំហៀង
+  };
 
-  function printReport(rep, paper) {
+  function printReport(rep, paper, orient) {
     paper = PAPER_MM[paper] ? paper : 'A4';
-    const avail = Math.floor(availPx(paper));
+    orient = orientOf(orient);
+    const avail = Math.floor(availPx(paper, orient));
     const f = document.createElement('iframe');
     f.style.cssText = `position:fixed;left:-99999px;top:0;width:${avail}px;height:900px;border:0;opacity:0;pointer-events:none;`;
     document.body.appendChild(f);
     const d = f.contentWindow.document;
     d.open();
     d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(rep.title)}</title>
-      <style>@page{size:${paper} landscape;margin:8mm}html,body{margin:0}
+      <style>@page{size:${paper} ${orient};margin:8mm}html,body{margin:0}
       tr{page-break-inside:avoid}thead{display:table-header-group}
       #wrap{width:max-content;min-width:100%;box-sizing:border-box}</style></head>
       <body><div id="wrap">${docHtml(rep)}</div></body></html>`);
@@ -222,8 +231,9 @@
   }
 
   // ---- PDF (html2canvas + jsPDF ដូច Payslip) ----
-  async function exportPdf(rep, month, mode, btn, paper) {
+  async function exportPdf(rep, month, mode, btn, paper, orient) {
     paper = PAPER_MM[paper] ? paper : 'A4';
+    orient = orientOf(orient);
     if (!window.html2canvas || !(window.jspdf && window.jspdf.jsPDF)) { customAlert('មិនអាចបង្កើត PDF បានទេ (ខ្វះ library) — សូមប្រើ «ព្រីន» រួចជ្រើស Save as PDF'); return; }
     const old = btn && btn.textContent;
     if (btn) { btn.disabled = true; btn.textContent = 'កំពុងបង្កើត...'; }
@@ -233,7 +243,7 @@
     document.body.appendChild(holder);
     try {
       const canvas = await html2canvas(holder, { scale: 2, backgroundColor: '#ffffff' });
-      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: paper.toLowerCase() });
+      const pdf = new window.jspdf.jsPDF({ orientation: orient, unit: 'mm', format: paper.toLowerCase() });
       const pw = pdf.internal.pageSize.getWidth() - 10, ph = pdf.internal.pageSize.getHeight() - 10;
       const pxPerPage = Math.floor(ph * canvas.width / pw);
       for (let y = 0, page = 0; y < canvas.height; y += pxPerPage, page++) {
@@ -278,9 +288,13 @@
           <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;"><input type="checkbox" id="prOnlyPaid" checked> បង្ហាញតែអ្នកដែលមានប្រាក់បើក</label>
           <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;" title="លើកទី២៖ បង្ហាញគ្រប់ជួរតាម Payslip ទោះទទេ"><input type="checkbox" id="prShowAll"> ជួរគ្រប់ប្រភេទ (ដូច Payslip)</label>
           <span style="flex:1"></span>
-          <select id="prPaper" style="${field}" title="ជួរច្រើន → ជ្រើស A3 ទំព័រទទឹង ដើម្បីឱ្យអក្សរធំជាង">
-            <option value="A4">ក្រដាស A4 ទទឹង</option>
-            <option value="A3">ក្រដាស A3 ទទឹង (ទំព័រធំ)</option>
+          <select id="prPaper" style="${field}" title="ជួរច្រើន → ជ្រើស A3 ដើម្បីឱ្យអក្សរធំជាង">
+            <option value="A4">ក្រដាស A4</option>
+            <option value="A3">ក្រដាស A3</option>
+          </select>
+          <select id="prOrient" style="${field}" title="ជួរច្រើន → ជ្រើស Landscape (ដេក) ដើម្បីឱ្យអក្សរធំជាង">
+            <option value="landscape">Landscape (ដេក)</option>
+            <option value="portrait">Portrait (ឈរ)</option>
           </select>
           <button type="button" class="secondary" id="prPrint">🖨 ព្រីន</button>
           <button type="button" class="secondary" id="prXls">📊 Excel</button>
@@ -306,9 +320,9 @@
     $('prClose').onclick = () => wrap.remove();
     wrap.addEventListener('mousedown', e => { if (e.target === wrap) wrap.remove(); });
     const guard = fn => () => { if (!rep || !rep.rows.length) { customAlert('មិនមានទិន្នន័យ'); return; } fn(); };
-    $('prPrint').onclick = guard(() => printReport(rep, $('prPaper').value));
+    $('prPrint').onclick = guard(() => printReport(rep, $('prPaper').value, $('prOrient').value));
     $('prXls').onclick = guard(() => exportExcel(rep, $('prMonth').value, $('prMode').value));
-    $('prPdf').onclick = guard(() => exportPdf(rep, $('prMonth').value, $('prMode').value, $('prPdf'), $('prPaper').value));
+    $('prPdf').onclick = guard(() => exportPdf(rep, $('prMonth').value, $('prMode').value, $('prPdf'), $('prPaper').value, $('prOrient').value));
     render();
   }
 
