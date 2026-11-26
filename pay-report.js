@@ -40,7 +40,7 @@
 
   const MODE_LABEL = { all: 'ទាំងអស់ (ទី១ + ទី២)', '1': 'លើកទី១ (ប្រាក់ខែទី១)', '2': 'លើកទី២ (ប្រាក់ខែសុទ្ធ)' };
 
-  function buildReport(month, mode, q, onlyPaid) {
+  function buildReport(month, mode, q, onlyPaid, showAll) {
     const needle = (q || '').trim().toLowerCase();
     let rows = buildRows(month).filter(r => !needle ||
       ((r.e.name || '') + ' ' + (r.e.username || '') + ' ' + (r.e.dept || '')).toLowerCase().includes(needle));
@@ -63,12 +63,21 @@
         r.adv.eligible ? (r.adv.due ? 'បានបើក' : 'មិនទាន់ដល់ថ្ងៃ') : 'មិនគ្រប់ថ្ងៃ', money(r.pay1)]);
       totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', '', '', '', money(sum('pay1'))];
     } else if (mode === '2') {
-      // របាយការណ៍បើកលើកទី២៖ បំបែកអត្ថប្រយោជន៍ និងប្រាក់កាត់ គ្រប់ធាតុដែល admin បានបន្ថែម + ប្រអប់ហត្ថលេខា/ស្នាមមេដៃ
-      const isAdv = p => p.virtual || /^(auto_)?adv_/.test(String(p.id || ''));
+      // រៀបជួរតាមលំដាប់ Payslip៖ ឈ្នួល · OT · ប្រាក់បាយ · LeavePay · អត្ថប្រយោជន៍ (Att. Allowance … Maternity) ·
+      // TotalPay · TotalPay before Tax · ប្រាក់កាត់ (Loan, UnionFee, Pension, Deduct …) · ប្រាក់ខែសុទ្ធ · ហត្ថលេខា · ស្នាមមេដៃ
+      const STD = (typeof PAY_ITEM_NAMES !== 'undefined' && PAY_ITEM_NAMES) || { benefit: [], deduction: [] };
+      const norm = x => String(x || '').toLowerCase().replace(/\s+/g, '');
+      const canon = (type, name) => {
+        const list = STD[type === 'benefit' ? 'benefit' : 'deduction'] || [];
+        const k = norm(name);
+        const hit = list.find(([km, en]) => norm(km) === k || norm(en) === k);
+        return hit ? hit[0] : null;     // ឈ្មោះខ្មែរក្នុងបញ្ជីស្តង់ដារ ឬ null បើជាឈ្មោះផ្ទាល់ខ្លួន
+      };
+      const isAdv = p => p.virtual || /^(auto_)?adv_/.test(String(p.id || '')) || canon('deduction', p.name) === 'ប្រាក់ខែទី១';
+      const rate0 = (typeof settings !== 'undefined' && settings.exchangeRate) || 0;
       const calc = rows.map(r => {
         const earn = r2(r.t.total), ben = r2(r.t.benefitsUSD);
-        // បំបែកប្រាក់តាមវត្តមាន៖ ឈ្នួល · ច្បាប់ · OT · ប្រាក់បាយ (ដូចក្នុងតារាងប្រាក់ខែ)
-        const rate = r.t.exchangeRate || (typeof settings !== 'undefined' && settings.exchangeRate) || 1;
+        const rate = r.t.exchangeRate || rate0 || 1;
         const eWork = r2(r.t.workPay != null ? r.t.workPay : r.t.normalPay), eLeave = r2(r.t.leavePay), eOt = r2(r.t.otPay);
         const eFood = r2(((r.t.foodRiel || 0) + (r.t.foodOtRiel || 0)) / rate);
         const eOther = r2(earn - (eWork + eLeave + eOt + eFood));
@@ -81,44 +90,56 @@
         if (!locked && typeof getPayrollItemsForEmpMonth === 'function') {
           getPayrollItemsForEmpMonth(r.e.id, month).forEach(p => {
             if (isAdv(p)) return;
-            const n = String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ';
             const m = p.type === 'benefit' ? bmap : (p.type === 'deduction' ? dmap : null);
-            if (m) m[n] = r2((m[n] || 0) + payrollItemToUSD(p));
+            if (!m) return;
+            const n = canon(p.type, p.name) || (String(p.name || 'ផ្សេងៗ').trim() || 'ផ្សេងៗ');
+            m[n] = r2((m[n] || 0) + payrollItemToUSD(p));
           });
         }
         const sumOf = m => Object.values(m).reduce((a, b) => a + b, 0);
-        return { r, earn, eWork, eLeave, eOt, eFood, eOther, ben, ded, other, bmap, dmap, benOther: r2(ben - sumOf(bmap)), dedOther: r2(ded - sumOf(dmap)) };
+        const total = r2(earn + ben);                          // TotalPay
+        return { r, earn, eWork, eLeave, eOt, eFood, eOther, ben, ded, other, bmap, dmap, total, beforeTax: r2(total - eFood),
+          benOther: r2(ben - sumOf(bmap)), dedOther: r2(ded - sumOf(dmap)) };
       });
-      const rank = key => {
-        const t = {};
-        calc.forEach(c => Object.entries(c[key]).forEach(([n, v]) => { t[n] = (t[n] || 0) + v; }));
-        return Object.keys(t).sort((a, b) => t[b] - t[a]);
+      // ជួរអត្ថប្រយោជន៍/ប្រាក់កាត់៖ ធាតុស្តង់ដារតាមលំដាប់ Payslip មុន រួចទើបធាតុផ្ទាល់ខ្លួន
+      const cols = (type, key, showAllStd) => {
+        const std = (STD[type] || []).filter(([km, en]) => !(type === 'deduction' && km === 'ប្រាក់ខែទី១'));
+        const tot = {};
+        calc.forEach(c => Object.entries(c[key]).forEach(([n, v]) => { tot[n] = (tot[n] || 0) + v; }));
+        const stdCols = std.filter(([km]) => showAllStd || Math.abs(tot[km] || 0) > 0.004).map(([km, en]) => ({ key: km, label: `${km} ${en}` }));
+        const stdKeys = new Set(std.map(x => x[0]));
+        const custom = Object.keys(tot).filter(n => !stdKeys.has(n)).sort((a, b) => tot[b] - tot[a]).map(n => ({ key: n, label: n }));
+        return stdCols.concat(custom);
       };
-      const bNames = rank('bmap'), dNames = rank('dmap');
+      const bCols = cols('benefit', 'bmap', showAll), dCols = cols('deduction', 'dmap', showAll);
       const hasBenOther = calc.some(c => Math.abs(c.benOther) > 0.01);
       const hasDedOther = calc.some(c => Math.abs(c.dedOther) > 0.01);
       const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
       const hasNote = calc.some(c => c.r.quitter);
-      const hasLeave = calc.some(c => Math.abs(c.eLeave) > 0.004);
+      const hasLeave = showAll || calc.some(c => Math.abs(c.eLeave) > 0.004);
       const hasEOther = calc.some(c => Math.abs(c.eOther) > 0.01);
       const dash = v => (Math.abs(v) > 0.004 ? money(v) : '-');
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'ឈ្នួល ($)']
-        .concat(hasLeave ? ['ច្បាប់ LeavePay ($)'] : [], ['OT ($)', 'ប្រាក់បាយ ($)'], hasEOther ? ['ផ្សេងៗ ($)'] : [], ['តាមវត្តមានសរុប ($)'],
-          bNames.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [], ['+ អត្ថប្រយោជន៍សរុប ($)'],
-          dNames.map(n => `− ${n} ($)`), hasDedOther ? ['− ប្រាក់កាត់ផ្សេងៗ ($)'] : [], ['− ប្រាក់កាត់សរុប ($)'],
+      const riel = v => (rate0 ? fmtRiel(Math.round(v * rate0)) + ' ៛' : '-');
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'ឈ្នួល ($)', 'OT ($)', 'ប្រាក់បាយ ($)']
+        .concat(hasLeave ? ['ច្បាប់ LeavePay ($)'] : [], hasEOther ? ['ផ្សេងៗ ($)'] : [], ['តាមវត្តមានសរុប ($)'],
+          bCols.map(c => `+ ${c.label} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [], ['+ អត្ថប្រយោជន៍សរុប ($)'],
+          ['ប្រាក់សរុប TotalPay ($)', 'TotalPay before Tax ($)'], showKhr ? ['ឬ TotalPay (បើកជារៀល)'] : [],
+          dCols.map(c => `− ${c.label} ($)`), hasDedOther ? ['− ប្រាក់កាត់ផ្សេងៗ ($)'] : [], ['− ប្រាក់កាត់សរុប ($)'],
           hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : [],
           hasNote ? ['កំណត់ចំណាំ'] : [], ['ហត្ថលេខា', 'ស្នាមមេដៃ']);
-      body = calc.map((c, i) => [i + 1, ...base(c.r), c.r.quitter ? 'តាមដៃ' : d2, dash(c.eWork)]
-        .concat(hasLeave ? [dash(c.eLeave)] : [], [dash(c.eOt), dash(c.eFood)], hasEOther ? [dash(c.eOther)] : [], [money(c.earn)],
-          bNames.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [], [dash(c.ben)],
-          dNames.map(n => dash(c.dmap[n] || 0)), hasDedOther ? [dash(c.dedOther)] : [], [dash(c.ded)],
+      body = calc.map((c, i) => [i + 1, ...base(c.r), c.r.quitter ? 'តាមដៃ' : d2, dash(c.eWork), dash(c.eOt), dash(c.eFood)]
+        .concat(hasLeave ? [dash(c.eLeave)] : [], hasEOther ? [dash(c.eOther)] : [], [money(c.earn)],
+          bCols.map(x => dash(c.bmap[x.key] || 0)), hasBenOther ? [dash(c.benOther)] : [], [dash(c.ben)],
+          [money(c.total), money(c.beforeTax)], showKhr ? [riel(c.total)] : [],
+          dCols.map(x => dash(c.dmap[x.key] || 0)), hasDedOther ? [dash(c.dedOther)] : [], [dash(c.ded)],
           hasOther ? [dash(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : [],
           hasNote ? [c.r.quitter ? 'ឈប់បម្រើការ · បើកតាមដៃ គិតប្រាក់ទាំងអស់' : ''] : [], ['', '']));
       const sm = f => r2(calc.reduce((s, c) => s + f(c), 0));
-      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.eWork))]
-        .concat(hasLeave ? [money(sm(c => c.eLeave))] : [], [money(sm(c => c.eOt)), money(sm(c => c.eFood))], hasEOther ? [money(sm(c => c.eOther))] : [], [money(sm(c => c.earn))],
-          bNames.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [], [money(sm(c => c.ben))],
-          dNames.map(n => money(sm(c => c.dmap[n] || 0))), hasDedOther ? [money(sm(c => c.dedOther))] : [], [money(sm(c => c.ded))],
+      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.eWork)), money(sm(c => c.eOt)), money(sm(c => c.eFood))]
+        .concat(hasLeave ? [money(sm(c => c.eLeave))] : [], hasEOther ? [money(sm(c => c.eOther))] : [], [money(sm(c => c.earn))],
+          bCols.map(x => money(sm(c => c.bmap[x.key] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [], [money(sm(c => c.ben))],
+          [money(sm(c => c.total)), money(sm(c => c.beforeTax))], showKhr ? [riel(sm(c => c.total))] : [],
+          dCols.map(x => money(sm(c => c.dmap[x.key] || 0))), hasDedOther ? [money(sm(c => c.dedOther))] : [], [money(sm(c => c.ded))],
           hasOther ? [money(sm(c => c.other))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : [],
           hasNote ? [''] : [], ['', '']);
       sigCols = [headers.length - 2, headers.length - 1];
@@ -236,6 +257,7 @@
           </select>
           <input type="search" id="prSearch" placeholder="ស្វែងរកឈ្មោះ/អត្តលេខ/ផ្នែក" style="${field}">
           <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;"><input type="checkbox" id="prOnlyPaid" checked> បង្ហាញតែអ្នកដែលមានប្រាក់បើក</label>
+          <label style="font-size:.8rem;display:flex;gap:4px;align-items:center;" title="លើកទី២៖ បង្ហាញគ្រប់ជួរតាម Payslip ទោះទទេ"><input type="checkbox" id="prShowAll"> ជួរគ្រប់ប្រភេទ (ដូច Payslip)</label>
           <span style="flex:1"></span>
           <button type="button" class="secondary" id="prPrint">🖨 ព្រីន</button>
           <button type="button" class="secondary" id="prXls">📊 Excel</button>
@@ -252,11 +274,11 @@
     const render = () => {
       const month = $('prMonth').value, mode = $('prMode').value;
       if (!month) return;
-      rep = buildReport(month, mode, $('prSearch').value, $('prOnlyPaid').checked);
+      rep = buildReport(month, mode, $('prSearch').value, $('prOnlyPaid').checked, $('prShowAll').checked);
       $('prInfo').textContent = rep.sub + ' · គណនាពីវត្តមាន និងច្បាប់ទី១ ដែលមានក្នុងប្រព័ន្ធ (មិនមែនកំណត់ត្រាបើកផ្ទាល់ពីធនាគារទេ)';
       $('prBody').innerHTML = rep.rows.length ? `<div style="padding:8px;">${tableHtml(rep)}${rep.foot ? `<div style="margin-top:8px;font-size:11px;color:#475569;">${esc(rep.foot)}</div>` : ''}</div>` : '<div style="padding:24px;text-align:center;color:#64748b;">មិនមានទិន្នន័យ</div>';
     };
-    ['prMonth', 'prMode', 'prOnlyPaid'].forEach(id => $(id).addEventListener('change', render));
+    ['prMonth', 'prMode', 'prOnlyPaid', 'prShowAll'].forEach(id => $(id).addEventListener('change', render));
     $('prSearch').addEventListener('input', render);
     $('prClose').onclick = () => wrap.remove();
     wrap.addEventListener('mousedown', e => { if (e.target === wrap) wrap.remove(); });
