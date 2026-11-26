@@ -67,6 +67,11 @@
       const isAdv = p => p.virtual || /^(auto_)?adv_/.test(String(p.id || ''));
       const calc = rows.map(r => {
         const earn = r2(r.t.total), ben = r2(r.t.benefitsUSD);
+        // បំបែកប្រាក់តាមវត្តមាន៖ ឈ្នួល · ច្បាប់ · OT · ប្រាក់បាយ (ដូចក្នុងតារាងប្រាក់ខែ)
+        const rate = r.t.exchangeRate || (typeof settings !== 'undefined' && settings.exchangeRate) || 1;
+        const eWork = r2(r.t.workPay != null ? r.t.workPay : r.t.normalPay), eLeave = r2(r.t.leavePay), eOt = r2(r.t.otPay);
+        const eFood = r2(((r.t.foodRiel || 0) + (r.t.foodOtRiel || 0)) / rate);
+        const eOther = r2(earn - (eWork + eLeave + eOt + eFood));
         const advIn = r.adv.due ? r.pay1 : 0;                 // ទី១ ដែលបានដកក្នុង t.deductionsUSD រួច
         const ded = r2(r.t.deductionsUSD - advIn);            // ប្រាក់កាត់ដោយមិនរាប់ទី១
         const sub = (r.adv.due || !r.quitter) ? r.pay1 : 0;   // ទី១ ដែលត្រូវដកចេញពីលើកទី២
@@ -82,7 +87,7 @@
           });
         }
         const sumOf = m => Object.values(m).reduce((a, b) => a + b, 0);
-        return { r, earn, ben, ded, other, bmap, dmap, benOther: r2(ben - sumOf(bmap)), dedOther: r2(ded - sumOf(dmap)) };
+        return { r, earn, eWork, eLeave, eOt, eFood, eOther, ben, ded, other, bmap, dmap, benOther: r2(ben - sumOf(bmap)), dedOther: r2(ded - sumOf(dmap)) };
       });
       const rank = key => {
         const t = {};
@@ -94,20 +99,25 @@
       const hasDedOther = calc.some(c => Math.abs(c.dedOther) > 0.01);
       const hasOther = calc.some(c => Math.abs(c.other) > 0.01);
       const hasNote = calc.some(c => c.r.quitter);
+      const hasLeave = calc.some(c => Math.abs(c.eLeave) > 0.004);
+      const hasEOther = calc.some(c => Math.abs(c.eOther) > 0.01);
       const dash = v => (Math.abs(v) > 0.004 ? money(v) : '-');
-      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'តាមវត្តមាន ($)']
-        .concat(bNames.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [], ['+ អត្ថប្រយោជន៍សរុប ($)'],
+      headers = ['#', 'អត្តលេខ', 'ឈ្មោះ', 'ផ្នែក', 'ថ្ងៃបើកប្រាក់', 'ឈ្នួល ($)']
+        .concat(hasLeave ? ['ច្បាប់ LeavePay ($)'] : [], ['OT ($)', 'ប្រាក់បាយ ($)'], hasEOther ? ['ផ្សេងៗ ($)'] : [], ['តាមវត្តមានសរុប ($)'],
+          bNames.map(n => `+ ${n} ($)`), hasBenOther ? ['+ អត្ថប្រយោជន៍ផ្សេងៗ ($)'] : [], ['+ អត្ថប្រយោជន៍សរុប ($)'],
           dNames.map(n => `− ${n} ($)`), hasDedOther ? ['− ប្រាក់កាត់ផ្សេងៗ ($)'] : [], ['− ប្រាក់កាត់សរុប ($)'],
           hasOther ? ['± ផ្សេងៗ ($)'] : [], ['ប្រាក់ខែសុទ្ធ លើកទី២ ($)'], showKhr ? ['ប្រាក់ខែសុទ្ធ (បើកជាប្រាក់)'] : [],
           hasNote ? ['កំណត់ចំណាំ'] : [], ['ហត្ថលេខា', 'ស្នាមមេដៃ']);
-      body = calc.map((c, i) => [i + 1, ...base(c.r), c.r.quitter ? 'តាមដៃ' : d2, money(c.earn)]
-        .concat(bNames.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [], [dash(c.ben)],
+      body = calc.map((c, i) => [i + 1, ...base(c.r), c.r.quitter ? 'តាមដៃ' : d2, dash(c.eWork)]
+        .concat(hasLeave ? [dash(c.eLeave)] : [], [dash(c.eOt), dash(c.eFood)], hasEOther ? [dash(c.eOther)] : [], [money(c.earn)],
+          bNames.map(n => dash(c.bmap[n] || 0)), hasBenOther ? [dash(c.benOther)] : [], [dash(c.ben)],
           dNames.map(n => dash(c.dmap[n] || 0)), hasDedOther ? [dash(c.dedOther)] : [], [dash(c.ded)],
           hasOther ? [dash(c.other)] : [], [money(c.r.pay2)], showKhr ? [fmtNetByMode(c.r.pay2)] : [],
           hasNote ? [c.r.quitter ? 'ឈប់បម្រើការ · បើកតាមដៃ គិតប្រាក់ទាំងអស់' : ''] : [], ['', '']));
       const sm = f => r2(calc.reduce((s, c) => s + f(c), 0));
-      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.earn))]
-        .concat(bNames.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [], [money(sm(c => c.ben))],
+      totals = ['', '', `សរុប ${rows.length} នាក់`, '', '', money(sm(c => c.eWork))]
+        .concat(hasLeave ? [money(sm(c => c.eLeave))] : [], [money(sm(c => c.eOt)), money(sm(c => c.eFood))], hasEOther ? [money(sm(c => c.eOther))] : [], [money(sm(c => c.earn))],
+          bNames.map(n => money(sm(c => c.bmap[n] || 0))), hasBenOther ? [money(sm(c => c.benOther))] : [], [money(sm(c => c.ben))],
           dNames.map(n => money(sm(c => c.dmap[n] || 0))), hasDedOther ? [money(sm(c => c.dedOther))] : [], [money(sm(c => c.ded))],
           hasOther ? [money(sm(c => c.other))] : [], [money(sum('pay2'))], showKhr ? [fmtNetByMode(sum('pay2'))] : [],
           hasNote ? [''] : [], ['', '']);
